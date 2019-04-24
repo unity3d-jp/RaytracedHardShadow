@@ -4,9 +4,10 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <d3d12.h>
-#include <comdef.h>
 #include <dxgi1_4.h>
 #include <dxgiformat.h>
+#include <dxcapi.h>
+#include <comdef.h>
 
 #include <string>
 #include <vector>

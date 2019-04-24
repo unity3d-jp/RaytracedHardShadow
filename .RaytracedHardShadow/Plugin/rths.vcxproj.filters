@@ -12,6 +12,12 @@
     <ClCompile Include="rths\rths.cpp">
       <Filter>rths</Filter>
     </ClCompile>
+    <ClCompile Include="rths\rthsGfxContext.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\rthsRenderer.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\pch.h">
@@ -20,5 +26,19 @@
     <ClInclude Include="rths\rths.h">
       <Filter>rths</Filter>
     </ClInclude>
+    <ClInclude Include="rths\rthsTypes.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\rthsGfxContext.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\rthsRenderer.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="rths\shader.hlsl">
+      <Filter>rths</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

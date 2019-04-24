@@ -15,10 +15,21 @@
     <ClCompile Include="rths\pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="rths\rthsGfxContext.cpp" />
+    <ClCompile Include="rths\rthsRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\rths.h" />
     <ClInclude Include="rths\pch.h" />
+    <ClInclude Include="rths\rthsGfxContext.h" />
+    <ClInclude Include="rths\rthsRenderer.h" />
+    <ClInclude Include="rths\rthsTypes.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="rths\shader.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{66397903-6FF2-46C6-B51E-B323FD248FAD}</ProjectGuid>
