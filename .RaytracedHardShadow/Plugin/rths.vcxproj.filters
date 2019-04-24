@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="rths">
+      <UniqueIdentifier>{d039ae94-4ce1-4932-b8b3-d9e219efd163}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="rths\pch.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\rths.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="rths\pch.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\rths.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
