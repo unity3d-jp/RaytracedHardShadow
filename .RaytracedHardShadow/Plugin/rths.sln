@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.572
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rths", "rths.vcxproj", "{66397903-6FF2-46C6-B51E-B323FD248FAD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{66397903-6FF2-46C6-B51E-B323FD248FAD}.Debug|x64.ActiveCfg = Debug|x64
+		{66397903-6FF2-46C6-B51E-B323FD248FAD}.Debug|x64.Build.0 = Debug|x64
+		{66397903-6FF2-46C6-B51E-B323FD248FAD}.Release|x64.ActiveCfg = Release|x64
+		{66397903-6FF2-46C6-B51E-B323FD248FAD}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {16A08EA7-4A75-49A1-9C80-17160F8BD906}
+	EndGlobalSection
+EndGlobal
