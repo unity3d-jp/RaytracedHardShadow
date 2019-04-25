@@ -8,9 +8,7 @@ namespace UTJ.RaytracedHardShadow
     {
         #region internal
         public IntPtr self;
-        [DllImport("rths")] static extern byte rthsInitializeGfxDevice();
-        [DllImport("rths")] static extern void rthsFinalizeGfxDevice();
-
+        [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
         [DllImport("rths")] static extern IntPtr rthsCreateRenderer();
         [DllImport("rths")] static extern void rthsDestroyRenderer(IntPtr self);
 
@@ -21,12 +19,21 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsSetCamera(IntPtr self, Matrix4x4 trans, float near, float far, float fov);
         [DllImport("rths")] static extern void rthsAddDirectionalLight(IntPtr self, Matrix4x4 trans);
         [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib);
+
+        public static string S(IntPtr cstring)
+        {
+            return cstring == IntPtr.Zero ? "" : Marshal.PtrToStringAnsi(cstring);
+        }
         #endregion
+        public static string errorLog
+        {
+            get { return S(rthsGetErrorLog()); }
+        }
 
         public static implicit operator bool(rthsShadowRenderer v) { return v.self != IntPtr.Zero; }
         public static rthsShadowRenderer Create()
         {
-            // return null if not supported
+            // rthsCreateRenderer() will return null if DXR is not supported
             return new rthsShadowRenderer { self = rthsCreateRenderer() };
         }
 

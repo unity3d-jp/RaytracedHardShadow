@@ -12,7 +12,8 @@ public:
     static GfxContext* getInstance();
 
     bool valid() const;
-    ID3D12ResourcePtr translateResource(void *ptr);
+    ID3D12ResourcePtr translateTexture(void *ptr);
+    ID3D12ResourcePtr translateBuffer(void *ptr);
 
 private:
     GfxContext();

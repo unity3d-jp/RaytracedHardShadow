@@ -7,21 +7,24 @@ class IResourceTranslator
 {
 public:
     virtual ~IResourceTranslator() {}
-    virtual ID3D12ResourcePtr translate(void *ptr) = 0;
+    virtual ID3D12ResourcePtr translateTexture(void *ptr) = 0;
+    virtual ID3D12ResourcePtr translateBuffer(void *ptr) = 0;
 };
 
 class D3D11ResourceTranslator : public IResourceTranslator
 {
 public:
     ~D3D11ResourceTranslator() override;
-    ID3D12ResourcePtr translate(void *ptr) override;
+    ID3D12ResourcePtr translateTexture(void *ptr) override;
+    ID3D12ResourcePtr translateBuffer(void *ptr) override;
 };
 
 class D3D12ResourceTranslator : public IResourceTranslator
 {
 public:
     ~D3D12ResourceTranslator() override;
-    ID3D12ResourcePtr translate(void *ptr) override;
+    ID3D12ResourcePtr translateTexture(void *ptr) override;
+    ID3D12ResourcePtr translateBuffer(void *ptr) override;
 };
 
 
@@ -51,17 +54,30 @@ D3D12ResourceTranslator::~D3D12ResourceTranslator()
 {
 }
 
-ID3D12ResourcePtr D3D12ResourceTranslator::translate(void * ptr)
+ID3D12ResourcePtr D3D12ResourceTranslator::translateTexture(void * ptr)
 {
     // todo
     return ID3D12ResourcePtr();
 }
 
+ID3D12ResourcePtr D3D12ResourceTranslator::translateBuffer(void * ptr)
+{
+    // todo
+    return ID3D12ResourcePtr();
+}
+
+
 D3D11ResourceTranslator::~D3D11ResourceTranslator()
 {
 }
 
-ID3D12ResourcePtr D3D11ResourceTranslator::translate(void * ptr)
+ID3D12ResourcePtr D3D11ResourceTranslator::translateTexture(void * ptr)
+{
+    // todo
+    return ID3D12ResourcePtr();
+}
+
+ID3D12ResourcePtr D3D11ResourceTranslator::translateBuffer(void * ptr)
 {
     // todo
     return ID3D12ResourcePtr();
@@ -111,12 +127,17 @@ GfxContext::GfxContext()
             continue;
 
         // Create the device
-        ::D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&m_device));
+        ID3D12Device5Ptr device;
+        ::D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
 
         D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5;
-        HRESULT hr = m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
+        HRESULT hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
         if (FAILED(hr) || features5.RaytracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
             SetErrorLog("DXR is not supported on this device");
+        }
+        else {
+            m_device = device;
+            break;
         }
     }
 }
@@ -130,10 +151,17 @@ bool GfxContext::valid() const
     return m_device != nullptr;
 }
 
-ID3D12ResourcePtr GfxContext::translateResource(void * ptr)
+ID3D12ResourcePtr GfxContext::translateTexture(void *ptr)
 {
     if (g_translator)
-        return g_translator->translate(ptr);
+        return g_translator->translateTexture(ptr);
+    return nullptr;
+}
+
+ID3D12ResourcePtr GfxContext::translateBuffer(void *ptr)
+{
+    if (g_translator)
+        return g_translator->translateBuffer(ptr);
     return nullptr;
 }
 
