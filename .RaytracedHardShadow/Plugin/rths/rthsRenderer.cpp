@@ -13,6 +13,7 @@ Renderer::~Renderer()
     m_camera_buffer = nullptr;
     m_light_buffer = nullptr;
     m_toplevel_as = nullptr;
+    m_bottomlevel_as = nullptr;
     m_mesh_buffers.clear();
 }
 
@@ -45,9 +46,10 @@ void Renderer::addDirectionalLight(const float4x4& trans)
 void Renderer::addMesh(const float4x4& trans, void *vb, void *ib)
 {
     MeshBuffers tmp;
-    tmp.m_vertex_buffer = GfxContext::getInstance()->translateBuffer(vb);
-    tmp.m_index_buffer = GfxContext::getInstance()->translateBuffer(ib);
-    m_mesh_buffers.push_back(std::move(tmp));
+    tmp.m_vertex_buffer = GfxContext::getInstance()->translateVertexBuffer(vb);
+    tmp.m_index_buffer = GfxContext::getInstance()->translateIndexBuffer(ib);
+    if (tmp.m_vertex_buffer && tmp.m_index_buffer)
+        m_mesh_buffers.push_back(std::move(tmp));
 }
 
 } // namespace rths

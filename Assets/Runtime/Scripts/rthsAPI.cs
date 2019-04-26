@@ -84,7 +84,7 @@ namespace UTJ.RaytracedHardShadow
         public void AddMesh(MeshRenderer mr)
         {
             var mf = mr.GetComponent<MeshFilter>();
-            var mesh = mf.mesh;
+            var mesh = mf.sharedMesh;
             if (mesh == null)
                 return;
             rthsAddMesh(self, mr.transform.localToWorldMatrix, mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr());

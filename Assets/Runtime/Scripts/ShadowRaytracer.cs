@@ -19,16 +19,19 @@ namespace UTJ.RaytracedHardShadow
         }
 #endif
 
+#pragma warning disable 649
         [Tooltip("If this field is null, Camera.main will be used.")]
-        public Camera m_camera;
+        [SerializeField] Camera m_camera;
 
         [Tooltip("Light(s) to cast shadow. Must be directional.")]
-        public Light[] m_lights;
+        [SerializeField] Light[] m_lights;
 
         [Tooltip("Output buffer. Must be R32F format.")]
-        public RenderTexture m_shadowBuffer;
+        [SerializeField] RenderTexture m_shadowBuffer;
 
         rthsShadowRenderer m_renderer;
+#pragma warning restore 649
+
 
         void Awake()
         {

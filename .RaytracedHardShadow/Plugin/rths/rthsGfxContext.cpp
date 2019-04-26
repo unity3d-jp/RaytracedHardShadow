@@ -1,37 +1,13 @@
 #include "pch.h"
 #include "rthsGfxContext.h"
+#include "rthsResourceTranslator.h"
 
 namespace rths {
-
-class IResourceTranslator
-{
-public:
-    virtual ~IResourceTranslator() {}
-    virtual ID3D12ResourcePtr translateTexture(void *ptr) = 0;
-    virtual ID3D12ResourcePtr translateBuffer(void *ptr) = 0;
-};
-
-class D3D11ResourceTranslator : public IResourceTranslator
-{
-public:
-    ~D3D11ResourceTranslator() override;
-    ID3D12ResourcePtr translateTexture(void *ptr) override;
-    ID3D12ResourcePtr translateBuffer(void *ptr) override;
-};
-
-class D3D12ResourceTranslator : public IResourceTranslator
-{
-public:
-    ~D3D12ResourceTranslator() override;
-    ID3D12ResourcePtr translateTexture(void *ptr) override;
-    ID3D12ResourcePtr translateBuffer(void *ptr) override;
-};
 
 
 static std::string g_gfx_error_log;
 static std::once_flag g_gfx_once;
 static GfxContext *g_gfx_context;
-static IResourceTranslator *g_translator;
 
 const std::string& GetErrorLog()
 {
@@ -50,46 +26,9 @@ void SetErrorLog(const char *format, ...)
 }
 
 
-D3D12ResourceTranslator::~D3D12ResourceTranslator()
-{
-}
-
-ID3D12ResourcePtr D3D12ResourceTranslator::translateTexture(void * ptr)
-{
-    // todo
-    return ID3D12ResourcePtr();
-}
-
-ID3D12ResourcePtr D3D12ResourceTranslator::translateBuffer(void * ptr)
-{
-    // todo
-    return ID3D12ResourcePtr();
-}
-
-
-D3D11ResourceTranslator::~D3D11ResourceTranslator()
-{
-}
-
-ID3D12ResourcePtr D3D11ResourceTranslator::translateTexture(void * ptr)
-{
-    // todo
-    return ID3D12ResourcePtr();
-}
-
-ID3D12ResourcePtr D3D11ResourceTranslator::translateBuffer(void * ptr)
-{
-    // todo
-    return ID3D12ResourcePtr();
-}
-
-
 bool GfxContext::initializeInstance()
 {
     std::call_once(g_gfx_once, []() {
-        if (!g_translator)
-            return;
-
         g_gfx_context = new GfxContext();
         if (!g_gfx_context->valid()) {
             delete g_gfx_context;
@@ -151,17 +90,29 @@ bool GfxContext::valid() const
     return m_device != nullptr;
 }
 
+ID3D12Device5* GfxContext::getDevice()
+{
+    return m_device;
+}
+
 ID3D12ResourcePtr GfxContext::translateTexture(void *ptr)
 {
-    if (g_translator)
-        return g_translator->translateTexture(ptr);
+    if (auto translator = GetResourceTranslator())
+        return translator->translateTexture(ptr);
     return nullptr;
 }
 
-ID3D12ResourcePtr GfxContext::translateBuffer(void *ptr)
+ID3D12ResourcePtr GfxContext::translateVertexBuffer(void *ptr)
 {
-    if (g_translator)
-        return g_translator->translateBuffer(ptr);
+    if (auto translator = GetResourceTranslator())
+        return translator->translateVertexBuffer(ptr);
+    return nullptr;
+}
+
+ID3D12ResourcePtr GfxContext::translateIndexBuffer(void *ptr)
+{
+    if (auto translator = GetResourceTranslator())
+        return translator->translateIndexBuffer(ptr);
     return nullptr;
 }
 
@@ -174,13 +125,16 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
 {
     using namespace rths;
 
+    rths::GfxContext::initializeInstance();
+
+
     auto* graphics = unityInterfaces->Get<IUnityGraphics>();
     switch (graphics->GetRenderer()) {
     case kUnityGfxRendererD3D11:
-        g_translator = new D3D11ResourceTranslator();
+        InitializeResourceTranslator(unityInterfaces->Get<IUnityGraphicsD3D11>()->GetDevice());
         break;
     case kUnityGfxRendererD3D12:
-        g_translator = new D3D12ResourceTranslator();
+        InitializeResourceTranslator(unityInterfaces->Get<IUnityGraphicsD3D12>()->GetDevice());
         break;
     default:
         // graphics API not supported

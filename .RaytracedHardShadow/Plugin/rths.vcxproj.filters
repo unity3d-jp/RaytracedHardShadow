@@ -18,6 +18,9 @@
     <ClCompile Include="rths\rthsRenderer.cpp">
       <Filter>rths</Filter>
     </ClCompile>
+    <ClCompile Include="rths\rthsResourceTranslator.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\pch.h">
@@ -33,6 +36,9 @@
       <Filter>rths</Filter>
     </ClInclude>
     <ClInclude Include="rths\rthsRenderer.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\rthsResourceTranslator.h">
       <Filter>rths</Filter>
     </ClInclude>
   </ItemGroup>
