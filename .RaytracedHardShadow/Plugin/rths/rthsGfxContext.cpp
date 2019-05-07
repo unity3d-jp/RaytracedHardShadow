@@ -97,21 +97,21 @@ ID3D12Device5* GfxContext::getDevice()
 
 ID3D12ResourcePtr GfxContext::translateTexture(void *ptr)
 {
-    if (auto translator = GetResourceTranslator())
-        return translator->translateTexture(ptr);
+    if (auto translator = GetResourceTranslator(m_device))
+        return translator->createTemporaryRenderTarget(ptr);
     return nullptr;
 }
 
 ID3D12ResourcePtr GfxContext::translateVertexBuffer(void *ptr)
 {
-    if (auto translator = GetResourceTranslator())
+    if (auto translator = GetResourceTranslator(m_device))
         return translator->translateVertexBuffer(ptr);
     return nullptr;
 }
 
 ID3D12ResourcePtr GfxContext::translateIndexBuffer(void *ptr)
 {
-    if (auto translator = GetResourceTranslator())
+    if (auto translator = GetResourceTranslator(m_device))
         return translator->translateIndexBuffer(ptr);
     return nullptr;
 }
@@ -124,9 +124,7 @@ extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
 UnityPluginLoad(IUnityInterfaces* unityInterfaces)
 {
     using namespace rths;
-
-    rths::GfxContext::initializeInstance();
-
+    GfxContext::initializeInstance();
 
     auto* graphics = unityInterfaces->Get<IUnityGraphics>();
     switch (graphics->GetRenderer()) {

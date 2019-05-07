@@ -4,6 +4,9 @@
     <Filter Include="rths">
       <UniqueIdentifier>{d039ae94-4ce1-4932-b8b3-d9e219efd163}</UniqueIdentifier>
     </Filter>
+    <Filter Include="rths\Shaders">
+      <UniqueIdentifier>{d212cab3-57af-4731-88ac-949a03f61c5c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="rths\pch.cpp">
@@ -41,10 +44,19 @@
     <ClInclude Include="rths\rthsResourceTranslator.h">
       <Filter>rths</Filter>
     </ClInclude>
+    <ClInclude Include="rths\Shaders\common.h">
+      <Filter>rths\Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="rths\shader.hlsl">
-      <Filter>rths</Filter>
+    <FxCompile Include="rths\Shaders\copy_vb.hlsl">
+      <Filter>rths\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="rths\Shaders\shader.hlsl">
+      <Filter>rths\Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="rths\Shaders\copy_ib.hlsl">
+      <Filter>rths\Shaders</Filter>
     </FxCompile>
   </ItemGroup>
 </Project>

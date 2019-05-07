@@ -9,12 +9,14 @@ struct float4x4 { float v[16]; };
 
 
 #define DefPtr(_a) _COM_SMARTPTR_TYPEDEF(_a, __uuidof(_a))
-DefPtr(ID3D12Device5);
-DefPtr(ID3D12GraphicsCommandList4);
-DefPtr(ID3D12CommandQueue);
 DefPtr(IDXGISwapChain3);
 DefPtr(IDXGIFactory4);
 DefPtr(IDXGIAdapter1);
+DefPtr(IDxcBlobEncoding);
+DefPtr(ID3D11Buffer);
+DefPtr(ID3D12Device5);
+DefPtr(ID3D12GraphicsCommandList4);
+DefPtr(ID3D12CommandQueue);
 DefPtr(ID3D12Fence);
 DefPtr(ID3D12CommandAllocator);
 DefPtr(ID3D12Resource);
@@ -23,7 +25,6 @@ DefPtr(ID3D12Debug);
 DefPtr(ID3D12StateObject);
 DefPtr(ID3D12RootSignature);
 DefPtr(ID3DBlob);
-DefPtr(IDxcBlobEncoding);
 #undef DefPtr
 
 } // namespace rths
