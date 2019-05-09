@@ -26,9 +26,21 @@ DefPtr(ID3D12DescriptorHeap);
 DefPtr(ID3D12Debug);
 DefPtr(ID3D12StateObject);
 DefPtr(ID3D12RootSignature);
+DefPtr(ID3D12StateObjectProperties);
 DefPtr(ID3DBlob);
+DefPtr(IDxcCompiler);
+DefPtr(IDxcLibrary);
+DefPtr(IDxcBlobEncoding);
+DefPtr(IDxcOperationResult);
+DefPtr(IDxcBlob);
 #undef DefPtr
 
+struct AccelerationStructureBuffers
+{
+    ID3D12ResourcePtr scratch;
+    ID3D12ResourcePtr result;
+    ID3D12ResourcePtr instance_desc; // used only for top-level AS
+};
 
 struct TextureData
 {

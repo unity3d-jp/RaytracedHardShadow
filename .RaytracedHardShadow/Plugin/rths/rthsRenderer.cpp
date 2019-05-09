@@ -27,6 +27,15 @@ void Renderer::endScene()
 
 void Renderer::render()
 {
+    auto ctx = GfxContext::getInstance();
+    ctx->setMeshes(m_mesh_buffers);
+    ctx->flush();
+}
+
+void Renderer::finish()
+{
+    auto ctx = GfxContext::getInstance();
+    ctx->finish();
 }
 
 void Renderer::setRenderTarget(void *rt)

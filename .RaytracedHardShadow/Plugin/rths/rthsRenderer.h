@@ -12,6 +12,7 @@ public:
     void beginScene();
     void endScene();
     void render();
+    void finish();
 
     void setRenderTarget(void *rt);
     void setCamera(const float4x4& trans, float near_, float far_, float fov);

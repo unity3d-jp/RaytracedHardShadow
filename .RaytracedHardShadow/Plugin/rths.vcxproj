@@ -67,7 +67,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <IncludePath>$(SolutionDir)Externals\Unity\PluginAPI;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)Externals\DXCAPI;$(SolutionDir)Externals\Unity\PluginAPI;$(IncludePath)</IncludePath>
     <OutDir>$(SolutionDir)_out\$(Platform)_$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)_tmp\$(ProjectName)_$(Platform)_$(Configuration)\</IntDir>
     <LibraryPath>$(LibraryPath)</LibraryPath>

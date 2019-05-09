@@ -11,6 +11,7 @@
 #include <dxcapi.h>
 #include <comdef.h>
 
+#include <array>
 #include <string>
 #include <vector>
 #include <map>
@@ -25,6 +26,10 @@
 #include <random>
 #include <regex>
 #include <iterator>
+#include <locale>
+#include <codecvt>
+
+#include "dxcapi.use.h"
 
 // Unity PluginAPI
 #include "IUnityInterface.h"
