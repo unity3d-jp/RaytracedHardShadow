@@ -1,4 +1,6 @@
 #include "pch.h"
+#include "rthsLog.h"
+#include "rthsMisc.h"
 #include "rthsGfxContext.h"
 #include "rthsResourceTranslator.h"
 
@@ -180,27 +182,6 @@ static inline std::string convertBlobToString(BlotType* pBlob)
     return std::string(infoLog.data());
 }
 
-static std::wstring string_2_wstring(const std::string& s)
-{
-    std::wstring_convert<std::codecvt_utf8<WCHAR>> cvt;
-    std::wstring ws = cvt.from_bytes(s);
-    return ws;
-}
-
-static std::string wstring_2_string(const std::wstring& ws)
-{
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
-    std::string s = cvt.to_bytes(ws);
-    return s;
-}
-
-static void msgBox(const std::string& msg)
-{
-    ::OutputDebugStringA(msg.c_str());
-}
-
-
-
 static ID3DBlobPtr compileLibrary(const WCHAR* filename, const WCHAR* targetString)
 {
     // Initialize the helper
@@ -214,7 +195,7 @@ static ID3DBlobPtr compileLibrary(const WCHAR* filename, const WCHAR* targetStri
     std::ifstream shaderFile(filename);
     if (shaderFile.good() == false)
     {
-        msgBox("Can't open file " + wstring_2_string(std::wstring(filename)));
+        SetErrorLog("Can't open file %s\n", ToMBS(filename).c_str());
         return nullptr;
     }
     std::stringstream strStream;
@@ -237,7 +218,7 @@ static ID3DBlobPtr compileLibrary(const WCHAR* filename, const WCHAR* targetStri
         IDxcBlobEncodingPtr pError;
         pResult->GetErrorBuffer(&pError);
         std::string log = convertBlobToString(pError.GetInterfacePtr());
-        msgBox("Compiler error:\n" + log);
+        SetErrorLog("Compiler error: %s\n", log.c_str());
         return nullptr;
     }
 
@@ -254,7 +235,7 @@ static ID3D12RootSignaturePtr createRootSignature(ID3D12Device5Ptr pDevice, cons
     if (FAILED(hr))
     {
         std::string msg = convertBlobToString(pErrorBlob.GetInterfacePtr());
-        msgBox(msg);
+        SetErrorLog("%s\n", msg);
         return nullptr;
     }
     ID3D12RootSignaturePtr pRootSig;
@@ -304,26 +285,8 @@ static RootSignatureDesc createRayGenRootDesc()
 
 
 
-static std::string g_gfx_error_log;
 static std::once_flag g_gfx_once;
 static GfxContext *g_gfx_context;
-
-const std::string& GetErrorLog()
-{
-    return g_gfx_error_log;
-}
-void SetErrorLog(const char *format, ...)
-{
-    const int MaxBuf = 2048;
-    char buf[MaxBuf];
-
-    va_list args;
-    va_start(args, format);
-    vsprintf(buf, format, args);
-    g_gfx_error_log = buf;
-    va_end(args);
-}
-
 
 bool GfxContext::initializeInstance()
 {
@@ -446,7 +409,7 @@ GfxContext::GfxContext()
 
             // Create the global root signature and store the empty signature
             GlobalRootSignature root(m_device, {});
-            mpEmptyRootSig = root.pRootSig;
+            m_empty_rootsig = root.pRootSig;
             subobjects[index++] = root.subobject; // 9
 
             // Create the state
@@ -768,43 +731,39 @@ uint64_t GfxContext::submitCommandList()
 
 void GfxContext::flush()
 {
-    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    const float clear_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    m_cmd_list->ClearRenderTargetView(m_rtv, clear_color, 0, nullptr);
-    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-
+    if (!m_render_target.resource) {
+        SetErrorLog("GfxContext::flush(): render target is null\n");
+        return;
+    }
 
     addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    D3D12_DISPATCH_RAYS_DESC rt_desc = {};
-    rt_desc.Width = m_render_target.width;
-    rt_desc.Height = m_render_target.height;
-    rt_desc.Depth = 1;
+    D3D12_DISPATCH_RAYS_DESC dr_desc = {};
+    dr_desc.Width = m_render_target.width;
+    dr_desc.Height = m_render_target.height;
+    dr_desc.Depth = 1;
 
-    // todo
+    // RayGen is the first entry in the shader-table
+    dr_desc.RayGenerationShaderRecord.StartAddress = m_shader_table->GetGPUVirtualAddress() + 0 * m_shader_table_entry_size;
+    dr_desc.RayGenerationShaderRecord.SizeInBytes = m_shader_table_entry_size;
 
-    //// RayGen is the first entry in the shader-table
-    //rt_desc.RayGenerationShaderRecord.StartAddress = mpShaderTable->GetGPUVirtualAddress() + 0 * mShaderTableEntrySize;
-    //rt_desc.RayGenerationShaderRecord.SizeInBytes = mShaderTableEntrySize;
+    // Miss is the second entry in the shader-table
+    size_t miss_offset = 1 * m_shader_table_entry_size;
+    dr_desc.MissShaderTable.StartAddress = m_shader_table->GetGPUVirtualAddress() + miss_offset;
+    dr_desc.MissShaderTable.StrideInBytes = m_shader_table_entry_size;
+    dr_desc.MissShaderTable.SizeInBytes = m_shader_table_entry_size;   // Only a s single miss-entry
 
-    //// Miss is the second entry in the shader-table
-    //size_t missOffset = 1 * mShaderTableEntrySize;
-    //rt_desc.MissShaderTable.StartAddress = mpShaderTable->GetGPUVirtualAddress() + missOffset;
-    //rt_desc.MissShaderTable.StrideInBytes = mShaderTableEntrySize;
-    //rt_desc.MissShaderTable.SizeInBytes = mShaderTableEntrySize;   // Only a s single miss-entry
+    // Hit is the third entry in the shader-table
+    size_t hit_offset = 2 * m_shader_table_entry_size;
+    dr_desc.HitGroupTable.StartAddress = m_shader_table->GetGPUVirtualAddress() + hit_offset;
+    dr_desc.HitGroupTable.StrideInBytes = m_shader_table_entry_size;
+    dr_desc.HitGroupTable.SizeInBytes = m_shader_table_entry_size;
 
-    //// Hit is the third entry in the shader-table
-    //size_t hitOffset = 2 * mShaderTableEntrySize;
-    //rt_desc.HitGroupTable.StartAddress = mpShaderTable->GetGPUVirtualAddress() + hitOffset;
-    //rt_desc.HitGroupTable.StrideInBytes = mShaderTableEntrySize;
-    //rt_desc.HitGroupTable.SizeInBytes = mShaderTableEntrySize;
+    // Bind the empty root signature
+    m_cmd_list->SetComputeRootSignature(m_empty_rootsig);
 
-
-    //// Bind the empty root signature
-    //m_cmd_list->SetComputeRootSignature(mpEmptyRootSig);
-
-    //// Dispatch
-    //m_cmd_list->SetPipelineState1(mpPipelineState.GetInterfacePtr());
-    //m_cmd_list->DispatchRays(&rt_desc);
+    // Dispatch
+    m_cmd_list->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
+    m_cmd_list->DispatchRays(&dr_desc);
 
     // Copy the results to the back-buffer
     addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);

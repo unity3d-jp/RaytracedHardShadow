@@ -24,6 +24,12 @@
     <ClCompile Include="rths\rthsResourceTranslator.cpp">
       <Filter>rths</Filter>
     </ClCompile>
+    <ClCompile Include="rths\rthsLog.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\rthsMisc.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\pch.h">
@@ -46,6 +52,12 @@
     </ClInclude>
     <ClInclude Include="rths\Shaders\common.h">
       <Filter>rths\Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\rthsLog.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\rthsMisc.h">
+      <Filter>rths</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

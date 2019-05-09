@@ -16,6 +16,8 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="rths\rthsGfxContext.cpp" />
+    <ClCompile Include="rths\rthsLog.cpp" />
+    <ClCompile Include="rths\rthsMisc.cpp" />
     <ClCompile Include="rths\rthsRenderer.cpp" />
     <ClCompile Include="rths\rthsResourceTranslator.cpp" />
   </ItemGroup>
@@ -23,6 +25,8 @@
     <ClInclude Include="rths\rths.h" />
     <ClInclude Include="rths\pch.h" />
     <ClInclude Include="rths\rthsGfxContext.h" />
+    <ClInclude Include="rths\rthsLog.h" />
+    <ClInclude Include="rths\rthsMisc.h" />
     <ClInclude Include="rths\rthsRenderer.h" />
     <ClInclude Include="rths\rthsResourceTranslator.h" />
     <ClInclude Include="rths\rthsTypes.h" />

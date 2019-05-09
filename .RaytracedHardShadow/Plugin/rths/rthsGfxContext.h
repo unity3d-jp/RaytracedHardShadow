@@ -52,7 +52,7 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_rtv;
 
     ID3D12StateObjectPtr m_pipeline_state;
-    ID3D12RootSignaturePtr mpEmptyRootSig;
+    ID3D12RootSignaturePtr m_empty_rootsig;
     ID3D12ResourcePtr m_shader_table;
     uint32_t m_shader_table_entry_size = 0;
 
