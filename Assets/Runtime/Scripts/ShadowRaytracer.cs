@@ -55,6 +55,9 @@ namespace UTJ.RaytracedHardShadow
             if (cam == null || m_lights.Length == 0)
                 return;
 
+            if (!m_shadowBuffer.IsCreated())
+                m_shadowBuffer.Create();
+
             m_renderer.SetRenderTarget(m_shadowBuffer);
             m_renderer.BeginScene();
             m_renderer.SetCamera(cam);

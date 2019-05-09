@@ -50,6 +50,27 @@ GfxContext* GfxContext::getInstance()
     return g_gfx_context;
 }
 
+static ID3D12ResourcePtr CreateBuffer(ID3D12Device5Ptr device, uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initState, const D3D12_HEAP_PROPERTIES& heapProps)
+{
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Alignment = 0;
+    desc.DepthOrArraySize = 1;
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Flags = flags;
+    desc.Format = DXGI_FORMAT_UNKNOWN;
+    desc.Height = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.MipLevels = 1;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Width = size;
+
+    ID3D12ResourcePtr ret;
+    device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, initState, nullptr, IID_PPV_ARGS(&ret));
+    return ret;
+}
+
+
 GfxContext::GfxContext()
 {
     IDXGIFactory4Ptr dxgi_factory;
@@ -79,11 +100,77 @@ GfxContext::GfxContext()
             break;
         }
     }
+
+    if (m_device) {
+        m_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
+    }
 }
 
 GfxContext::~GfxContext()
 {
 }
+
+void GfxContext::updateAccelerationStructure(std::vector<MeshBuffers>& meshes)
+{
+    // todo: cache
+    std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geom_descs;
+    geom_descs.resize(meshes.size());
+    size_t num_meshes = meshes.size();
+    for (size_t i = 0; i < num_meshes; ++i) {
+        auto& src = meshes[i];
+
+        auto& geom_desc = geom_descs[i];
+        geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+        geom_desc.Triangles.VertexBuffer.StartAddress = src.vertex_buffer.resource->GetGPUVirtualAddress();
+        geom_desc.Triangles.VertexBuffer.StrideInBytes = src.vertex_buffer.size / src.vertex_count;
+        geom_desc.Triangles.VertexCount = src.vertex_count;
+        geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+        geom_desc.Triangles.IndexBuffer = src.index_buffer.resource->GetGPUVirtualAddress();
+        geom_desc.Triangles.IndexCount = src.index_count;
+        geom_desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+        geom_desc.Triangles.Transform3x4 = src.transform_buffer.resource ? src.transform_buffer.resource->GetGPUVirtualAddress() : 0;
+        geom_desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    }
+
+
+    // Get the size requirements for the scratch and AS buffers
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
+    inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+    inputs.NumDescs = (UINT)geom_descs.size();
+    inputs.pGeometryDescs = geom_descs.data();
+    inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info = {};
+    m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
+
+    // Create the buffers. They need to support UAV, and since we are going to immediately use them, we create them with an unordered-access state
+    static const D3D12_HEAP_PROPERTIES heap_props =
+    {
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        D3D12_MEMORY_POOL_UNKNOWN,
+        0,
+        0
+    };
+    m_as_buffers.scratch = CreateBuffer(m_device, info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, heap_props);
+    m_as_buffers.result = CreateBuffer(m_device, info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, heap_props);
+
+    // Create the bottom-level AS
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc = {};
+    asDesc.Inputs = inputs;
+    asDesc.DestAccelerationStructureData = m_as_buffers.result->GetGPUVirtualAddress();
+    asDesc.ScratchAccelerationStructureData = m_as_buffers.scratch->GetGPUVirtualAddress();
+
+    m_cmd_list->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
+
+    // We need to insert a UAV barrier before using the acceleration structures in a raytracing operation
+    D3D12_RESOURCE_BARRIER uav_barrier = {};
+    uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+    uav_barrier.UAV.pResource = m_as_buffers.result;
+    m_cmd_list->ResourceBarrier(1, &uav_barrier);
+}
+
 
 bool GfxContext::valid() const
 {
@@ -95,25 +182,25 @@ ID3D12Device5* GfxContext::getDevice()
     return m_device;
 }
 
-ID3D12ResourcePtr GfxContext::translateTexture(void *ptr)
+TextureData GfxContext::translateTexture(void *ptr)
 {
     if (auto translator = GetResourceTranslator(m_device))
         return translator->createTemporaryRenderTarget(ptr);
-    return nullptr;
+    return {};
 }
 
-ID3D12ResourcePtr GfxContext::translateVertexBuffer(void *ptr)
+BufferData GfxContext::translateVertexBuffer(void *ptr)
 {
     if (auto translator = GetResourceTranslator(m_device))
         return translator->translateVertexBuffer(ptr);
-    return nullptr;
+    return {};
 }
 
-ID3D12ResourcePtr GfxContext::translateIndexBuffer(void *ptr)
+BufferData GfxContext::translateIndexBuffer(void *ptr)
 {
     if (auto translator = GetResourceTranslator(m_device))
         return translator->translateIndexBuffer(ptr);
-    return nullptr;
+    return {};
 }
 
 } // namespace rths

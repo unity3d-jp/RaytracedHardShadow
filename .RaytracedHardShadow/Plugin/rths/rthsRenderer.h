@@ -19,23 +19,8 @@ public:
     void addMesh(const float4x4& trans, void *vb, void *ib);
 
 private:
-    struct MeshBuffers
-    {
-        ID3D12ResourcePtr m_vertex_buffer;
-        ID3D12ResourcePtr m_index_buffer;
-        ID3D12ResourcePtr m_constant_buffer;
-    };
-    struct LightData
-    {
-        float4 position;
-        float4 direction;
-        float near_;
-        float far_;
-        float fov;
-        float pad;
-    };
 
-    ID3D12ResourcePtr m_render_target;
+    TextureData m_render_target;
     ID3D12ResourcePtr m_camera_buffer;
     ID3D12ResourcePtr m_light_buffer;
 

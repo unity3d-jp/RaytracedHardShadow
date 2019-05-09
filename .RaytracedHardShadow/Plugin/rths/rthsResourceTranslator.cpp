@@ -6,11 +6,18 @@ namespace rths {
 
 class ResourceTranslatorBase : public IResourceTranslator
 {
-public:
+protected:
+    ID3D12ResourcePtr createTemporaryRenderTargetImpl(int width, int height);
 
 protected:
-    std::map<void*, ID3D12ResourcePtr> m_render_target_table;
-    std::map<void*, ID3D12ResourcePtr> m_buffer_table;
+    struct BufferHolder
+    {
+        ID3D12ResourcePtr dxr_buf;
+
+    };
+
+    std::map<void*, TextureData> m_render_target_table;
+    std::map<void*, BufferData> m_buffer_table;
 };
 
 
@@ -19,13 +26,14 @@ class D3D11ResourceTranslator : public ResourceTranslatorBase
 public:
     D3D11ResourceTranslator(ID3D11Device *device);
     ~D3D11ResourceTranslator() override;
-    ID3D12ResourcePtr createTemporaryRenderTarget(void *ptr) override;
+    TextureData createTemporaryRenderTarget(void *ptr) override;
     void copyRenderTarget(void *dst, ID3D12ResourcePtr src) override;
-    ID3D12ResourcePtr translateVertexBuffer(void *ptr) override;
-    ID3D12ResourcePtr translateIndexBuffer(void *ptr) override;
+    BufferData translateVertexBuffer(void *ptr) override;
+    BufferData translateIndexBuffer(void *ptr) override;
 
 private:
-    ID3D11Device *m_unity_device = nullptr;
+    ID3D11DevicePtr m_unity_device = nullptr;
+    ID3D11DeviceContextPtr m_unity_dev_context = nullptr;
 };
 
 class D3D12ResourceTranslator : public ResourceTranslatorBase
@@ -33,10 +41,10 @@ class D3D12ResourceTranslator : public ResourceTranslatorBase
 public:
     D3D12ResourceTranslator(ID3D12Device *device);
     ~D3D12ResourceTranslator() override;
-    ID3D12ResourcePtr createTemporaryRenderTarget(void *ptr) override;
+    TextureData createTemporaryRenderTarget(void *ptr) override;
     void copyRenderTarget(void *dst, ID3D12ResourcePtr src) override;
-    ID3D12ResourcePtr translateVertexBuffer(void *ptr) override;
-    ID3D12ResourcePtr translateIndexBuffer(void *ptr) override;
+    BufferData translateVertexBuffer(void *ptr) override;
+    BufferData translateIndexBuffer(void *ptr) override;
 
 private:
     ID3D12Device *m_device = nullptr;
@@ -46,25 +54,8 @@ private:
 
 
 
-D3D11ResourceTranslator::D3D11ResourceTranslator(ID3D11Device *device)
-    : m_unity_device(device)
+ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryRenderTargetImpl(int width, int height)
 {
-}
-
-D3D11ResourceTranslator::~D3D11ResourceTranslator()
-{
-}
-
-ID3D12ResourcePtr D3D11ResourceTranslator::createTemporaryRenderTarget(void *ptr)
-{
-    auto& ret = m_render_target_table[ptr];
-    if (ret)
-        return ret;
-
-    auto tex = (ID3D11Texture2D*)ptr;
-    D3D11_TEXTURE2D_DESC src_desc{};
-    tex->GetDesc(&src_desc);
-
     D3D12_HEAP_PROPERTIES prop{};
     prop.Type = D3D12_HEAP_TYPE_DEFAULT;
     prop.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
@@ -75,8 +66,8 @@ ID3D12ResourcePtr D3D11ResourceTranslator::createTemporaryRenderTarget(void *ptr
     D3D12_RESOURCE_DESC desc{};
     desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     desc.Alignment = 0;
-    desc.Width = src_desc.Width;
-    desc.Height = src_desc.Height;
+    desc.Width = width;
+    desc.Height = height;
     desc.DepthOrArraySize = 1;
     desc.MipLevels = 1;
     desc.Format = DXGI_FORMAT_R32_FLOAT;
@@ -93,19 +84,59 @@ ID3D12ResourcePtr D3D11ResourceTranslator::createTemporaryRenderTarget(void *ptr
     clear_value.Format = desc.Format;
 
     auto device = GfxContext::getInstance()->getDevice();
+    ID3D12ResourcePtr ret;
     auto hr = device->CreateCommittedResource(&prop, flags, &desc, initial_state, &clear_value, IID_PPV_ARGS(&ret));
+    return ret;
 
+}
+
+D3D11ResourceTranslator::D3D11ResourceTranslator(ID3D11Device *device)
+    : m_unity_device(device)
+{
+    m_unity_device->GetImmediateContext(&m_unity_dev_context);
+}
+
+D3D11ResourceTranslator::~D3D11ResourceTranslator()
+{
+}
+
+TextureData D3D11ResourceTranslator::createTemporaryRenderTarget(void *ptr)
+{
+    auto& ret = m_render_target_table[ptr];
+    if (ret.resource)
+        return ret;
+
+    auto tex = (ID3D11Texture2D*)ptr;
+    D3D11_TEXTURE2D_DESC src_desc{};
+    tex->GetDesc(&src_desc);
+
+    ret.width = src_desc.Width;
+    ret.height = src_desc.Height;
+    ret.resource = createTemporaryRenderTargetImpl(src_desc.Width, src_desc.Height);
     return ret;
 }
 
 void D3D11ResourceTranslator::copyRenderTarget(void *dst, ID3D12ResourcePtr src)
 {
+    HANDLE handle = nullptr;
+    HRESULT hr = 0;
+
+    IDXGIResource *ires = nullptr;
+    hr = src->QueryInterface(__uuidof(IDXGIResource), (LPVOID*)&ires);
+    hr = ires->GetSharedHandle(&handle);
+    ires->Release();
+
+    ID3D11BufferPtr src_buf;
+    hr = m_unity_device->OpenSharedResource(handle, __uuidof(ID3D11Buffer), (LPVOID*)&src_buf);
+
+    auto dst_d3d11 = (ID3D11Buffer*)dst;
+    m_unity_dev_context->CopyResource(dst_d3d11, src_buf);
 }
 
-ID3D12ResourcePtr D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
+BufferData D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
-    if (ret)
+    if (ret.resource)
         return ret;
 
     HANDLE handle = nullptr;
@@ -122,9 +153,7 @@ ID3D12ResourcePtr D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
     hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &tmp_buf);
 
     // copy contents of d3d11_buf to tmp_buf
-    ID3D11DeviceContext *ctx = nullptr;
-    m_unity_device->GetImmediateContext(&ctx);
-    ctx->CopyResource(tmp_buf, d3d11_buf);
+    m_unity_dev_context->CopyResource(tmp_buf, d3d11_buf);
 
     // translate temporary as d3d12 resource
     IDXGIResource *ires = nullptr;
@@ -133,18 +162,44 @@ ID3D12ResourcePtr D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
     ires->Release();
 
     auto device = GfxContext::getInstance()->getDevice();
-    hr = device->OpenSharedHandle(handle, __uuidof(ID3D12Resource), (LPVOID*)&ret);
+    hr = device->OpenSharedHandle(handle, __uuidof(ID3D12Resource), (LPVOID*)&ret.resource);
+    ret.size = src_desc.ByteWidth;
 
     return ret;
 }
 
-ID3D12ResourcePtr D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
+BufferData D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
-    if (ret)
+    if (ret.resource)
         return ret;
 
-    // todo
+    HANDLE handle = nullptr;
+    HRESULT hr = 0;
+
+    auto d3d11_buf = (ID3D11Buffer*)ptr;
+    D3D11_BUFFER_DESC src_desc{};
+    d3d11_buf->GetDesc(&src_desc);
+
+    // create temporary buffer that can be shared with d3d12
+    D3D11_BUFFER_DESC tmp_desc = src_desc;
+    tmp_desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
+    ID3D11BufferPtr tmp_buf;
+    hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &tmp_buf);
+
+    // copy contents of d3d11_buf to tmp_buf
+    m_unity_dev_context->CopyResource(tmp_buf, d3d11_buf);
+
+    // translate temporary as d3d12 resource
+    IDXGIResource *ires = nullptr;
+    hr = tmp_buf->QueryInterface(__uuidof(IDXGIResource), (LPVOID*)&ires);
+    hr = ires->GetSharedHandle(&handle);
+    ires->Release();
+
+    auto device = GfxContext::getInstance()->getDevice();
+    hr = device->OpenSharedHandle(handle, __uuidof(ID3D12Resource), (LPVOID*)&ret.resource);
+    ret.size = src_desc.ByteWidth;
+
     return ret;
 }
 
@@ -160,10 +215,10 @@ D3D12ResourceTranslator::~D3D12ResourceTranslator()
 {
 }
 
-ID3D12ResourcePtr D3D12ResourceTranslator::createTemporaryRenderTarget(void *ptr)
+TextureData D3D12ResourceTranslator::createTemporaryRenderTarget(void *ptr)
 {
     auto& ret = m_render_target_table[ptr];
-    if (ret)
+    if (ret.resource)
         return ret;
 
     // todo
@@ -174,20 +229,20 @@ void D3D12ResourceTranslator::copyRenderTarget(void * dst, ID3D12ResourcePtr src
 {
 }
 
-ID3D12ResourcePtr D3D12ResourceTranslator::translateVertexBuffer(void *ptr)
+BufferData D3D12ResourceTranslator::translateVertexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
-    if (ret)
+    if (ret.resource)
         return ret;
 
     // todo
     return ret;
 }
 
-ID3D12ResourcePtr D3D12ResourceTranslator::translateIndexBuffer(void *ptr)
+BufferData D3D12ResourceTranslator::translateIndexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
-    if (ret)
+    if (ret.resource)
         return ret;
 
     // todo

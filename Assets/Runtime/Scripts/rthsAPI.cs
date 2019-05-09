@@ -18,7 +18,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRender(IntPtr self);
         [DllImport("rths")] static extern void rthsSetCamera(IntPtr self, Matrix4x4 trans, float near, float far, float fov);
         [DllImport("rths")] static extern void rthsAddDirectionalLight(IntPtr self, Matrix4x4 trans);
-        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib);
+        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib, int vertexCount, uint indexCount, uint indexStart);
 
         public static string S(IntPtr cstring)
         {
@@ -87,7 +87,9 @@ namespace UTJ.RaytracedHardShadow
             var mesh = mf.sharedMesh;
             if (mesh == null)
                 return;
-            rthsAddMesh(self, mr.transform.localToWorldMatrix, mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr());
+            rthsAddMesh(self, mr.transform.localToWorldMatrix,
+                mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
+                mesh.vertexCount, mesh.GetIndexCount(0), mesh.GetIndexStart(0));
         }
 
         public void AddMesh(SkinnedMeshRenderer smr)
@@ -96,7 +98,9 @@ namespace UTJ.RaytracedHardShadow
                 return;
             var mesh = new Mesh();
             smr.BakeMesh(mesh);
-            rthsAddMesh(self, smr.transform.localToWorldMatrix, mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr());
+            rthsAddMesh(self, smr.transform.localToWorldMatrix,
+                mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
+                mesh.vertexCount, mesh.GetIndexCount(0), mesh.GetIndexStart(0));
         }
     }
 }

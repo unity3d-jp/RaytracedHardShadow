@@ -13,6 +13,8 @@ DefPtr(IDXGISwapChain3);
 DefPtr(IDXGIFactory4);
 DefPtr(IDXGIAdapter1);
 DefPtr(IDxcBlobEncoding);
+DefPtr(ID3D11Device);
+DefPtr(ID3D11DeviceContext);
 DefPtr(ID3D11Buffer);
 DefPtr(ID3D12Device5);
 DefPtr(ID3D12GraphicsCommandList4);
@@ -26,5 +28,38 @@ DefPtr(ID3D12StateObject);
 DefPtr(ID3D12RootSignature);
 DefPtr(ID3DBlob);
 #undef DefPtr
+
+
+struct TextureData
+{
+    ID3D12ResourcePtr resource;
+    int width = 0;
+    int height = 0;
+};
+
+struct BufferData
+{
+    ID3D12ResourcePtr resource;
+    int size = 0;
+};
+
+struct MeshBuffers
+{
+    BufferData vertex_buffer;
+    BufferData index_buffer;
+    BufferData transform_buffer;
+    int vertex_count = 0;
+    int index_count = 0;
+};
+
+struct LightData
+{
+    float4 position;
+    float4 direction;
+    float near_;
+    float far_;
+    float fov;
+    float pad;
+};
 
 } // namespace rths
