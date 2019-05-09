@@ -69,9 +69,9 @@ rthsAPI void rthsAddDirectionalLight(Renderer *self, float4x4 transform)
     self->addDirectionalLight(transform);
 }
 
-rthsAPI void rthsAddMesh(Renderer *self, float4x4 transform, void *vb, void *ib, int vertex_count, int index_count, int index_start)
+rthsAPI void rthsAddMesh(Renderer *self, float4x4 transform, void *vb, void *ib, int vertex_count, int index_count, int index_offset)
 {
     if (!self || !vb || !ib)
         return;
-    self->addMesh(transform, vb, ib);
+    self->addMesh(transform, vb, ib, vertex_count, index_count, index_offset);
 }

@@ -50,6 +50,7 @@ struct MeshBuffers
     BufferData transform_buffer;
     int vertex_count = 0;
     int index_count = 0;
+    int index_offset = 0;
 };
 
 struct LightData

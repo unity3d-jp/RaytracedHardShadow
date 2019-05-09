@@ -16,7 +16,7 @@ public:
     void setRenderTarget(void *rt);
     void setCamera(const float4x4& trans, float near_, float far_, float fov);
     void addDirectionalLight(const float4x4& trans);
-    void addMesh(const float4x4& trans, void *vb, void *ib);
+    void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_count, int index_offset);
 
 private:
 

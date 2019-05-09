@@ -42,13 +42,18 @@ void Renderer::addDirectionalLight(const float4x4& trans)
 {
 }
 
-void Renderer::addMesh(const float4x4& trans, void *vb, void *ib)
+void Renderer::addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_count, int index_offset)
 {
     MeshBuffers tmp;
     tmp.vertex_buffer = GfxContext::getInstance()->translateVertexBuffer(vb);
     tmp.index_buffer = GfxContext::getInstance()->translateIndexBuffer(ib);
-    if (tmp.vertex_buffer.resource && tmp.index_buffer.resource)
-        m_mesh_buffers.push_back(std::move(tmp));
+    if (!tmp.vertex_buffer.resource)
+        return;
+
+    tmp.vertex_count = vertex_count;
+    tmp.index_count = index_count;
+    tmp.index_offset = index_offset;
+    m_mesh_buffers.push_back(std::move(tmp));
 }
 
 } // namespace rths

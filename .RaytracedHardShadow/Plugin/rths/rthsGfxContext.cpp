@@ -50,7 +50,7 @@ GfxContext* GfxContext::getInstance()
     return g_gfx_context;
 }
 
-static ID3D12ResourcePtr CreateBuffer(ID3D12Device5Ptr device, uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initState, const D3D12_HEAP_PROPERTIES& heapProps)
+static ID3D12ResourcePtr CreateBuffer(ID3D12Device5Ptr device, uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)
 {
     D3D12_RESOURCE_DESC desc = {};
     desc.Alignment = 0;
@@ -66,7 +66,7 @@ static ID3D12ResourcePtr CreateBuffer(ID3D12Device5Ptr device, uint64_t size, D3
     desc.Width = size;
 
     ID3D12ResourcePtr ret;
-    device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, initState, nullptr, IID_PPV_ARGS(&ret));
+    device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, state, nullptr, IID_PPV_ARGS(&ret));
     return ret;
 }
 
@@ -102,7 +102,16 @@ GfxContext::GfxContext()
     }
 
     if (m_device) {
+        {
+            D3D12_COMMAND_QUEUE_DESC desc = {};
+            desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+            desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+            m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue));
+        }
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
+        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
         m_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
+        m_fence_event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
     }
 }
 
@@ -110,26 +119,53 @@ GfxContext::~GfxContext()
 {
 }
 
-void GfxContext::updateAccelerationStructure(std::vector<MeshBuffers>& meshes)
+D3D12_CPU_DESCRIPTOR_HANDLE GfxContext::createRTV(ID3D12ResourcePtr resource, ID3D12DescriptorHeapPtr heap, uint32_t& usedHeapEntries, DXGI_FORMAT format)
 {
-    // todo: cache
+    D3D12_RENDER_TARGET_VIEW_DESC desc = {};
+    desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+    desc.Format = format;
+    desc.Texture2D.MipSlice = 0;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = heap->GetCPUDescriptorHandleForHeapStart();
+    rtvHandle.ptr += usedHeapEntries * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    usedHeapEntries++;
+    m_device->CreateRenderTargetView(resource, &desc, rtvHandle);
+    return rtvHandle;
+}
+
+void GfxContext::setRenderTarget(TextureData rt)
+{
+    uint32_t dummy = 0;
+    m_rtv = createRTV(rt.resource, m_desc_heap, dummy, DXGI_FORMAT_R32_FLOAT);
+}
+
+void GfxContext::setMeshes(std::vector<MeshBuffers>& meshes)
+{
+    // setup geometries
     std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geom_descs;
     geom_descs.resize(meshes.size());
     size_t num_meshes = meshes.size();
     for (size_t i = 0; i < num_meshes; ++i) {
-        auto& src = meshes[i];
+        auto& mesh = meshes[i];
 
         auto& geom_desc = geom_descs[i];
+        geom_desc = {};
         geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-        geom_desc.Triangles.VertexBuffer.StartAddress = src.vertex_buffer.resource->GetGPUVirtualAddress();
-        geom_desc.Triangles.VertexBuffer.StrideInBytes = src.vertex_buffer.size / src.vertex_count;
-        geom_desc.Triangles.VertexCount = src.vertex_count;
-        geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-        geom_desc.Triangles.IndexBuffer = src.index_buffer.resource->GetGPUVirtualAddress();
-        geom_desc.Triangles.IndexCount = src.index_count;
-        geom_desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
-        geom_desc.Triangles.Transform3x4 = src.transform_buffer.resource ? src.transform_buffer.resource->GetGPUVirtualAddress() : 0;
         geom_desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+        if (mesh.vertex_buffer.resource) {
+            geom_desc.Triangles.VertexBuffer.StartAddress = mesh.vertex_buffer.resource->GetGPUVirtualAddress();
+            geom_desc.Triangles.VertexBuffer.StrideInBytes = mesh.vertex_buffer.size / mesh.vertex_count;
+            geom_desc.Triangles.VertexCount = mesh.vertex_count;
+            geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+        }
+        if (mesh.index_buffer.resource) {
+            geom_desc.Triangles.IndexBuffer = mesh.index_buffer.resource->GetGPUVirtualAddress() + (sizeof(int32_t) * mesh.index_offset);
+            geom_desc.Triangles.IndexCount = mesh.index_count;
+            geom_desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+        }
+        if (mesh.transform_buffer.resource) {
+            geom_desc.Triangles.Transform3x4 = mesh.transform_buffer.resource->GetGPUVirtualAddress();
+        }
     }
 
 
@@ -201,6 +237,59 @@ BufferData GfxContext::translateIndexBuffer(void *ptr)
     if (auto translator = GetResourceTranslator(m_device))
         return translator->translateIndexBuffer(ptr);
     return {};
+}
+
+BufferData GfxContext::allocateTransformBuffer(const float4x4& trans)
+{
+    BufferData ret;
+    static const D3D12_HEAP_PROPERTIES heap_props =
+    {
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        D3D12_MEMORY_POOL_UNKNOWN,
+        0,
+        0
+    };
+    ret.size = sizeof(float) * 12;
+    ret.resource = CreateBuffer(m_device, ret.size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, heap_props);
+    return ret;
+}
+
+void GfxContext::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
+{
+    D3D12_RESOURCE_BARRIER barrier = {};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = resource;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = state_before;
+    barrier.Transition.StateAfter = state_after;
+    m_cmd_list->ResourceBarrier(1, &barrier);
+}
+
+void GfxContext::flush()
+{
+    addResourceBarrier(m_render_target, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    const float clear_color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    m_cmd_list->ClearRenderTargetView(m_rtv, clear_color, 0, nullptr);
+
+    addResourceBarrier(m_render_target, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+
+    {
+        m_cmd_list->Close();
+        ID3D12CommandList* cmd_list = m_cmd_list.GetInterfacePtr();
+        m_cmd_queue->ExecuteCommandLists(1, &cmd_list);
+        m_fence_value++;
+        m_cmd_queue->Signal(m_fence, m_fence_value);
+        m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+    }
+
+}
+
+void GfxContext::finish()
+{
+    WaitForSingleObject(m_fence_event, INFINITE);
+    m_cmd_allocator->Reset();
+    m_cmd_list->Reset(m_cmd_allocator, nullptr);
 }
 
 } // namespace rths
