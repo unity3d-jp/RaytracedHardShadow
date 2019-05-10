@@ -67,6 +67,7 @@ void RendererDXR::setRenderTarget(void *rt)
 {
     m_unity_rt = rt;
     m_tmp_rt = GfxContextDXR::getInstance()->translateTexture(rt);
+    GfxContextDXR::getInstance()->setRenderTarget(m_tmp_rt);
 }
 
 void RendererDXR::setCamera(const float4x4& trans, float near_, float far_, float fov)

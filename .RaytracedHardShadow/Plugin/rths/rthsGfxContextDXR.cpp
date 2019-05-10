@@ -541,24 +541,13 @@ ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAG
     return ret;
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE GfxContextDXR::createRTV(ID3D12ResourcePtr resource, ID3D12DescriptorHeapPtr heap, uint32_t& usedHeapEntries, DXGI_FORMAT format)
-{
-    D3D12_RENDER_TARGET_VIEW_DESC desc = {};
-    desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-    desc.Format = format;
-    desc.Texture2D.MipSlice = 0;
-
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = heap->GetCPUDescriptorHandleForHeapStart();
-    rtvHandle.ptr += usedHeapEntries * m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-    usedHeapEntries++;
-    m_device->CreateRenderTargetView(resource, &desc, rtvHandle);
-    return rtvHandle;
-}
-
 void GfxContextDXR::setRenderTarget(TextureData rt)
 {
-    uint32_t dummy = 0;
-    m_rtv = createRTV(rt.resource, m_desc_heap, dummy, DXGI_FORMAT_R32_FLOAT);
+    m_render_target = rt;
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+    uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    m_device->CreateUnorderedAccessView(rt.resource, nullptr, &uav_desc, m_srv_uav_heap->GetCPUDescriptorHandleForHeapStart());
 }
 
 void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)

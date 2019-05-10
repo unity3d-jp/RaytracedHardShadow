@@ -13,6 +13,7 @@ DefPtr(IDxcBlobEncoding);
 DefPtr(ID3D11Device);
 DefPtr(ID3D11DeviceContext);
 DefPtr(ID3D11Buffer);
+DefPtr(ID3D11Texture2D);
 DefPtr(ID3D12Device5);
 DefPtr(ID3D12GraphicsCommandList4);
 DefPtr(ID3D12CommandQueue);

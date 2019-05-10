@@ -68,9 +68,9 @@ ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryRenderTargetImpl(int wi
     desc.SampleDesc.Count = 1;
     desc.SampleDesc.Quality = 0;
     desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
 
-    D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_SHARED;
+    D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES | D3D12_HEAP_FLAG_SHARED;
     D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COPY_SOURCE;
 
     auto device = GfxContextDXR::getInstance()->getDevice();
@@ -108,19 +108,16 @@ TextureData D3D11ResourceTranslator::createTemporaryRenderTarget(void *ptr)
 
 void D3D11ResourceTranslator::copyTexture(void *dst, ID3D12ResourcePtr src)
 {
+    auto device = GfxContextDXR::getInstance()->getDevice();
+
     HANDLE handle = nullptr;
-    HRESULT hr = 0;
+    HRESULT hr = device->CreateSharedHandle(src, nullptr, GENERIC_ALL, nullptr, &handle);
 
-    IDXGIResource *ires = nullptr;
-    hr = src->QueryInterface(__uuidof(IDXGIResource), (LPVOID*)&ires);
-    hr = ires->GetSharedHandle(&handle);
-    ires->Release();
+    ID3D11Texture2DPtr tex;
+    hr = m_unity_device->OpenSharedResource(handle, IID_PPV_ARGS(&tex));
 
-    ID3D11BufferPtr src_buf;
-    hr = m_unity_device->OpenSharedResource(handle, __uuidof(ID3D11Buffer), (LPVOID*)&src_buf);
-
-    auto dst_d3d11 = (ID3D11Buffer*)dst;
-    m_unity_dev_context->CopyResource(dst_d3d11, src_buf);
+    auto dst_d3d11 = (ID3D11Texture2D*)dst;
+    m_unity_dev_context->CopyResource(dst_d3d11, tex);
 }
 
 BufferData D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
@@ -147,12 +144,12 @@ BufferData D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
 
     // translate temporary as d3d12 resource
     IDXGIResource *ires = nullptr;
-    hr = tmp_buf->QueryInterface(__uuidof(IDXGIResource), (LPVOID*)&ires);
+    hr = tmp_buf->QueryInterface(IID_PPV_ARGS(&ires));
     hr = ires->GetSharedHandle(&handle);
     ires->Release();
 
     auto device = GfxContextDXR::getInstance()->getDevice();
-    hr = device->OpenSharedHandle(handle, __uuidof(ID3D12Resource), (LPVOID*)&ret.resource);
+    hr = device->OpenSharedHandle(handle, IID_PPV_ARGS(&ret.resource));
     ret.size = src_desc.ByteWidth;
 
     return ret;
@@ -182,12 +179,12 @@ BufferData D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
 
     // translate temporary as d3d12 resource
     IDXGIResource *ires = nullptr;
-    hr = tmp_buf->QueryInterface(__uuidof(IDXGIResource), (LPVOID*)&ires);
+    hr = tmp_buf->QueryInterface(IID_PPV_ARGS(&ires));
     hr = ires->GetSharedHandle(&handle);
     ires->Release();
 
     auto device = GfxContextDXR::getInstance()->getDevice();
-    hr = device->OpenSharedHandle(handle, __uuidof(ID3D12Resource), (LPVOID*)&ret.resource);
+    hr = device->OpenSharedHandle(handle, IID_PPV_ARGS(&ret.resource));
     ret.size = src_desc.ByteWidth;
 
     return ret;
