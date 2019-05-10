@@ -64,11 +64,13 @@
     <FxCompile Include="rths\Shaders\copy_vb.hlsl">
       <Filter>rths\Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="rths\Shaders\shader.hlsl">
-      <Filter>rths\Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="rths\Shaders\copy_ib.hlsl">
       <Filter>rths\Shaders</Filter>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="rths\Shaders\rthsShaderDXR.hlsl">
+      <Filter>rths\Shaders</Filter>
+    </CustomBuild>
   </ItemGroup>
 </Project>
