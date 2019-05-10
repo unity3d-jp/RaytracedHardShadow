@@ -2,6 +2,7 @@
 
 #include "rthsTypes.h"
 
+#ifdef _WIN32
 namespace rths {
 
 #define DefPtr(_a) _COM_SMARTPTR_TYPEDEF(_a, __uuidof(_a))
@@ -55,10 +56,13 @@ struct MeshBuffers
 {
     BufferData vertex_buffer;
     BufferData index_buffer;
-    BufferData transform_buffer;
     int vertex_count = 0;
     int index_count = 0;
     int index_offset = 0;
+
+    float3x4 transform;
+    ID3D12ResourcePtr acceleration_structure;
 };
 
 } // namespace rths
+#endif // _WIN32

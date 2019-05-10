@@ -1,4 +1,5 @@
 #include "pch.h"
+#ifdef _WIN32
 #include "rthsRenderer.h"
 #include "rthsGfxContextDXR.h"
 
@@ -25,10 +26,7 @@ private:
     TextureData m_tmp_rt;
     ID3D12ResourcePtr m_camera_buffer;
     ID3D12ResourcePtr m_light_buffer;
-
     std::vector<MeshBuffers> m_mesh_buffers;
-    ID3D12ResourcePtr m_toplevel_as;
-    ID3D12ResourcePtr m_bottomlevel_as;
 };
 
 RendererDXR::RendererDXR()
@@ -39,8 +37,6 @@ RendererDXR::~RendererDXR()
 {
     m_camera_buffer = nullptr;
     m_light_buffer = nullptr;
-    m_toplevel_as = nullptr;
-    m_bottomlevel_as = nullptr;
     m_mesh_buffers.clear();
 }
 
@@ -92,6 +88,7 @@ void RendererDXR::addMesh(const float4x4& trans, void *vb, void *ib, int vertex_
     tmp.vertex_count = vertex_count;
     tmp.index_count = index_count;
     tmp.index_offset = index_offset;
+    tmp.transform = to_float3x4(trans);
     m_mesh_buffers.push_back(std::move(tmp));
 }
 
@@ -103,3 +100,4 @@ IRenderer* CreateRendererDXR()
 }
 
 } // namespace rths
+#endif

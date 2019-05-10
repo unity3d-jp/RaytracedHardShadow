@@ -1,4 +1,5 @@
 #pragma once
+#ifdef _WIN32
 #include "rthsTypesDXR.h"
 
 namespace rths {
@@ -27,8 +28,6 @@ public:
 private:
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     D3D12_CPU_DESCRIPTOR_HANDLE createRTV(ID3D12ResourcePtr pResource, ID3D12DescriptorHeapPtr pHeap, uint32_t& usedHeapEntries, DXGI_FORMAT format);
-    AccelerationStructureBuffers createBottomLevelAS(ID3D12ResourcePtr vb);
-    AccelerationStructureBuffers createTopLevelAS(ID3D12ResourcePtr bottom_level_as, uint64_t& tlas_size);
     void addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
     uint64_t submitCommandList();
 
@@ -46,7 +45,9 @@ private:
     HANDLE m_fence_event;
     uint64_t m_fence_value = 0;
 
-    AccelerationStructureBuffers m_as_buffers;
+    ID3D12ResourcePtr m_toplevel_as;
+    std::vector<ID3D12ResourcePtr> m_bottomlevel_as;
+
     TextureData m_render_target;
     D3D12_CPU_DESCRIPTOR_HANDLE m_rtv;
 
@@ -63,3 +64,4 @@ const std::string& GetErrorLog();
 void SetErrorLog(const char *format, ...);
 
 } // namespace rths
+#endif

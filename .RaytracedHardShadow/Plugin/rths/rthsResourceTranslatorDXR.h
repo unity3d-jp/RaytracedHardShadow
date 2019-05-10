@@ -1,4 +1,5 @@
 #pragma once
+#ifdef _WIN32
 #include "rthsTypesDXR.h"
 
 namespace rths {
@@ -19,3 +20,4 @@ void FinalizeResourceTranslator();
 IResourceTranslator* GetResourceTranslator(ID3D12Device *my_gfx_device);
 
 } // namespace rths
+#endif

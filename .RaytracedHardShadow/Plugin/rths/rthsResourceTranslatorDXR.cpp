@@ -1,4 +1,5 @@
 #include "pch.h"
+#ifdef _WIN32
 #include "rthsResourceTranslatorDXR.h"
 #include "rthsGfxContextDXR.h"
 
@@ -274,3 +275,4 @@ IResourceTranslator* GetResourceTranslator(ID3D12Device *my)
 }
 
 } // namespace rths
+#endif
