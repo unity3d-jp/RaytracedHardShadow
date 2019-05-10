@@ -47,6 +47,7 @@ private:
 
     ID3D12ResourcePtr m_toplevel_as;
     std::vector<ID3D12ResourcePtr> m_bottomlevel_as;
+    std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
     TextureData m_render_target;
     D3D12_CPU_DESCRIPTOR_HANDLE m_rtv;
@@ -56,7 +57,7 @@ private:
     ID3D12ResourcePtr m_shader_table;
     uint32_t m_shader_table_entry_size = 0;
 
-    ID3D12DescriptorHeapPtr mpSrvUavHeap;
+    ID3D12DescriptorHeapPtr m_srv_uav_heap;
     static const uint32_t kSrvUavHeapSize = 2;
 };
 

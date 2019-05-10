@@ -54,6 +54,13 @@ rthsAPI void rthsRender(IRenderer *self)
     self->render();
 }
 
+rthsAPI void rthsFinish(IRenderer *self)
+{
+    if (!self)
+        return;
+    self->finish();
+}
+
 rthsAPI void rthsSetCamera(IRenderer *self, float4x4 transform, float near_, float far_, float fov)
 {
     if (!self)

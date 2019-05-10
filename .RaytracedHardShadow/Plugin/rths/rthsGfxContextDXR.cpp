@@ -14,7 +14,7 @@ static const WCHAR* kMissShader = L"miss";
 static const WCHAR* kClosestHitShader = L"chs";
 static const WCHAR* kHitGroup = L"HitGroup";
 
-static const D3D12_HEAP_PROPERTIES kUploadHeapProps =
+const D3D12_HEAP_PROPERTIES kUploadHeapProps =
 {
     D3D12_HEAP_TYPE_UPLOAD,
     D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
@@ -23,7 +23,7 @@ static const D3D12_HEAP_PROPERTIES kUploadHeapProps =
     0,
 };
 
-static const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
+const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
 {
     D3D12_HEAP_TYPE_DEFAULT,
     D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
@@ -35,7 +35,6 @@ static const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
 static dxc::DxcDllSupport gDxcDllHelper;
 
 static ID3D12RootSignaturePtr createRootSignature(ID3D12Device5Ptr pDevice, const D3D12_ROOT_SIGNATURE_DESC& desc);
-static ID3DBlobPtr compileLibrary(const WCHAR* filename, const WCHAR* targetString);
 
 struct DxilLibrary
 {
@@ -165,14 +164,6 @@ struct PipelineConfig
 };
 
 
-static DxilLibrary createDxilLibrary(const wchar_t *path_to_shader)
-{
-    // Compile the shader
-    ID3DBlobPtr pDxilLib = compileLibrary(path_to_shader, L"lib_6_3");
-    const WCHAR* entryPoints[] = { kRayGenShader, kMissShader, kClosestHitShader };
-    return DxilLibrary(pDxilLib, entryPoints, arraysize(entryPoints));
-}
-
 template<class BlotType>
 static inline std::string convertBlobToString(BlotType* pBlob)
 {
@@ -182,39 +173,33 @@ static inline std::string convertBlobToString(BlotType* pBlob)
     return std::string(infoLog.data());
 }
 
-static ID3DBlobPtr compileLibrary(const WCHAR* filename, const WCHAR* targetString)
+static ID3DBlobPtr compileLibrary(const char *shader, int shader_size, const WCHAR* targetString)
 {
     // Initialize the helper
     gDxcDllHelper.Initialize();
     IDxcCompilerPtr pCompiler;
     IDxcLibraryPtr pLibrary;
-    gDxcDllHelper.CreateInstance(CLSID_DxcCompiler, &pCompiler);
-    gDxcDllHelper.CreateInstance(CLSID_DxcLibrary, &pLibrary);
-
-    // Open and read the file
-    std::ifstream shaderFile(filename);
-    if (shaderFile.good() == false)
-    {
-        SetErrorLog("Can't open file %s\n", ToMBS(filename).c_str());
+    if (FAILED(gDxcDllHelper.CreateInstance(CLSID_DxcCompiler, &pCompiler))) {
+        SetErrorLog("failed to create compiler instance.\n");
         return nullptr;
     }
-    std::stringstream strStream;
-    strStream << shaderFile.rdbuf();
-    std::string shader = strStream.str();
+    if (FAILED(gDxcDllHelper.CreateInstance(CLSID_DxcLibrary, &pLibrary))) {
+        SetErrorLog("failed to create dxc library instance.\n");
+        return nullptr;
+    }
 
     // Create blob from the string
     IDxcBlobEncodingPtr pTextBlob;
-    pLibrary->CreateBlobWithEncodingFromPinned((LPBYTE)shader.c_str(), (uint32_t)shader.size(), 0, &pTextBlob);
+    pLibrary->CreateBlobWithEncodingFromPinned(shader, shader_size, 0, &pTextBlob);
 
     // Compile
     IDxcOperationResultPtr pResult;
-    pCompiler->Compile(pTextBlob, filename, L"", targetString, nullptr, 0, nullptr, 0, nullptr, &pResult);
+    pCompiler->Compile(pTextBlob, nullptr, L"", targetString, nullptr, 0, nullptr, 0, nullptr, &pResult);
 
     // Verify the result
     HRESULT resultCode;
     pResult->GetStatus(&resultCode);
-    if (FAILED(resultCode))
-    {
+    if (FAILED(resultCode)) {
         IDxcBlobEncodingPtr pError;
         pResult->GetErrorBuffer(&pError);
         std::string log = convertBlobToString(pError.GetInterfacePtr());
@@ -225,6 +210,14 @@ static ID3DBlobPtr compileLibrary(const WCHAR* filename, const WCHAR* targetStri
     IDxcBlobPtr pBlob;
     pResult->GetResult(&pBlob);
     return pBlob;
+}
+
+static DxilLibrary createDxilLibrary(const char *shader, int shader_size)
+{
+    // Compile the shader
+    ID3DBlobPtr pDxilLib = compileLibrary(shader, shader_size, L"lib_6_3");
+    const WCHAR* entryPoints[] = { kRayGenShader, kMissShader, kClosestHitShader };
+    return DxilLibrary(pDxilLib, entryPoints, arraysize(entryPoints));
 }
 
 static ID3D12RootSignaturePtr createRootSignature(ID3D12Device5Ptr pDevice, const D3D12_ROOT_SIGNATURE_DESC& desc)
@@ -282,6 +275,59 @@ static RootSignatureDesc createRayGenRootDesc()
     return desc;
 }
 
+static ID3D12DescriptorHeapPtr createDescriptorHeap(ID3D12Device5Ptr pDevice, uint32_t count, D3D12_DESCRIPTOR_HEAP_TYPE type, bool shaderVisible)
+{
+    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+    desc.NumDescriptors = count;
+    desc.Type = type;
+    desc.Flags = shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+
+    ID3D12DescriptorHeapPtr pHeap;
+    pDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pHeap));
+    return pHeap;
+}
+
+
+static const char* GetModulePath()
+{
+    static char s_path[MAX_PATH + 1];
+    if (s_path[0] == 0) {
+        HMODULE mod = 0;
+        ::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)&GetModulePath, &mod);
+        DWORD size = ::GetModuleFileNameA(mod, s_path, sizeof(s_path));
+        for (int i = size - 1; i >= 0; --i) {
+            if (s_path[i] == '\\') {
+                s_path[i] = '\0';
+                break;
+            }
+        }
+    }
+    return s_path;
+}
+
+static void AddDLLSearchPath(const char *v)
+{
+    std::string path;
+    {
+        DWORD size = ::GetEnvironmentVariableA("PATH", nullptr, 0);
+        if (size > 0) {
+            path.resize(size);
+            ::GetEnvironmentVariableA("PATH", &path[0], (DWORD)path.size());
+            path.pop_back(); // delete last '\0'
+        }
+    }
+    if (path.find(v) == std::string::npos) {
+        if (!path.empty()) { path += ";"; }
+        auto pos = path.size();
+        path += v;
+        for (size_t i = pos; i < path.size(); ++i) {
+            char& c = path[i];
+            if (c == '/') { c = '\\'; }
+        }
+        ::SetEnvironmentVariableA("PATH", path.c_str());
+    }
+}
+
 
 
 
@@ -314,6 +360,8 @@ GfxContextDXR* GfxContextDXR::getInstance()
 
 GfxContextDXR::GfxContextDXR()
 {
+    AddDLLSearchPath(GetModulePath());
+
     IDXGIFactory4Ptr dxgi_factory;
     ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
 
@@ -369,7 +417,7 @@ GfxContextDXR::GfxContextDXR()
             uint32_t index = 0;
 
             // Create the DXIL library
-            DxilLibrary dxilLib = createDxilLibrary(L"Data/rths.hlsl");
+            DxilLibrary dxilLib = createDxilLibrary(rthsShaderDXR, rthsShaderDXR_size);
             subobjects[index++] = dxilLib.stateSubobject; // 0 Library
 
             HitProgram hitProgram(nullptr, kClosestHitShader, kHitGroup);
@@ -433,6 +481,8 @@ GfxContextDXR::GfxContextDXR()
                 The entry size must be aligned up to D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT
             */
 
+            m_srv_uav_heap = createDescriptorHeap(m_device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+
             // Calculate the size and create the buffer
             m_shader_table_entry_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
             m_shader_table_entry_size += 8; // The ray-gen's descriptor table
@@ -451,7 +501,7 @@ GfxContextDXR::GfxContextDXR()
 
             // Entry 0 - ray-gen program ID and descriptor data
             memcpy(data, sop->GetShaderIdentifier(kRayGenShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-            uint64_t heap_start = mpSrvUavHeap->GetGPUDescriptorHandleForHeapStart().ptr;
+            uint64_t heap_start = m_srv_uav_heap->GetGPUDescriptorHandleForHeapStart().ptr;
             *(uint64_t*)(data + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES) = heap_start;
 
             // Entry 1 - miss program
@@ -552,6 +602,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)
 
         // Create the buffers. They need to support UAV, and since we are going to immediately use them, we create them with an unordered-access state
         auto scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
+        m_temporary_buffers.push_back(scratch);
         mesh.acceleration_structure = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
 
         // Create the bottom-level AS
@@ -584,11 +635,13 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)
 
         // Create the buffers
         auto scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
+        m_temporary_buffers.push_back(scratch);
         m_toplevel_as = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
         uint64_t tlas_size = info.ResultDataMaxSizeInBytes;
 
         // The instance desc should be inside a buffer, create and map the buffer
         auto instance_descs_buf = createBuffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+        m_temporary_buffers.push_back(instance_descs_buf);
         D3D12_RAYTRACING_INSTANCE_DESC* instance_descs;
         instance_descs_buf->Map(0, nullptr, (void**)&instance_descs);
         ZeroMemory(instance_descs, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes);
@@ -725,7 +778,6 @@ void GfxContextDXR::flush()
     m_cmd_list->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
     m_cmd_list->DispatchRays(&dr_desc);
 
-    // Copy the results to the back-buffer
     addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
     submitCommandList();
@@ -733,9 +785,11 @@ void GfxContextDXR::flush()
 
 void GfxContextDXR::finish()
 {
-    WaitForSingleObject(m_fence_event, INFINITE);
+    ::WaitForSingleObject(m_fence_event, INFINITE);
     m_cmd_allocator->Reset();
     m_cmd_list->Reset(m_cmd_allocator, nullptr);
+
+    m_temporary_buffers.clear();
 }
 
 } // namespace rths

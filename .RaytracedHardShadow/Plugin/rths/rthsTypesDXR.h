@@ -64,5 +64,10 @@ struct MeshBuffers
     ID3D12ResourcePtr acceleration_structure;
 };
 
+
+extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
+extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
+
+
 } // namespace rths
 #endif // _WIN32

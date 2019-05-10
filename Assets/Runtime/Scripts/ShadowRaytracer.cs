@@ -68,7 +68,9 @@ namespace UTJ.RaytracedHardShadow
             foreach (var smr in FindObjectsOfType<SkinnedMeshRenderer>())
                 m_renderer.AddMesh(smr);
             m_renderer.EndScene();
+
             m_renderer.Render();
+            m_renderer.Finish();
         }
     }
 }
