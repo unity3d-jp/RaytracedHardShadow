@@ -15,19 +15,19 @@
     <ClCompile Include="rths\rths.cpp">
       <Filter>rths</Filter>
     </ClCompile>
-    <ClCompile Include="rths\rthsGfxContext.cpp">
-      <Filter>rths</Filter>
-    </ClCompile>
-    <ClCompile Include="rths\rthsRenderer.cpp">
-      <Filter>rths</Filter>
-    </ClCompile>
-    <ClCompile Include="rths\rthsResourceTranslator.cpp">
-      <Filter>rths</Filter>
-    </ClCompile>
     <ClCompile Include="rths\rthsLog.cpp">
       <Filter>rths</Filter>
     </ClCompile>
     <ClCompile Include="rths\rthsMisc.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\rthsGfxContextDXR.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\rthsRendererDXR.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\rthsResourceTranslatorDXR.cpp">
       <Filter>rths</Filter>
     </ClCompile>
   </ItemGroup>
@@ -41,13 +41,7 @@
     <ClInclude Include="rths\rthsTypes.h">
       <Filter>rths</Filter>
     </ClInclude>
-    <ClInclude Include="rths\rthsGfxContext.h">
-      <Filter>rths</Filter>
-    </ClInclude>
     <ClInclude Include="rths\rthsRenderer.h">
-      <Filter>rths</Filter>
-    </ClInclude>
-    <ClInclude Include="rths\rthsResourceTranslator.h">
       <Filter>rths</Filter>
     </ClInclude>
     <ClInclude Include="rths\Shaders\common.h">
@@ -57,6 +51,15 @@
       <Filter>rths</Filter>
     </ClInclude>
     <ClInclude Include="rths\rthsMisc.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\rthsGfxContextDXR.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\rthsResourceTranslatorDXR.h">
+      <Filter>rths</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\rthsTypesDXR.h">
       <Filter>rths</Filter>
     </ClInclude>
   </ItemGroup>

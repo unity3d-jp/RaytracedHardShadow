@@ -1,20 +1,20 @@
 #pragma once
-
-#include "rthsTypes.h"
+#include "rthsTypesDXR.h"
 
 namespace rths {
 
-class GfxContext
+class GfxContextDXR
 {
 public:
     static bool initializeInstance();
     static void finalizeInstance();
-    static GfxContext* getInstance();
+    static GfxContextDXR* getInstance();
 
     bool valid() const;
     ID3D12Device5* getDevice();
 
     TextureData translateTexture(void *ptr);
+    void copyTexture(void *dst, ID3D12ResourcePtr src);
     BufferData translateVertexBuffer(void *ptr);
     BufferData translateIndexBuffer(void *ptr);
     BufferData allocateTransformBuffer(const float4x4& trans);
@@ -34,8 +34,8 @@ private:
 
 
 private:
-    GfxContext();
-    ~GfxContext();
+    GfxContextDXR();
+    ~GfxContextDXR();
 
     ID3D12Device5Ptr m_device;
     ID3D12CommandAllocatorPtr m_cmd_allocator;
@@ -47,7 +47,6 @@ private:
     uint64_t m_fence_value = 0;
 
     AccelerationStructureBuffers m_as_buffers;
-    void *m_render_target_unity = nullptr;
     TextureData m_render_target;
     D3D12_CPU_DESCRIPTOR_HANDLE m_rtv;
 

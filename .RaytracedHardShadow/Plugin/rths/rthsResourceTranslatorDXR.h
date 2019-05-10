@@ -1,5 +1,5 @@
 #pragma once
-#include "rthsTypes.h"
+#include "rthsTypesDXR.h"
 
 namespace rths {
 
@@ -8,7 +8,7 @@ class IResourceTranslator
 public:
     virtual ~IResourceTranslator() {}
     virtual TextureData createTemporaryRenderTarget(void *ptr) = 0;
-    virtual void copyRenderTarget(void *dst, ID3D12ResourcePtr src) = 0;
+    virtual void copyTexture(void *dst, ID3D12ResourcePtr src) = 0;
     virtual BufferData translateVertexBuffer(void *ptr) = 0;
     virtual BufferData translateIndexBuffer(void *ptr) = 0;
 };

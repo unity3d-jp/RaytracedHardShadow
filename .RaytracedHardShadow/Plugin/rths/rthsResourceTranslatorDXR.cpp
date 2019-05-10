@@ -1,6 +1,6 @@
 #include "pch.h"
-#include "rthsResourceTranslator.h"
-#include "rthsGfxContext.h"
+#include "rthsResourceTranslatorDXR.h"
+#include "rthsGfxContextDXR.h"
 
 namespace rths {
 
@@ -27,7 +27,7 @@ public:
     D3D11ResourceTranslator(ID3D11Device *device);
     ~D3D11ResourceTranslator() override;
     TextureData createTemporaryRenderTarget(void *ptr) override;
-    void copyRenderTarget(void *dst, ID3D12ResourcePtr src) override;
+    void copyTexture(void *dst, ID3D12ResourcePtr src) override;
     BufferData translateVertexBuffer(void *ptr) override;
     BufferData translateIndexBuffer(void *ptr) override;
 
@@ -42,7 +42,7 @@ public:
     D3D12ResourceTranslator(ID3D12Device *device);
     ~D3D12ResourceTranslator() override;
     TextureData createTemporaryRenderTarget(void *ptr) override;
-    void copyRenderTarget(void *dst, ID3D12ResourcePtr src) override;
+    void copyTexture(void *dst, ID3D12ResourcePtr src) override;
     BufferData translateVertexBuffer(void *ptr) override;
     BufferData translateIndexBuffer(void *ptr) override;
 
@@ -83,7 +83,7 @@ ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryRenderTargetImpl(int wi
     D3D12_CLEAR_VALUE clear_value{};
     clear_value.Format = desc.Format;
 
-    auto device = GfxContext::getInstance()->getDevice();
+    auto device = GfxContextDXR::getInstance()->getDevice();
     ID3D12ResourcePtr ret;
     auto hr = device->CreateCommittedResource(&prop, flags, &desc, initial_state, &clear_value, IID_PPV_ARGS(&ret));
     return ret;
@@ -116,7 +116,7 @@ TextureData D3D11ResourceTranslator::createTemporaryRenderTarget(void *ptr)
     return ret;
 }
 
-void D3D11ResourceTranslator::copyRenderTarget(void *dst, ID3D12ResourcePtr src)
+void D3D11ResourceTranslator::copyTexture(void *dst, ID3D12ResourcePtr src)
 {
     HANDLE handle = nullptr;
     HRESULT hr = 0;
@@ -161,7 +161,7 @@ BufferData D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
     hr = ires->GetSharedHandle(&handle);
     ires->Release();
 
-    auto device = GfxContext::getInstance()->getDevice();
+    auto device = GfxContextDXR::getInstance()->getDevice();
     hr = device->OpenSharedHandle(handle, __uuidof(ID3D12Resource), (LPVOID*)&ret.resource);
     ret.size = src_desc.ByteWidth;
 
@@ -196,7 +196,7 @@ BufferData D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
     hr = ires->GetSharedHandle(&handle);
     ires->Release();
 
-    auto device = GfxContext::getInstance()->getDevice();
+    auto device = GfxContextDXR::getInstance()->getDevice();
     hr = device->OpenSharedHandle(handle, __uuidof(ID3D12Resource), (LPVOID*)&ret.resource);
     ret.size = src_desc.ByteWidth;
 
@@ -225,7 +225,7 @@ TextureData D3D12ResourceTranslator::createTemporaryRenderTarget(void *ptr)
     return ret;
 }
 
-void D3D12ResourceTranslator::copyRenderTarget(void * dst, ID3D12ResourcePtr src)
+void D3D12ResourceTranslator::copyTexture(void * dst, ID3D12ResourcePtr src)
 {
 }
 

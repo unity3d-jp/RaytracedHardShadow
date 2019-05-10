@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "rths.h"
+#include "rthsLog.h"
 #include "rthsRenderer.h"
 
 #ifdef _WIN32
@@ -15,61 +16,59 @@ rthsAPI const char* rthsGetErrorLog()
     return GetErrorLog().c_str();
 }
 
-rthsAPI Renderer* rthsCreateRenderer()
+rthsAPI IRenderer* rthsCreateRenderer()
 {
-    if (!GfxContext::initializeInstance())
-        return nullptr;
-    return new Renderer();
+    return CreateRendererDXR();
 }
 
-rthsAPI void rthsDestroyRenderer(Renderer *self)
+rthsAPI void rthsDestroyRenderer(IRenderer *self)
 {
     return delete self;
 }
 
-rthsAPI void rthsSetRenderTarget(Renderer *self, void *render_target)
+rthsAPI void rthsSetRenderTarget(IRenderer *self, void *render_target)
 {
     if (!self || !render_target)
         return;
     self->setRenderTarget(render_target);
 }
 
-rthsAPI void rthsBeginScene(Renderer *self)
+rthsAPI void rthsBeginScene(IRenderer *self)
 {
     if (!self)
         return;
     self->beginScene();
 }
 
-rthsAPI void rthsEndScene(Renderer *self)
+rthsAPI void rthsEndScene(IRenderer *self)
 {
     if (!self)
         return;
     self->endScene();
 }
 
-rthsAPI void rthsRender(Renderer *self)
+rthsAPI void rthsRender(IRenderer *self)
 {
     if (!self)
         return;
     self->render();
 }
 
-rthsAPI void rthsSetCamera(Renderer *self, float4x4 transform, float near_, float far_, float fov)
+rthsAPI void rthsSetCamera(IRenderer *self, float4x4 transform, float near_, float far_, float fov)
 {
     if (!self)
         return;
     self->setCamera(transform, near_, far_, fov);
 }
 
-rthsAPI void rthsAddDirectionalLight(Renderer *self, float4x4 transform)
+rthsAPI void rthsAddDirectionalLight(IRenderer *self, float4x4 transform)
 {
     if (!self)
         return;
     self->addDirectionalLight(transform);
 }
 
-rthsAPI void rthsAddMesh(Renderer *self, float4x4 transform, void *vb, void *ib, int vertex_count, int index_count, int index_offset)
+rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform, void *vb, void *ib, int vertex_count, int index_count, int index_offset)
 {
     if (!self || !vb || !ib)
         return;

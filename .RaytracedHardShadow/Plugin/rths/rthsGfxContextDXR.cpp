@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "rthsLog.h"
 #include "rthsMisc.h"
-#include "rthsGfxContext.h"
-#include "rthsResourceTranslator.h"
+#include "rthsGfxContextDXR.h"
+#include "rthsResourceTranslatorDXR.h"
 #include "rthsShaderDXR.h"
 
 
@@ -285,12 +285,12 @@ static RootSignatureDesc createRayGenRootDesc()
 
 
 static std::once_flag g_gfx_once;
-static GfxContext *g_gfx_context;
+static GfxContextDXR *g_gfx_context;
 
-bool GfxContext::initializeInstance()
+bool GfxContextDXR::initializeInstance()
 {
     std::call_once(g_gfx_once, []() {
-        g_gfx_context = new GfxContext();
+        g_gfx_context = new GfxContextDXR();
         if (!g_gfx_context->valid()) {
             delete g_gfx_context;
             g_gfx_context = nullptr;
@@ -299,19 +299,19 @@ bool GfxContext::initializeInstance()
     return g_gfx_context != nullptr;
 }
 
-void GfxContext::finalizeInstance()
+void GfxContextDXR::finalizeInstance()
 {
     delete g_gfx_context;
     g_gfx_context = nullptr;
 }
 
 
-GfxContext* GfxContext::getInstance()
+GfxContextDXR* GfxContextDXR::getInstance()
 {
     return g_gfx_context;
 }
 
-GfxContext::GfxContext()
+GfxContextDXR::GfxContextDXR()
 {
     IDXGIFactory4Ptr dxgi_factory;
     ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
@@ -466,11 +466,11 @@ GfxContext::GfxContext()
     }
 }
 
-GfxContext::~GfxContext()
+GfxContextDXR::~GfxContextDXR()
 {
 }
 
-ID3D12ResourcePtr GfxContext::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)
+ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)
 {
     D3D12_RESOURCE_DESC desc = {};
     desc.Alignment = 0;
@@ -490,7 +490,7 @@ ID3D12ResourcePtr GfxContext::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS f
     return ret;
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE GfxContext::createRTV(ID3D12ResourcePtr resource, ID3D12DescriptorHeapPtr heap, uint32_t& usedHeapEntries, DXGI_FORMAT format)
+D3D12_CPU_DESCRIPTOR_HANDLE GfxContextDXR::createRTV(ID3D12ResourcePtr resource, ID3D12DescriptorHeapPtr heap, uint32_t& usedHeapEntries, DXGI_FORMAT format)
 {
     D3D12_RENDER_TARGET_VIEW_DESC desc = {};
     desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
@@ -504,7 +504,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE GfxContext::createRTV(ID3D12ResourcePtr resource, ID
     return rtvHandle;
 }
 
-AccelerationStructureBuffers GfxContext::createBottomLevelAS(ID3D12ResourcePtr vb)
+AccelerationStructureBuffers GfxContextDXR::createBottomLevelAS(ID3D12ResourcePtr vb)
 {
     D3D12_RAYTRACING_GEOMETRY_DESC geomDesc = {};
     geomDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -547,7 +547,7 @@ AccelerationStructureBuffers GfxContext::createBottomLevelAS(ID3D12ResourcePtr v
     return buffers;
 }
 
-AccelerationStructureBuffers GfxContext::createTopLevelAS(ID3D12ResourcePtr bottom_level_as, uint64_t& tlas_size)
+AccelerationStructureBuffers GfxContextDXR::createTopLevelAS(ID3D12ResourcePtr bottom_level_as, uint64_t& tlas_size)
 {
     // First, get the size of the TLAS buffers and create them
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
@@ -600,13 +600,13 @@ AccelerationStructureBuffers GfxContext::createTopLevelAS(ID3D12ResourcePtr bott
     return buffers;
 }
 
-void GfxContext::setRenderTarget(TextureData rt)
+void GfxContextDXR::setRenderTarget(TextureData rt)
 {
     uint32_t dummy = 0;
     m_rtv = createRTV(rt.resource, m_desc_heap, dummy, DXGI_FORMAT_R32_FLOAT);
 }
 
-void GfxContext::setMeshes(std::vector<MeshBuffers>& meshes)
+void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)
 {
     // setup geometries
     std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geom_descs;
@@ -667,38 +667,44 @@ void GfxContext::setMeshes(std::vector<MeshBuffers>& meshes)
 }
 
 
-bool GfxContext::valid() const
+bool GfxContextDXR::valid() const
 {
     return m_device != nullptr;
 }
 
-ID3D12Device5* GfxContext::getDevice()
+ID3D12Device5* GfxContextDXR::getDevice()
 {
     return m_device;
 }
 
-TextureData GfxContext::translateTexture(void *ptr)
+TextureData GfxContextDXR::translateTexture(void *ptr)
 {
     if (auto translator = GetResourceTranslator(m_device))
         return translator->createTemporaryRenderTarget(ptr);
     return {};
 }
 
-BufferData GfxContext::translateVertexBuffer(void *ptr)
+void GfxContextDXR::copyTexture(void *dst, ID3D12ResourcePtr src)
+{
+    if (auto translator = GetResourceTranslator(m_device))
+        return translator->copyTexture(dst, src);
+}
+
+BufferData GfxContextDXR::translateVertexBuffer(void *ptr)
 {
     if (auto translator = GetResourceTranslator(m_device))
         return translator->translateVertexBuffer(ptr);
     return {};
 }
 
-BufferData GfxContext::translateIndexBuffer(void *ptr)
+BufferData GfxContextDXR::translateIndexBuffer(void *ptr)
 {
     if (auto translator = GetResourceTranslator(m_device))
         return translator->translateIndexBuffer(ptr);
     return {};
 }
 
-BufferData GfxContext::allocateTransformBuffer(const float4x4& trans)
+BufferData GfxContextDXR::allocateTransformBuffer(const float4x4& trans)
 {
     BufferData ret;
     ret.size = sizeof(float) * 12;
@@ -706,7 +712,7 @@ BufferData GfxContext::allocateTransformBuffer(const float4x4& trans)
     return ret;
 }
 
-void GfxContext::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
+void GfxContextDXR::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
 {
     D3D12_RESOURCE_BARRIER barrier = {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -717,7 +723,7 @@ void GfxContext::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_S
     m_cmd_list->ResourceBarrier(1, &barrier);
 }
 
-uint64_t GfxContext::submitCommandList()
+uint64_t GfxContextDXR::submitCommandList()
 {
     m_cmd_list->Close();
     ID3D12CommandList* cmd_list = m_cmd_list.GetInterfacePtr();
@@ -728,7 +734,7 @@ uint64_t GfxContext::submitCommandList()
     return m_fence_value;
 }
 
-void GfxContext::flush()
+void GfxContextDXR::flush()
 {
     if (!m_render_target.resource) {
         SetErrorLog("GfxContext::flush(): render target is null\n");
@@ -770,13 +776,11 @@ void GfxContext::flush()
     submitCommandList();
 }
 
-void GfxContext::finish()
+void GfxContextDXR::finish()
 {
     WaitForSingleObject(m_fence_event, INFINITE);
     m_cmd_allocator->Reset();
     m_cmd_list->Reset(m_cmd_allocator, nullptr);
-
-    GetResourceTranslator(m_device)->copyRenderTarget(m_render_target_unity, m_render_target.resource);
 }
 
 } // namespace rths
@@ -787,7 +791,7 @@ extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
 UnityPluginLoad(IUnityInterfaces* unityInterfaces)
 {
     using namespace rths;
-    GfxContext::initializeInstance();
+    GfxContextDXR::initializeInstance();
 
     auto* graphics = unityInterfaces->Get<IUnityGraphics>();
     switch (graphics->GetRenderer()) {
