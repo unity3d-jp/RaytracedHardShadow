@@ -390,12 +390,32 @@ ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAG
 
 bool GfxContextDXR::initializeDevice()
 {
-#ifdef rthsDebug
+#ifdef rthsEnableD3D12DebugLayer
     {
-        ID3D12DebugPtr debug;
-        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))
+        // enable d3d12 debug features
+        ID3D12DebugPtr debug0;
+        if (SUCCEEDED(::D3D12GetDebugInterface(IID_PPV_ARGS(&debug0))))
         {
-            debug->EnableDebugLayer();
+            // enable debug layer
+            debug0->EnableDebugLayer();
+
+#ifdef rthsEnableD3D12GBV
+            ID3D12Debug1Ptr debug1;
+            if (SUCCEEDED(debug0->QueryInterface(IID_PPV_ARGS(&debug1)))) {
+                debug1->SetEnableGPUBasedValidation(true);
+                debug1->SetEnableSynchronizedCommandQueueValidation(true);
+            }
+#endif
+        }
+    }
+#endif
+
+#ifdef rthsEnableD3D12DREAD
+    {
+        ID3D12DeviceRemovedExtendedDataSettingsPtr dread_settings;
+        if (SUCCEEDED(::D3D12GetDebugInterface(IID_PPV_ARGS(&dread_settings)))) {
+            dread_settings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+            dread_settings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
         }
     }
 #endif
@@ -700,6 +720,19 @@ bool GfxContextDXR::validateDevice()
 
     auto reason = m_device->GetDeviceRemovedReason();
     if (reason != 0) {
+#ifdef rthsEnableD3D12DREAD
+        {
+            ID3D12DeviceRemovedExtendedDataPtr dread;
+            if (m_device->QueryInterface(IID_PPV_ARGS(&dread))) {
+                D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT DredAutoBreadcrumbsOutput;
+                D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
+                dread->GetAutoBreadcrumbsOutput(&DredAutoBreadcrumbsOutput);
+                dread->GetPageFaultAllocationOutput(&DredPageFaultOutput);
+                // todo: get error log
+            }
+        }
+#endif
+
         PSTR buf = nullptr;
         size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
             NULL, reason, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&buf, 0, NULL);

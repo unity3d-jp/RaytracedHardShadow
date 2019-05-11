@@ -3,6 +3,20 @@
 #include "rthsTypes.h"
 
 #ifdef _WIN32
+#ifdef rthsDebug
+    // debug layer
+    #define rthsEnableD3D12DebugLayer
+
+    // GPU based validation
+    // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/using-d3d12-debug-layer-gpu-based-validation
+    #define rthsEnableD3D12GBV
+
+    // DREAD (this requires Windows SDK 10.0.18362.0 or newer)
+    // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
+    #define rthsEnableD3D12DREAD
+#endif
+
+
 namespace rths {
 
 #define DefPtr(_a) _COM_SMARTPTR_TYPEDEF(_a, __uuidof(_a))
@@ -23,10 +37,17 @@ DefPtr(ID3D12Fence);
 DefPtr(ID3D12CommandAllocator);
 DefPtr(ID3D12Resource);
 DefPtr(ID3D12DescriptorHeap);
-DefPtr(ID3D12Debug);
 DefPtr(ID3D12StateObject);
 DefPtr(ID3D12RootSignature);
 DefPtr(ID3D12StateObjectProperties);
+DefPtr(ID3D12Debug);
+#ifdef rthsEnableD3D12GBV
+    DefPtr(ID3D12Debug1);
+#endif
+#ifdef rthsEnableD3D12DREAD
+    DefPtr(ID3D12DeviceRemovedExtendedDataSettings);
+    DefPtr(ID3D12DeviceRemovedExtendedData);
+#endif
 DefPtr(ID3DBlob);
 DefPtr(IDxcCompiler);
 DefPtr(IDxcLibrary);
