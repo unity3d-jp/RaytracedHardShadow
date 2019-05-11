@@ -377,20 +377,23 @@ GfxContextDXR::GfxContextDXR()
 
         // Create the device
         ID3D12Device5Ptr device;
-        ::D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
+        HRESULT hr = ::D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
+        if (FAILED(hr)) {
+            continue;
+        }
 
         D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5;
-        HRESULT hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
-        if (FAILED(hr) || features5.RaytracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
-            SetErrorLog("DXR is not supported on this device");
-        }
-        else {
+        hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
+        if (SUCCEEDED(hr) && features5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
             m_device = device;
             break;
         }
     }
 
-    if (m_device) {
+    if (!m_device) {
+        SetErrorLog("DXR is not supported on this device");
+    }
+    else {
         {
             D3D12_COMMAND_QUEUE_DESC desc = {};
             desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;

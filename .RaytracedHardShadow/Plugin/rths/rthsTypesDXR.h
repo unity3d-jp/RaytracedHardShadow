@@ -9,8 +9,10 @@ namespace rths {
 DefPtr(IDXGISwapChain3);
 DefPtr(IDXGIFactory4);
 DefPtr(IDXGIAdapter1);
+DefPtr(IDXGIResource);
 DefPtr(IDxcBlobEncoding);
 DefPtr(ID3D11Device);
+DefPtr(ID3D11Device1);
 DefPtr(ID3D11DeviceContext);
 DefPtr(ID3D11Buffer);
 DefPtr(ID3D11Texture2D);
