@@ -390,6 +390,16 @@ ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAG
 
 bool GfxContextDXR::initializeDevice()
 {
+#ifdef rthsDebug
+    {
+        ID3D12DebugPtr debug;
+        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))
+        {
+            debug->EnableDebugLayer();
+        }
+    }
+#endif
+
     IDXGIFactory4Ptr dxgi_factory;
     ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
 
@@ -554,7 +564,7 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    m_device->CreateUnorderedAccessView(rt.resource, nullptr, &uav_desc, m_srv_uav_heap->GetCPUDescriptorHandleForHeapStart());
+    m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_srv_uav_heap->GetCPUDescriptorHandleForHeapStart());
 }
 
 void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
@@ -767,16 +777,20 @@ void GfxContextDXR::flush()
     addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
     submitCommandList();
+    m_flushing = true;
 }
 
 void GfxContextDXR::finish()
 {
-    ::WaitForSingleObject(m_fence_event, INFINITE);
+    if (m_flushing) {
+        ::WaitForSingleObject(m_fence_event, INFINITE);
+        m_flushing = false;
+    }
+
     m_cmd_allocator->Reset();
     m_cmd_list->Reset(m_cmd_allocator, nullptr);
 
     GetResourceTranslator(m_device)->applyTexture(m_render_target);
-
     m_temporary_buffers.clear();
 }
 

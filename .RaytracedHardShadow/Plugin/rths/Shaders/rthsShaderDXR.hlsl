@@ -40,5 +40,5 @@ void miss(inout RayPayload payload)
 [shader("closesthit")]
 void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
-    payload.shadow = 0.0;
+    payload.shadow = 1.0;
 }

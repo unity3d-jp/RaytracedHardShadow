@@ -51,6 +51,8 @@ private:
 
     ID3D12DescriptorHeapPtr m_srv_uav_heap;
     static const uint32_t kSrvUavHeapSize = 2;
+
+    bool m_flushing = false;
 };
 
 } // namespace rths
