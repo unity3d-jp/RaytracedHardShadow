@@ -8,17 +8,12 @@ namespace rths {
 class ResourceTranslatorBase : public IResourceTranslator
 {
 protected:
-    ID3D12ResourcePtr createTemporaryRenderTargetImpl(int width, int height);
+    void clearCache() override;
+    ID3D12ResourcePtr createTemporaryTextureImpl(int width, int height);
 
 protected:
-    struct BufferHolder
-    {
-        ID3D12ResourcePtr dxr_buf;
-
-    };
-
-    std::map<void*, TextureData> m_render_target_table;
-    std::map<void*, BufferData> m_buffer_table;
+    std::map<void*, TextureDataDXR> m_render_target_table;
+    std::map<void*, BufferDataDXR> m_buffer_table;
 };
 
 
@@ -27,10 +22,10 @@ class D3D11ResourceTranslator : public ResourceTranslatorBase
 public:
     D3D11ResourceTranslator(ID3D11Device *device);
     ~D3D11ResourceTranslator() override;
-    TextureData createTemporaryRenderTarget(void *ptr) override;
-    void copyTexture(void *dst, ID3D12ResourcePtr src) override;
-    BufferData translateVertexBuffer(void *ptr) override;
-    BufferData translateIndexBuffer(void *ptr) override;
+    TextureDataDXR createTemporaryTexture(void *ptr) override;
+    void applyTexture(TextureDataDXR& tex) override;
+    BufferDataDXR translateVertexBuffer(void *ptr) override;
+    BufferDataDXR translateIndexBuffer(void *ptr) override;
 
 private:
     // note: sharing resources from d3d12 to d3d11 require d3d11.1.
@@ -43,10 +38,10 @@ class D3D12ResourceTranslator : public ResourceTranslatorBase
 public:
     D3D12ResourceTranslator(ID3D12Device *device);
     ~D3D12ResourceTranslator() override;
-    TextureData createTemporaryRenderTarget(void *ptr) override;
-    void copyTexture(void *dst, ID3D12ResourcePtr src) override;
-    BufferData translateVertexBuffer(void *ptr) override;
-    BufferData translateIndexBuffer(void *ptr) override;
+    TextureDataDXR createTemporaryTexture(void *ptr) override;
+    void applyTexture(TextureDataDXR& tex) override;
+    BufferDataDXR translateVertexBuffer(void *ptr) override;
+    BufferDataDXR translateIndexBuffer(void *ptr) override;
 
 private:
     ID3D12Device *m_device = nullptr;
@@ -56,9 +51,15 @@ private:
 
 
 
-ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryRenderTargetImpl(int width, int height)
+void ResourceTranslatorBase::clearCache()
 {
-    // note: sharing the resource with d3d11 requires some flags and restrictions:
+    m_render_target_table.clear();
+    m_buffer_table.clear();
+}
+
+ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, int height)
+{
+    // note: sharing textures with d3d11 requires some flags and restrictions:
     // - MipLevels must be 1
     // - D3D12_HEAP_FLAG_SHARED for heap flags
     // - D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET and D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS for resource flags
@@ -96,102 +97,99 @@ D3D11ResourceTranslator::~D3D11ResourceTranslator()
 {
 }
 
-TextureData D3D11ResourceTranslator::createTemporaryRenderTarget(void *ptr)
+TextureDataDXR D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
 {
     auto& ret = m_render_target_table[ptr];
     if (ret.resource)
         return ret;
 
-    auto tex = (ID3D11Texture2D*)ptr;
+    auto tex_unity = (ID3D11Texture2D*)ptr;
     D3D11_TEXTURE2D_DESC src_desc{};
-    tex->GetDesc(&src_desc);
+    tex_unity->GetDesc(&src_desc);
 
+    ret.texture = ptr;
     ret.width = src_desc.Width;
     ret.height = src_desc.Height;
-    ret.resource = createTemporaryRenderTargetImpl(src_desc.Width, src_desc.Height);
+    ret.resource = createTemporaryTextureImpl(src_desc.Width, src_desc.Height);
+
+    auto hr = GfxContextDXR::getInstance()->getDevice()->CreateSharedHandle(ret.resource, nullptr, GENERIC_ALL, nullptr, &ret.handle);
+    if (SUCCEEDED(hr)) {
+        // note: ID3D11Device::OpenSharedHandle() doesn't accept handles created by d3d12. ID3D11Device1::OpenSharedHandle1() is needed.
+        hr = m_unity_device->OpenSharedResource1(ret.handle, IID_PPV_ARGS(&ret.temporary_d3d11));
+    }
     return ret;
 }
 
-void D3D11ResourceTranslator::copyTexture(void *dst, ID3D12ResourcePtr src)
+void D3D11ResourceTranslator::applyTexture(TextureDataDXR& src)
 {
-    auto device = GfxContextDXR::getInstance()->getDevice();
-
-    HANDLE handle = nullptr;
-    HRESULT hr = device->CreateSharedHandle(src, nullptr, GENERIC_ALL, nullptr, &handle);
-
-    // note: ID3D11Device::OpenSharedHandle() doesn't accept handles created by d3d12. ID3D11Device1::OpenSharedHandle1() is needed.
-    ID3D11Texture2DPtr tex;
-    hr = m_unity_device->OpenSharedResource1(handle, IID_PPV_ARGS(&tex));
-
-    auto dst_d3d11 = (ID3D11Texture2D*)dst;
-    m_unity_dev_context->CopyResource(dst_d3d11, tex);
+    if (src.temporary_d3d11) {
+        m_unity_dev_context->CopyResource((ID3D11Texture2D*)src.texture, src.temporary_d3d11);
+    }
 }
 
-BufferData D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
+BufferDataDXR D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
     if (ret.resource)
         return ret;
+    ret.buffer = ptr;
 
-    HANDLE handle = nullptr;
-    HRESULT hr = 0;
+    HRESULT hr;
 
-    auto d3d11_buf = (ID3D11Buffer*)ptr;
+    auto buf_unity = (ID3D11Buffer*)ptr;
     D3D11_BUFFER_DESC src_desc{};
-    d3d11_buf->GetDesc(&src_desc);
+    buf_unity->GetDesc(&src_desc);
 
     // create temporary buffer that can be shared with d3d12
     D3D11_BUFFER_DESC tmp_desc = src_desc;
     tmp_desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
-    ID3D11BufferPtr tmp_buf;
-    hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &tmp_buf);
+    hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
+    if (SUCCEEDED(hr)) {
+        // copy contents of VB to temporary
+        m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
 
-    // copy contents of d3d11_buf to tmp_buf
-    m_unity_dev_context->CopyResource(tmp_buf, d3d11_buf);
+        // translate temporary as d3d12 resource
+        IDXGIResourcePtr ires;
+        hr = ret.temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
+        hr = ires->GetSharedHandle(&ret.handle);
+        hr = GfxContextDXR::getInstance()->getDevice()->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.resource));
 
-    // translate temporary as d3d12 resource
-    IDXGIResourcePtr ires;
-    hr = tmp_buf->QueryInterface(IID_PPV_ARGS(&ires));
-    hr = ires->GetSharedHandle(&handle);
-
-    auto device = GfxContextDXR::getInstance()->getDevice();
-    hr = device->OpenSharedHandle(handle, IID_PPV_ARGS(&ret.resource));
-    ret.size = src_desc.ByteWidth;
+        ret.size = src_desc.ByteWidth;
+    }
 
     return ret;
 }
 
-BufferData D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
+BufferDataDXR D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
     if (ret.resource)
         return ret;
+    ret.buffer = ptr;
 
-    HANDLE handle = nullptr;
     HRESULT hr = 0;
 
-    auto d3d11_buf = (ID3D11Buffer*)ptr;
+    auto buf_unity = (ID3D11Buffer*)ptr;
     D3D11_BUFFER_DESC src_desc{};
-    d3d11_buf->GetDesc(&src_desc);
+    buf_unity->GetDesc(&src_desc);
 
     // create temporary buffer that can be shared with d3d12
     D3D11_BUFFER_DESC tmp_desc = src_desc;
     tmp_desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
-    ID3D11BufferPtr tmp_buf;
-    hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &tmp_buf);
+    hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
+    if (SUCCEEDED(hr)) {
+        // copy contents of IB to temporary
+        m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
 
-    // copy contents of d3d11_buf to tmp_buf
-    m_unity_dev_context->CopyResource(tmp_buf, d3d11_buf);
+        // translate temporary as d3d12 resource
+        IDXGIResourcePtr ires;
+        hr = ret.temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
+        hr = ires->GetSharedHandle(&ret.handle);
 
-    // translate temporary as d3d12 resource
-    IDXGIResourcePtr ires;
-    hr = tmp_buf->QueryInterface(IID_PPV_ARGS(&ires));
-    hr = ires->GetSharedHandle(&handle);
-
-    auto device = GfxContextDXR::getInstance()->getDevice();
-    hr = device->OpenSharedHandle(handle, IID_PPV_ARGS(&ret.resource));
-    ret.size = src_desc.ByteWidth;
-
+        auto device = GfxContextDXR::getInstance()->getDevice();
+        hr = device->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.resource));
+        ret.size = src_desc.ByteWidth;
+    }
     return ret;
 }
 
@@ -207,7 +205,7 @@ D3D12ResourceTranslator::~D3D12ResourceTranslator()
 {
 }
 
-TextureData D3D12ResourceTranslator::createTemporaryRenderTarget(void *ptr)
+TextureDataDXR D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
 {
     auto& ret = m_render_target_table[ptr];
     if (ret.resource)
@@ -217,11 +215,11 @@ TextureData D3D12ResourceTranslator::createTemporaryRenderTarget(void *ptr)
     return ret;
 }
 
-void D3D12ResourceTranslator::copyTexture(void * dst, ID3D12ResourcePtr src)
+void D3D12ResourceTranslator::applyTexture(TextureDataDXR& src)
 {
 }
 
-BufferData D3D12ResourceTranslator::translateVertexBuffer(void *ptr)
+BufferDataDXR D3D12ResourceTranslator::translateVertexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
     if (ret.resource)
@@ -231,7 +229,7 @@ BufferData D3D12ResourceTranslator::translateVertexBuffer(void *ptr)
     return ret;
 }
 
-BufferData D3D12ResourceTranslator::translateIndexBuffer(void *ptr)
+BufferDataDXR D3D12ResourceTranslator::translateIndexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
     if (ret.resource)

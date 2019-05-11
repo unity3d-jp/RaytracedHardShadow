@@ -8,10 +8,11 @@ class IResourceTranslator
 {
 public:
     virtual ~IResourceTranslator() {}
-    virtual TextureData createTemporaryRenderTarget(void *ptr) = 0;
-    virtual void copyTexture(void *dst, ID3D12ResourcePtr src) = 0;
-    virtual BufferData translateVertexBuffer(void *ptr) = 0;
-    virtual BufferData translateIndexBuffer(void *ptr) = 0;
+    virtual void clearCache() = 0;
+    virtual TextureDataDXR createTemporaryTexture(void *ptr) = 0;
+    virtual void applyTexture(TextureDataDXR& tex) = 0;
+    virtual BufferDataDXR translateVertexBuffer(void *ptr) = 0;
+    virtual BufferDataDXR translateIndexBuffer(void *ptr) = 0;
 };
 
 void InitializeResourceTranslator(ID3D11Device *unity_gfx_device);

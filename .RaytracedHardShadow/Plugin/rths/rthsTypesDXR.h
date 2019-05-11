@@ -35,36 +35,37 @@ DefPtr(IDxcOperationResult);
 DefPtr(IDxcBlob);
 #undef DefPtr
 
-struct AccelerationStructureBuffers
+struct TextureDataDXR
 {
-    ID3D12ResourcePtr scratch;
-    ID3D12ResourcePtr result;
-    ID3D12ResourcePtr instance_desc; // used only for top-level AS
-};
-
-struct TextureData
-{
-    ID3D12ResourcePtr resource;
+    void *texture = nullptr; // unity
     int width = 0;
     int height = 0;
-};
 
-struct BufferData
-{
     ID3D12ResourcePtr resource;
-    int size = 0;
+    ID3D11Texture2DPtr temporary_d3d11;
+    HANDLE handle = nullptr;
 };
 
-struct MeshBuffers
+struct BufferDataDXR
 {
-    BufferData vertex_buffer;
-    BufferData index_buffer;
+    void *buffer = nullptr; // unity
+    int size = 0;
+
+    ID3D12ResourcePtr resource;
+    ID3D11BufferPtr temporary_d3d11;
+    HANDLE handle = nullptr;
+};
+
+struct MeshBuffersDXR
+{
+    BufferDataDXR vertex_buffer;
+    BufferDataDXR index_buffer;
     int vertex_count = 0;
     int index_count = 0;
     int index_offset = 0;
-
     float3x4 transform;
-    ID3D12ResourcePtr acceleration_structure;
+
+    ID3D12ResourcePtr blas; // bottom level acceleration structure
 };
 
 

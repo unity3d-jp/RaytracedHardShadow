@@ -12,16 +12,12 @@ public:
     static GfxContextDXR* getInstance();
 
     bool valid() const;
+    bool validateDevice();
     ID3D12Device5* getDevice();
 
-    TextureData translateTexture(void *ptr);
-    void copyTexture(void *dst, ID3D12ResourcePtr src);
-    BufferData translateVertexBuffer(void *ptr);
-    BufferData translateIndexBuffer(void *ptr);
-    BufferData allocateTransformBuffer(const float4x4& trans);
-
-    void setRenderTarget(TextureData rt);
-    void setMeshes(std::vector<MeshBuffers>& meshes);
+    bool initializeDevice();
+    void setRenderTarget(TextureDataDXR rt);
+    void setMeshes(std::vector<MeshBuffersDXR>& meshes);
     void flush();
     void finish();
 
@@ -44,10 +40,9 @@ private:
     uint64_t m_fence_value = 0;
 
     ID3D12ResourcePtr m_toplevel_as;
-    std::vector<ID3D12ResourcePtr> m_bottomlevel_as;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
-    TextureData m_render_target;
+    TextureDataDXR m_render_target;
 
     ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_empty_rootsig;
@@ -57,9 +52,6 @@ private:
     ID3D12DescriptorHeapPtr m_srv_uav_heap;
     static const uint32_t kSrvUavHeapSize = 2;
 };
-
-const std::string& GetErrorLog();
-void SetErrorLog(const char *format, ...);
 
 } // namespace rths
 #endif

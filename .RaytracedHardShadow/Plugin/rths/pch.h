@@ -1,5 +1,6 @@
 #pragma once
 
+#ifdef _WIN32
 #define _CRT_SECURE_NO_WARNINGS
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -11,6 +12,14 @@
 #include <dxgiformat.h>
 #include <dxcapi.h>
 #include <comdef.h>
+#include "dxcapi.use.h"
+#endif // _WIN32
+
+// Unity PluginAPI
+#include "IUnityInterface.h"
+#include "IUnityGraphics.h"
+#include "IUnityGraphicsD3D11.h"
+#include "IUnityGraphicsD3D12.h"
 
 #include <array>
 #include <string>
@@ -29,11 +38,3 @@
 #include <iterator>
 #include <locale>
 #include <codecvt>
-
-#include "dxcapi.use.h"
-
-// Unity PluginAPI
-#include "IUnityInterface.h"
-#include "IUnityGraphics.h"
-#include "IUnityGraphicsD3D11.h"
-#include "IUnityGraphicsD3D12.h"

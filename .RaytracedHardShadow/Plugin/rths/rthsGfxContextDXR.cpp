@@ -361,7 +361,35 @@ GfxContextDXR* GfxContextDXR::getInstance()
 GfxContextDXR::GfxContextDXR()
 {
     AddDLLSearchPath(GetModulePath());
+    initializeDevice();
+}
 
+GfxContextDXR::~GfxContextDXR()
+{
+}
+
+ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)
+{
+    D3D12_RESOURCE_DESC desc = {};
+    desc.Alignment = 0;
+    desc.DepthOrArraySize = 1;
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Flags = flags;
+    desc.Format = DXGI_FORMAT_UNKNOWN;
+    desc.Height = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.MipLevels = 1;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Width = size;
+
+    ID3D12ResourcePtr ret;
+    m_device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, state, nullptr, IID_PPV_ARGS(&ret));
+    return ret;
+}
+
+bool GfxContextDXR::initializeDevice()
+{
     IDXGIFactory4Ptr dxgi_factory;
     ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
 
@@ -389,171 +417,147 @@ GfxContextDXR::GfxContextDXR()
             break;
         }
     }
-
     if (!m_device) {
         SetErrorLog("DXR is not supported on this device");
+        return false;
     }
-    else {
-        {
-            D3D12_COMMAND_QUEUE_DESC desc = {};
-            desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-            desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-            m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue));
-        }
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
-        m_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
-        m_fence_event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
-        {
-            // pipeline state
-
-            // Need 10 subobjects:
-            //  1 for the DXIL library
-            //  1 for hit-group
-            //  2 for RayGen root-signature (root-signature and the subobject association)
-            //  2 for the root-signature shared between miss and hit shaders (signature and association)
-            //  2 for shader config (shared between all programs. 1 for the config, 1 for association)
-            //  1 for pipeline config
-            //  1 for the global root signature
-            std::array<D3D12_STATE_SUBOBJECT, 10> subobjects;
-            uint32_t index = 0;
-
-            // Create the DXIL library
-            DxilLibrary dxilLib = createDxilLibrary(rthsShaderDXR, rthsShaderDXR_size);
-            subobjects[index++] = dxilLib.stateSubobject; // 0 Library
-
-            HitProgram hitProgram(nullptr, kClosestHitShader, kHitGroup);
-            subobjects[index++] = hitProgram.subObject; // 1 Hit Group
-
-            // Create the ray-gen root-signature and association
-            LocalRootSignature rgsRootSignature(m_device, createRayGenRootDesc().desc);
-            subobjects[index] = rgsRootSignature.subobject; // 2 RayGen Root Sig
-
-            uint32_t rgsRootIndex = index++; // 2
-            ExportAssociation rgsRootAssociation(&kRayGenShader, 1, &(subobjects[rgsRootIndex]));
-            subobjects[index++] = rgsRootAssociation.subobject; // 3 Associate Root Sig to RGS
-
-            // Create the miss- and hit-programs root-signature and association
-            D3D12_ROOT_SIGNATURE_DESC emptyDesc = {};
-            emptyDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
-            LocalRootSignature hitMissRootSignature(m_device, emptyDesc);
-            subobjects[index] = hitMissRootSignature.subobject; // 4 Root Sig to be shared between Miss and CHS
-
-            uint32_t hitMissRootIndex = index++; // 4
-            const WCHAR* missHitExportName[] = { kMissShader, kClosestHitShader };
-            ExportAssociation missHitRootAssociation(missHitExportName, arraysize(missHitExportName), &(subobjects[hitMissRootIndex]));
-            subobjects[index++] = missHitRootAssociation.subobject; // 5 Associate Root Sig to Miss and CHS
-
-            // Bind the payload size to the programs
-            ShaderConfig shaderConfig(sizeof(float) * 2, sizeof(float) * 3);
-            subobjects[index] = shaderConfig.subobject; // 6 Shader Config
-
-            uint32_t shaderConfigIndex = index++; // 6
-            const WCHAR* shaderExports[] = { kMissShader, kClosestHitShader, kRayGenShader };
-            ExportAssociation configAssociation(shaderExports, arraysize(shaderExports), &(subobjects[shaderConfigIndex]));
-            subobjects[index++] = configAssociation.subobject; // 7 Associate Shader Config to Miss, CHS, RGS
-
-            // Create the pipeline config
-            PipelineConfig config(1);
-            subobjects[index++] = config.subobject; // 8
-
-            // Create the global root signature and store the empty signature
-            GlobalRootSignature root(m_device, {});
-            m_empty_rootsig = root.pRootSig;
-            subobjects[index++] = root.subobject; // 9
-
-            // Create the state
-            D3D12_STATE_OBJECT_DESC desc;
-            desc.NumSubobjects = index; // 10
-            desc.pSubobjects = subobjects.data();
-            desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
-
-            m_device->CreateStateObject(&desc, IID_PPV_ARGS(&m_pipeline_state));
-        }
-
-        {
-            // shader table
-
-            /** The shader-table layout is as follows:
-                Entry 0 - Ray-gen program
-                Entry 1 - Miss program
-                Entry 2 - Hit program
-                All entries in the shader-table must have the same size, so we will choose it base on the largest required entry.
-                The ray-gen program requires the largest entry - sizeof(program identifier) + 8 bytes for a descriptor-table.
-                The entry size must be aligned up to D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT
-            */
-
-            m_srv_uav_heap = createDescriptorHeap(m_device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
-
-            // Calculate the size and create the buffer
-            m_shader_table_entry_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-            m_shader_table_entry_size += 8; // The ray-gen's descriptor table
-            m_shader_table_entry_size = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_shader_table_entry_size);
-            uint32_t shader_table_size = m_shader_table_entry_size * 3;
-
-            // For simplicity, we create the shader-table on the upload heap. You can also create it on the default heap
-            m_shader_table = createBuffer(shader_table_size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-
-            // Map the buffer
-            uint8_t* data;
-            m_shader_table->Map(0, nullptr, (void**)&data);
-
-            ID3D12StateObjectPropertiesPtr sop;
-            m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
-
-            // Entry 0 - ray-gen program ID and descriptor data
-            memcpy(data, sop->GetShaderIdentifier(kRayGenShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-            uint64_t heap_start = m_srv_uav_heap->GetGPUDescriptorHandleForHeapStart().ptr;
-            *(uint64_t*)(data + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES) = heap_start;
-
-            // Entry 1 - miss program
-            memcpy(data + m_shader_table_entry_size, sop->GetShaderIdentifier(kMissShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-            // Entry 2 - hit program
-            uint8_t* hit_entry = data + m_shader_table_entry_size * 2; // +2 skips the ray-gen and miss entries
-            memcpy(hit_entry, sop->GetShaderIdentifier(kHitGroup), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-            // Unmap
-            m_shader_table->Unmap(0, nullptr);
-        }
+    {
+        D3D12_COMMAND_QUEUE_DESC desc = {};
+        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue));
     }
+    m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
+    m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
+    m_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
+    m_fence_event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
+
+    {
+        // pipeline state
+
+        // Need 10 subobjects:
+        //  1 for the DXIL library
+        //  1 for hit-group
+        //  2 for RayGen root-signature (root-signature and the subobject association)
+        //  2 for the root-signature shared between miss and hit shaders (signature and association)
+        //  2 for shader config (shared between all programs. 1 for the config, 1 for association)
+        //  1 for pipeline config
+        //  1 for the global root signature
+        std::array<D3D12_STATE_SUBOBJECT, 10> subobjects;
+        uint32_t index = 0;
+
+        // Create the DXIL library
+        DxilLibrary dxilLib = createDxilLibrary(rthsShaderDXR, rthsShaderDXR_size);
+        subobjects[index++] = dxilLib.stateSubobject; // 0 Library
+
+        HitProgram hitProgram(nullptr, kClosestHitShader, kHitGroup);
+        subobjects[index++] = hitProgram.subObject; // 1 Hit Group
+
+        // Create the ray-gen root-signature and association
+        LocalRootSignature rgsRootSignature(m_device, createRayGenRootDesc().desc);
+        subobjects[index] = rgsRootSignature.subobject; // 2 RayGen Root Sig
+
+        uint32_t rgsRootIndex = index++; // 2
+        ExportAssociation rgsRootAssociation(&kRayGenShader, 1, &(subobjects[rgsRootIndex]));
+        subobjects[index++] = rgsRootAssociation.subobject; // 3 Associate Root Sig to RGS
+
+        // Create the miss- and hit-programs root-signature and association
+        D3D12_ROOT_SIGNATURE_DESC emptyDesc = {};
+        emptyDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
+        LocalRootSignature hitMissRootSignature(m_device, emptyDesc);
+        subobjects[index] = hitMissRootSignature.subobject; // 4 Root Sig to be shared between Miss and CHS
+
+        uint32_t hitMissRootIndex = index++; // 4
+        const WCHAR* missHitExportName[] = { kMissShader, kClosestHitShader };
+        ExportAssociation missHitRootAssociation(missHitExportName, arraysize(missHitExportName), &(subobjects[hitMissRootIndex]));
+        subobjects[index++] = missHitRootAssociation.subobject; // 5 Associate Root Sig to Miss and CHS
+
+        // Bind the payload size to the programs
+        ShaderConfig shaderConfig(sizeof(float) * 2, sizeof(float) * 3);
+        subobjects[index] = shaderConfig.subobject; // 6 Shader Config
+
+        uint32_t shaderConfigIndex = index++; // 6
+        const WCHAR* shaderExports[] = { kMissShader, kClosestHitShader, kRayGenShader };
+        ExportAssociation configAssociation(shaderExports, arraysize(shaderExports), &(subobjects[shaderConfigIndex]));
+        subobjects[index++] = configAssociation.subobject; // 7 Associate Shader Config to Miss, CHS, RGS
+
+        // Create the pipeline config
+        PipelineConfig config(1);
+        subobjects[index++] = config.subobject; // 8
+
+        // Create the global root signature and store the empty signature
+        GlobalRootSignature root(m_device, {});
+        m_empty_rootsig = root.pRootSig;
+        subobjects[index++] = root.subobject; // 9
+
+        // Create the state
+        D3D12_STATE_OBJECT_DESC desc;
+        desc.NumSubobjects = index; // 10
+        desc.pSubobjects = subobjects.data();
+        desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+
+        m_device->CreateStateObject(&desc, IID_PPV_ARGS(&m_pipeline_state));
+    }
+
+    {
+        // shader table
+
+        /** The shader-table layout is as follows:
+            Entry 0 - Ray-gen program
+            Entry 1 - Miss program
+            Entry 2 - Hit program
+            All entries in the shader-table must have the same size, so we will choose it base on the largest required entry.
+            The ray-gen program requires the largest entry - sizeof(program identifier) + 8 bytes for a descriptor-table.
+            The entry size must be aligned up to D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT
+        */
+
+        m_srv_uav_heap = createDescriptorHeap(m_device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+
+        // Calculate the size and create the buffer
+        m_shader_table_entry_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+        m_shader_table_entry_size += 8; // The ray-gen's descriptor table
+        m_shader_table_entry_size = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_shader_table_entry_size);
+        uint32_t shader_table_size = m_shader_table_entry_size * 3;
+
+        // For simplicity, we create the shader-table on the upload heap. You can also create it on the default heap
+        m_shader_table = createBuffer(shader_table_size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+
+        // Map the buffer
+        uint8_t* data;
+        m_shader_table->Map(0, nullptr, (void**)&data);
+
+        ID3D12StateObjectPropertiesPtr sop;
+        m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
+
+        // Entry 0 - ray-gen program ID and descriptor data
+        memcpy(data, sop->GetShaderIdentifier(kRayGenShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+        uint64_t heap_start = m_srv_uav_heap->GetGPUDescriptorHandleForHeapStart().ptr;
+        *(uint64_t*)(data + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES) = heap_start;
+
+        // Entry 1 - miss program
+        memcpy(data + m_shader_table_entry_size, sop->GetShaderIdentifier(kMissShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+
+        // Entry 2 - hit program
+        uint8_t* hit_entry = data + m_shader_table_entry_size * 2; // +2 skips the ray-gen and miss entries
+        memcpy(hit_entry, sop->GetShaderIdentifier(kHitGroup), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+
+        // Unmap
+        m_shader_table->Unmap(0, nullptr);
+    }
+    return true;
 }
 
-GfxContextDXR::~GfxContextDXR()
+void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
 {
-}
-
-ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)
-{
-    D3D12_RESOURCE_DESC desc = {};
-    desc.Alignment = 0;
-    desc.DepthOrArraySize = 1;
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    desc.Flags = flags;
-    desc.Format = DXGI_FORMAT_UNKNOWN;
-    desc.Height = 1;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    desc.MipLevels = 1;
-    desc.SampleDesc.Count = 1;
-    desc.SampleDesc.Quality = 0;
-    desc.Width = size;
-
-    ID3D12ResourcePtr ret;
-    m_device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, state, nullptr, IID_PPV_ARGS(&ret));
-    return ret;
-}
-
-void GfxContextDXR::setRenderTarget(TextureData rt)
-{
-    m_render_target = rt;
+    m_render_target = GetResourceTranslator(m_device)->createTemporaryTexture(rt.texture);
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     m_device->CreateUnorderedAccessView(rt.resource, nullptr, &uav_desc, m_srv_uav_heap->GetCPUDescriptorHandleForHeapStart());
 }
 
-void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)
+void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
 {
     // build bottom level acceleration structures
     std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geom_descs;
@@ -561,8 +565,15 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)
     size_t num_meshes = meshes.size();
     for (size_t i = 0; i < num_meshes; ++i) {
         auto& mesh = meshes[i];
-        if (mesh.acceleration_structure)
+        if (mesh.blas)
             continue;
+
+        if (!mesh.vertex_buffer.resource)
+            mesh.vertex_buffer = GetResourceTranslator(m_device)->translateVertexBuffer(mesh.vertex_buffer.buffer);
+        if (!mesh.vertex_buffer.resource)
+            mesh.vertex_buffer = GetResourceTranslator(m_device)->translateIndexBuffer(mesh.index_buffer.buffer);
+        if (!mesh.vertex_buffer.resource)
+            return;
 
         auto& geom_desc = geom_descs[i];
         geom_desc = {};
@@ -595,12 +606,12 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)
         // Create the buffers. They need to support UAV, and since we are going to immediately use them, we create them with an unordered-access state
         auto scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
         m_temporary_buffers.push_back(scratch);
-        mesh.acceleration_structure = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+        mesh.blas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
 
         // Create the bottom-level AS
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc = {};
         as_desc.Inputs = inputs;
-        as_desc.DestAccelerationStructureData = mesh.acceleration_structure->GetGPUVirtualAddress();
+        as_desc.DestAccelerationStructureData = mesh.blas->GetGPUVirtualAddress();
         as_desc.ScratchAccelerationStructureData = scratch->GetGPUVirtualAddress();
 
         m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
@@ -608,7 +619,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)
         // We need to insert a UAV barrier before using the acceleration structures in a raytracing operation
         D3D12_RESOURCE_BARRIER uav_barrier = {};
         uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        uav_barrier.UAV.pResource = mesh.acceleration_structure;
+        uav_barrier.UAV.pResource = mesh.blas;
         m_cmd_list->ResourceBarrier(1, &uav_barrier);
     }
 
@@ -619,7 +630,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
         inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
         inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-        inputs.NumDescs = 3;
+        inputs.NumDescs = (UINT)num_meshes;
         inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info;
@@ -644,7 +655,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffers>& meshes)
             instance_descs[i].InstanceID = i; // This value will be exposed to the shader via InstanceID()
             instance_descs[i].InstanceContributionToHitGroupIndex = i;
             instance_descs[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
-            instance_descs[i].AccelerationStructure = mesh.acceleration_structure->GetGPUVirtualAddress();
+            instance_descs[i].AccelerationStructure = mesh.blas->GetGPUVirtualAddress();
             instance_descs[i].InstanceMask = 0xFF;
         }
         instance_descs_buf->Unmap(0, nullptr);
@@ -672,44 +683,27 @@ bool GfxContextDXR::valid() const
     return m_device != nullptr;
 }
 
+bool GfxContextDXR::validateDevice()
+{
+    if (!m_device)
+        return false;
+
+    auto reason = m_device->GetDeviceRemovedReason();
+    if (reason != 0) {
+        PSTR buf = nullptr;
+        size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL, reason, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&buf, 0, NULL);
+
+        std::string message(buf, size);
+        SetErrorLog(message.c_str());
+        return false;
+    }
+    return true;
+}
+
 ID3D12Device5* GfxContextDXR::getDevice()
 {
     return m_device;
-}
-
-TextureData GfxContextDXR::translateTexture(void *ptr)
-{
-    if (auto translator = GetResourceTranslator(m_device))
-        return translator->createTemporaryRenderTarget(ptr);
-    return {};
-}
-
-void GfxContextDXR::copyTexture(void *dst, ID3D12ResourcePtr src)
-{
-    if (auto translator = GetResourceTranslator(m_device))
-        return translator->copyTexture(dst, src);
-}
-
-BufferData GfxContextDXR::translateVertexBuffer(void *ptr)
-{
-    if (auto translator = GetResourceTranslator(m_device))
-        return translator->translateVertexBuffer(ptr);
-    return {};
-}
-
-BufferData GfxContextDXR::translateIndexBuffer(void *ptr)
-{
-    if (auto translator = GetResourceTranslator(m_device))
-        return translator->translateIndexBuffer(ptr);
-    return {};
-}
-
-BufferData GfxContextDXR::allocateTransformBuffer(const float4x4& trans)
-{
-    BufferData ret;
-    ret.size = sizeof(float) * 12;
-    ret.resource = createBuffer(ret.size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
-    return ret;
 }
 
 void GfxContextDXR::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
@@ -780,6 +774,8 @@ void GfxContextDXR::finish()
     ::WaitForSingleObject(m_fence_event, INFINITE);
     m_cmd_allocator->Reset();
     m_cmd_list->Reset(m_cmd_allocator, nullptr);
+
+    GetResourceTranslator(m_device)->applyTexture(m_render_target);
 
     m_temporary_buffers.clear();
 }
