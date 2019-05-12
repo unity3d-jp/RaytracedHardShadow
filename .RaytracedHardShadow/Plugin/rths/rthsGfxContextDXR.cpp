@@ -531,49 +531,12 @@ bool GfxContextDXR::initializeDevice()
     }
 
     {
-        // shader table
-
-        /** The shader-table layout is as follows:
-            Entry 0 - Ray-gen program
-            Entry 1 - Miss program
-            Entry 2 - Hit program
-            All entries in the shader-table must have the same size, so we will choose it base on the largest required entry.
-            The ray-gen program requires the largest entry - sizeof(program identifier) + 8 bytes for a descriptor-table.
-            The entry size must be aligned up to D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT
-        */
-
         m_srv_uav_heap = createDescriptorHeap(m_device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
         // Calculate the size and create the buffer
         m_shader_table_entry_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-        m_shader_table_entry_size += 8; // The ray-gen's descriptor table
+        m_shader_table_entry_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE); // The ray-gen's descriptor table
         m_shader_table_entry_size = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_shader_table_entry_size);
-        uint32_t shader_table_size = m_shader_table_entry_size * 3;
-
-        // For simplicity, we create the shader-table on the upload heap. You can also create it on the default heap
-        m_shader_table = createBuffer(shader_table_size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-
-        // Map the buffer
-        uint8_t* data;
-        m_shader_table->Map(0, nullptr, (void**)&data);
-
-        ID3D12StateObjectPropertiesPtr sop;
-        m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
-
-        // Entry 0 - ray-gen program ID and descriptor data
-        memcpy(data, sop->GetShaderIdentifier(kRayGenShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-        uint64_t heap_start = m_srv_uav_heap->GetGPUDescriptorHandleForHeapStart().ptr;
-        *(uint64_t*)(data + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES) = heap_start;
-
-        // Entry 1 - miss program
-        memcpy(data + m_shader_table_entry_size, sop->GetShaderIdentifier(kMissShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-        // Entry 2 - hit program
-        uint8_t* hit_entry = data + m_shader_table_entry_size * 2; // +2 skips the ray-gen and miss entries
-        memcpy(hit_entry, sop->GetShaderIdentifier(kHitGroup), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-
-        // Unmap
-        m_shader_table->Unmap(0, nullptr);
     }
     return true;
 }
@@ -589,6 +552,8 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
 
 void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
 {
+    m_meshes = meshes;
+
     // build bottom level acceleration structures
     std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geom_descs;
     geom_descs.resize(meshes.size());
@@ -646,11 +611,9 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
 
         m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
 
-        // We need to insert a UAV barrier before using the acceleration structures in a raytracing operation
-        D3D12_RESOURCE_BARRIER uav_barrier = {};
-        uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        uav_barrier.UAV.pResource = mesh.blas;
-        m_cmd_list->ResourceBarrier(1, &uav_barrier);
+#ifdef rthsDebug
+        sync();
+#endif
     }
 
 
@@ -704,7 +667,21 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
         uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
         uav_barrier.UAV.pResource = m_toplevel_as;
         m_cmd_list->ResourceBarrier(1, &uav_barrier);
+
+        // Create the TLAS SRV
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.RaytracingAccelerationStructure.Location = m_toplevel_as->GetGPUVirtualAddress();
+
+        D3D12_CPU_DESCRIPTOR_HANDLE srv_handle = m_srv_uav_heap->GetCPUDescriptorHandleForHeapStart();
+        srv_handle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        m_device->CreateShaderResourceView(nullptr, &srv_desc, srv_handle);
     }
+
+#ifdef rthsDebug
+    sync();
+#endif
 }
 
 
@@ -723,7 +700,7 @@ bool GfxContextDXR::validateDevice()
 #ifdef rthsEnableD3D12DREAD
         {
             ID3D12DeviceRemovedExtendedDataPtr dread;
-            if (m_device->QueryInterface(IID_PPV_ARGS(&dread))) {
+            if (SUCCEEDED(m_device->QueryInterface(IID_PPV_ARGS(&dread)))) {
                 D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT DredAutoBreadcrumbsOutput;
                 D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
                 dread->GetAutoBreadcrumbsOutput(&DredAutoBreadcrumbsOutput);
@@ -771,6 +748,15 @@ uint64_t GfxContextDXR::submitCommandList()
     return m_fence_value;
 }
 
+void GfxContextDXR::sync()
+{
+    submitCommandList();
+    ::WaitForSingleObject(m_fence_event, INFINITE);
+
+    m_cmd_allocator->Reset();
+    m_cmd_list->Reset(m_cmd_allocator, nullptr);
+}
+
 void GfxContextDXR::flush()
 {
     if (!m_render_target.resource) {
@@ -778,34 +764,81 @@ void GfxContextDXR::flush()
         return;
     }
 
+    // setup shader table
+    {
+        // ray-gen + miss + hit for each meshes
+        int required_count = 2 + (int)m_meshes.size();
+
+        // allocate new buffer if required count exceeds capacity
+        if (required_count > m_shader_table_entry_capacity) {
+            int new_capacity = std::max<int>(required_count, std::max<int>(m_shader_table_entry_capacity * 2, 1024));
+            m_shader_table = createBuffer(m_shader_table_entry_size * new_capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            m_shader_table_entry_capacity = new_capacity;
+        }
+
+        // setup shader table entries
+        if (required_count > m_shader_table_entry_count) {
+            uint8_t *data;
+            m_shader_table->Map(0, nullptr, (void**)&data);
+
+            ID3D12StateObjectPropertiesPtr sop;
+            m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
+
+            // ray-gen
+            memcpy(data, sop->GetShaderIdentifier(kRayGenShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+            uint64_t heap_start = m_srv_uav_heap->GetGPUDescriptorHandleForHeapStart().ptr;
+            *(uint64_t*)(data + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES) = heap_start;
+            data += m_shader_table_entry_size;
+
+            // miss
+            memcpy(data, sop->GetShaderIdentifier(kMissShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+            data += m_shader_table_entry_size;
+
+            // hit for each meshes
+            int num_meshes = (int)m_meshes.size();
+            for (int i = 0; i < num_meshes; ++i) {
+                memcpy(data, sop->GetShaderIdentifier(kHitGroup), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+                data += m_shader_table_entry_size;
+            }
+
+            m_shader_table->Unmap(0, nullptr);
+            m_shader_table_entry_count = required_count;
+        }
+    }
+
     addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    D3D12_DISPATCH_RAYS_DESC dr_desc = {};
-    dr_desc.Width = m_render_target.width;
-    dr_desc.Height = m_render_target.height;
-    dr_desc.Depth = 1;
 
-    // RayGen is the first entry in the shader-table
-    dr_desc.RayGenerationShaderRecord.StartAddress = m_shader_table->GetGPUVirtualAddress() + 0 * m_shader_table_entry_size;
-    dr_desc.RayGenerationShaderRecord.SizeInBytes = m_shader_table_entry_size;
+    // dispatch rays
+    {
+        D3D12_DISPATCH_RAYS_DESC dr_desc = {};
+        dr_desc.Width = m_render_target.width;
+        dr_desc.Height = m_render_target.height;
+        dr_desc.Depth = 1;
 
-    // Miss is the second entry in the shader-table
-    size_t miss_offset = 1 * m_shader_table_entry_size;
-    dr_desc.MissShaderTable.StartAddress = m_shader_table->GetGPUVirtualAddress() + miss_offset;
-    dr_desc.MissShaderTable.StrideInBytes = m_shader_table_entry_size;
-    dr_desc.MissShaderTable.SizeInBytes = m_shader_table_entry_size;   // Only a s single miss-entry
+        auto addr = m_shader_table->GetGPUVirtualAddress();
+        // ray-gen
+        dr_desc.RayGenerationShaderRecord.StartAddress = addr;
+        dr_desc.RayGenerationShaderRecord.SizeInBytes = m_shader_table_entry_size;
+        addr += m_shader_table_entry_size;
 
-    // Hit is the third entry in the shader-table
-    size_t hit_offset = 2 * m_shader_table_entry_size;
-    dr_desc.HitGroupTable.StartAddress = m_shader_table->GetGPUVirtualAddress() + hit_offset;
-    dr_desc.HitGroupTable.StrideInBytes = m_shader_table_entry_size;
-    dr_desc.HitGroupTable.SizeInBytes = m_shader_table_entry_size;
+        // miss
+        dr_desc.MissShaderTable.StartAddress = addr;
+        dr_desc.MissShaderTable.StrideInBytes = m_shader_table_entry_size;
+        dr_desc.MissShaderTable.SizeInBytes = m_shader_table_entry_size;   // Only a s single miss-entry
+        addr += m_shader_table_entry_size;
 
-    // Bind the empty root signature
-    m_cmd_list->SetComputeRootSignature(m_empty_rootsig);
+        // hit for each meshes
+        dr_desc.HitGroupTable.StartAddress = addr;
+        dr_desc.HitGroupTable.StrideInBytes = m_shader_table_entry_size;
+        dr_desc.HitGroupTable.SizeInBytes = m_shader_table_entry_size * m_meshes.size();
 
-    // Dispatch
-    m_cmd_list->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
-    m_cmd_list->DispatchRays(&dr_desc);
+        // bind the empty root signature
+        m_cmd_list->SetComputeRootSignature(m_empty_rootsig);
+
+        // dispatch
+        m_cmd_list->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
+        m_cmd_list->DispatchRays(&dr_desc);
+    }
 
     addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
 

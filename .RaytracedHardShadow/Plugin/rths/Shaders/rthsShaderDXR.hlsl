@@ -1,11 +1,24 @@
-RaytracingAccelerationStructure gRtScene : register(t0);
-RWTexture2D<float> gOutput : register(u0);
+struct SceneData
+{
+    float4x4 camera_transform;
+    float camera_near;
+    float camera_far;
+    float camera_fov;
+    float pad1[1];
 
+    int directional_light_count;
+    int point_light_count;
+    int reverse_point_light_count;
+};
 
 struct RayPayload
 {
     float shadow;
 };
+
+RaytracingAccelerationStructure gRtScene : register(t0);
+RWTexture2D<float> gOutput : register(u0);
+ConstantBuffer<SceneData> gScene : register(b0);
 
 [shader("raygeneration")]
 void rayGen()

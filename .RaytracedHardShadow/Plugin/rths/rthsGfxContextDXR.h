@@ -18,6 +18,7 @@ public:
     bool initializeDevice();
     void setRenderTarget(TextureDataDXR rt);
     void setMeshes(std::vector<MeshBuffersDXR>& meshes);
+    void sync();
     void flush();
     void finish();
 
@@ -39,6 +40,7 @@ private:
     HANDLE m_fence_event;
     uint64_t m_fence_value = 0;
 
+    std::vector<MeshBuffersDXR> m_meshes;
     ID3D12ResourcePtr m_toplevel_as;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
@@ -46,11 +48,14 @@ private:
 
     ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_empty_rootsig;
+
     ID3D12ResourcePtr m_shader_table;
-    uint32_t m_shader_table_entry_size = 0;
+    int m_shader_table_entry_size = 0;
+    int m_shader_table_entry_count = 0;
+    int m_shader_table_entry_capacity = 0;
 
     ID3D12DescriptorHeapPtr m_srv_uav_heap;
-    static const uint32_t kSrvUavHeapSize = 2;
+    static const int kSrvUavHeapSize = 2;
 
     bool m_flushing = false;
 };
