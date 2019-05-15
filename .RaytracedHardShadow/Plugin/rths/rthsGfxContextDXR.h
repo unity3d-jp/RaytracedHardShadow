@@ -2,6 +2,8 @@
 #ifdef _WIN32
 #include "rthsTypesDXR.h"
 
+#define rthsMaxBounce 2
+
 namespace rths {
 
 class GfxContextDXR
@@ -40,16 +42,19 @@ private:
     HANDLE m_fence_event;
     uint64_t m_fence_value = 0;
 
+    ID3D12StateObjectPtr m_pipeline_state;
+    ID3D12RootSignaturePtr m_global_rootsig;
+    ID3D12RootSignaturePtr m_local_rootsig;
+
     std::vector<MeshBuffersDXR> m_meshes;
     ID3D12ResourcePtr m_toplevel_as;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
     TextureDataDXR m_render_target;
-
-    ID3D12StateObjectPtr m_pipeline_state;
-    ID3D12RootSignaturePtr m_empty_rootsig;
+    ID3D12ResourcePtr m_scene_data;
 
     ID3D12ResourcePtr m_shader_table;
+    int m_desc_heap_stride = 0;
     int m_shader_table_entry_size = 0;
     int m_shader_table_entry_count = 0;
     int m_shader_table_entry_capacity = 0;

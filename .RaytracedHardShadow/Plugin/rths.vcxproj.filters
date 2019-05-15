@@ -44,9 +44,6 @@
     <ClInclude Include="rths\rthsRenderer.h">
       <Filter>rths</Filter>
     </ClInclude>
-    <ClInclude Include="rths\Shaders\common.h">
-      <Filter>rths\Shaders</Filter>
-    </ClInclude>
     <ClInclude Include="rths\rthsLog.h">
       <Filter>rths</Filter>
     </ClInclude>
@@ -62,14 +59,6 @@
     <ClInclude Include="rths\rthsTypesDXR.h">
       <Filter>rths</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="rths\Shaders\copy_vb.hlsl">
-      <Filter>rths\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="rths\Shaders\copy_ib.hlsl">
-      <Filter>rths\Shaders</Filter>
-    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="rths\Shaders\rthsShaderDXR.hlsl">

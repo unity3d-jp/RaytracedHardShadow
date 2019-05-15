@@ -19,14 +19,50 @@ inline float3x4 to_float3x4(const float4x4& src)
 }
 
 
-struct LightData
+struct CameraData
 {
-    float4 position;
-    float4 direction;
-    float near_;
-    float far_;
+    union {
+        float3 position;
+        float4 position4;
+    };
+    union {
+        float3 direction;
+        float4 direction4;
+    };
+    float near_plane;
+    float far_plane;
     float fov;
-    float pad;
+    float pad1[1];
+};
+
+struct DirectionalLightData
+{
+    union {
+        float3 direction;
+        float4 direction4;
+    };
+};
+
+struct PointLightData
+{
+    union {
+        float3 position;
+        float4 position4;
+    };
+};
+
+struct SceneData
+{
+    CameraData camera;
+
+    int directional_light_count;
+    int point_light_count;
+    int reverse_point_light_count;
+    int pad1[1];
+
+    DirectionalLightData directional_lights[32];
+    PointLightData point_lights[32];
+    PointLightData reverse_point_lights[32];
 };
 
 } // namespace rths

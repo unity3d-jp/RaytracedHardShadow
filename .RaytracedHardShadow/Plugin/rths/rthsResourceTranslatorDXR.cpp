@@ -22,10 +22,10 @@ class D3D11ResourceTranslator : public ResourceTranslatorBase
 public:
     D3D11ResourceTranslator(ID3D11Device *device);
     ~D3D11ResourceTranslator() override;
-    TextureDataDXR createTemporaryTexture(void *ptr) override;
+    TextureDataDXR& createTemporaryTexture(void *ptr) override;
     void applyTexture(TextureDataDXR& tex) override;
-    BufferDataDXR translateVertexBuffer(void *ptr) override;
-    BufferDataDXR translateIndexBuffer(void *ptr) override;
+    BufferDataDXR& translateVertexBuffer(void *ptr) override;
+    BufferDataDXR& translateIndexBuffer(void *ptr) override;
 
 private:
     // note: sharing resources from d3d12 to d3d11 require d3d11.1.
@@ -38,10 +38,10 @@ class D3D12ResourceTranslator : public ResourceTranslatorBase
 public:
     D3D12ResourceTranslator(ID3D12Device *device);
     ~D3D12ResourceTranslator() override;
-    TextureDataDXR createTemporaryTexture(void *ptr) override;
+    TextureDataDXR& createTemporaryTexture(void *ptr) override;
     void applyTexture(TextureDataDXR& tex) override;
-    BufferDataDXR translateVertexBuffer(void *ptr) override;
-    BufferDataDXR translateIndexBuffer(void *ptr) override;
+    BufferDataDXR& translateVertexBuffer(void *ptr) override;
+    BufferDataDXR& translateIndexBuffer(void *ptr) override;
 
 private:
     ID3D12Device *m_device = nullptr;
@@ -97,7 +97,7 @@ D3D11ResourceTranslator::~D3D11ResourceTranslator()
 {
 }
 
-TextureDataDXR D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
+TextureDataDXR& D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
 {
     auto& ret = m_render_target_table[ptr];
     if (ret.resource)
@@ -127,7 +127,7 @@ void D3D11ResourceTranslator::applyTexture(TextureDataDXR& src)
     }
 }
 
-BufferDataDXR D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
+BufferDataDXR& D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
     if (ret.resource)
@@ -160,7 +160,7 @@ BufferDataDXR D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
     return ret;
 }
 
-BufferDataDXR D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
+BufferDataDXR& D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
     if (ret.resource)
@@ -205,7 +205,7 @@ D3D12ResourceTranslator::~D3D12ResourceTranslator()
 {
 }
 
-TextureDataDXR D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
+TextureDataDXR& D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
 {
     auto& ret = m_render_target_table[ptr];
     if (ret.resource)
@@ -219,7 +219,7 @@ void D3D12ResourceTranslator::applyTexture(TextureDataDXR& src)
 {
 }
 
-BufferDataDXR D3D12ResourceTranslator::translateVertexBuffer(void *ptr)
+BufferDataDXR& D3D12ResourceTranslator::translateVertexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
     if (ret.resource)
@@ -229,7 +229,7 @@ BufferDataDXR D3D12ResourceTranslator::translateVertexBuffer(void *ptr)
     return ret;
 }
 
-BufferDataDXR D3D12ResourceTranslator::translateIndexBuffer(void *ptr)
+BufferDataDXR& D3D12ResourceTranslator::translateIndexBuffer(void *ptr)
 {
     auto& ret = m_buffer_table[ptr];
     if (ret.resource)

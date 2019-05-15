@@ -1,14 +1,35 @@
+struct CameraData
+{
+    float4 position;
+    float4 direction;
+    float near_plane;
+    float far_plane;
+    float fov;
+    float pad1[1];
+};
+
+struct DirectionalLightData
+{
+    float4 direction;
+};
+
+struct PointLightData
+{
+    float4 position;
+};
+
 struct SceneData
 {
-    float4x4 camera_transform;
-    float camera_near;
-    float camera_far;
-    float camera_fov;
-    float pad1[1];
+    CameraData camera;
 
     int directional_light_count;
     int point_light_count;
     int reverse_point_light_count;
+    int pad1[1];
+
+    DirectionalLightData directional_lights[32];
+    PointLightData point_lights[32];
+    PointLightData reverse_point_lights[32];
 };
 
 struct RayPayload
@@ -16,12 +37,12 @@ struct RayPayload
     float shadow;
 };
 
-RaytracingAccelerationStructure gRtScene : register(t0);
+RaytracingAccelerationStructure gRtScene : register(t0, space0);
 RWTexture2D<float> gOutput : register(u0);
 ConstantBuffer<SceneData> gScene : register(b0);
 
 [shader("raygeneration")]
-void rayGen()
+void RayGen()
 {
     uint3 launchIndex = DispatchRaysIndex();
     uint3 launchDim = DispatchRaysDimensions();
@@ -29,7 +50,7 @@ void rayGen()
     float2 crd = float2(launchIndex.xy);
     float2 dims = float2(launchDim.xy);
 
-    float2 d = ((crd/dims) * 2.f - 1.f);
+    float2 d = ((crd / dims) * 2.f - 1.f);
     float aspectRatio = dims.x / dims.y;
 
     RayDesc ray;
@@ -40,18 +61,18 @@ void rayGen()
     ray.TMax = 100000;
 
     RayPayload payload;
-    TraceRay( gRtScene, 0 /*rayFlags*/, 0xFF, 0 /* ray index*/, 0, 0, ray, payload );
+    TraceRay(gRtScene, 0, 0xFF, 0, 0, 0, ray, payload);
     gOutput[launchIndex.xy] = payload.shadow;
 }
 
 [shader("miss")]
-void miss(inout RayPayload payload)
+void Miss(inout RayPayload payload : SV_RayPayload)
 {
     payload.shadow = 1.0;
 }
 
 [shader("closesthit")]
-void chs(inout RayPayload payload, in BuiltInTriangleIntersectionAttributes attribs)
+void Hit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
-    payload.shadow = 1.0;
+    payload.shadow = 0.0;
 }
