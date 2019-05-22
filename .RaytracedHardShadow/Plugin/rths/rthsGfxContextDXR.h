@@ -18,6 +18,7 @@ public:
     ID3D12Device5* getDevice();
 
     bool initializeDevice();
+    void setSceneData(SceneData& data);
     void setRenderTarget(TextureDataDXR rt);
     void setMeshes(std::vector<MeshBuffersDXR>& meshes);
     void sync();
@@ -51,11 +52,11 @@ private:
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
     TextureDataDXR m_render_target;
-    ID3D12ResourcePtr m_scene_data;
+    ID3D12ResourcePtr m_scene_buffer;
 
     ID3D12ResourcePtr m_shader_table;
     int m_desc_heap_stride = 0;
-    int m_shader_table_entry_size = 0;
+    int m_descriptor_stride = 0;
     int m_shader_table_entry_count = 0;
     int m_shader_table_entry_capacity = 0;
 

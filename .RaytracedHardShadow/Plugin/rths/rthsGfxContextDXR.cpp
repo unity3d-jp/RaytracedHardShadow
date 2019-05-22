@@ -7,9 +7,6 @@
 
 // shader binaries
 #include "rthsShaderDXR.h"
-//#include "rthsDXR_RayGen.h"
-//#include "rthsDXR_Miss.h"
-//#include "rthsDXR_Hit.h"
 
 
 namespace rths {
@@ -38,8 +35,7 @@ const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
 };
 
 
-template<class BlotType>
-static inline std::string convertBlobToString(BlotType* pBlob)
+static inline std::string ToString(ID3DBlob* pBlob)
 {
     std::vector<char> infoLog(pBlob->GetBufferSize() + 1);
     memcpy(infoLog.data(), pBlob->GetBufferPointer(), pBlob->GetBufferSize());
@@ -225,6 +221,11 @@ bool GfxContextDXR::initializeDevice()
         m_fence_event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
     }
 
+    // scene constant buffer
+    {
+        m_scene_buffer = createBuffer(1024 * 64, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kDefaultHeapProps);
+    }
+
     // setup pipeline state
     {
         std::vector<D3D12_STATE_SUBOBJECT> subobjects;
@@ -299,20 +300,20 @@ bool GfxContextDXR::initializeDevice()
         };
 
         D3D12_ROOT_PARAMETER params[_countof(ranges) + 1]; // +1 for gRtScene
-        for (int i = 0; i < _countof(ranges); i++)
-        {
-            params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-            params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-            params[i].DescriptorTable.NumDescriptorRanges = 1;
-            params[i].DescriptorTable.pDescriptorRanges = &ranges[i];
-        }
         {
             // gRtScene
-            auto& param = params[_countof(ranges)];
+            auto& param = params[0];
             param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
             param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
             param.Descriptor.ShaderRegister = 0;
             param.Descriptor.RegisterSpace = 0;
+        }
+        for (int i = 0; i < _countof(ranges); i++) {
+            auto& param = params[i + 1];
+            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            param.DescriptorTable.NumDescriptorRanges = 1;
+            param.DescriptorTable.pDescriptorRanges = &ranges[i];
         }
 
         D3D12_ROOT_SIGNATURE_DESC desc = {};
@@ -323,10 +324,8 @@ bool GfxContextDXR::initializeDevice()
         ID3DBlobPtr sig_blob;
         ID3DBlobPtr error_blob;
         HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
-        if (FAILED(hr))
-        {
-            std::string msg = convertBlobToString(error_blob.GetInterfacePtr());
-            SetErrorLog("%s\n", msg);
+        if (FAILED(hr)) {
+            SetErrorLog(ToString(error_blob) + "\n");
         }
         m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_global_rootsig));
     }
@@ -338,10 +337,8 @@ bool GfxContextDXR::initializeDevice()
         ID3DBlobPtr sig_blob;
         ID3DBlobPtr error_blob;
         HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
-        if (FAILED(hr))
-        {
-            std::string msg = convertBlobToString(error_blob.GetInterfacePtr());
-            SetErrorLog("%s\n", msg);
+        if (FAILED(hr)) {
+            SetErrorLog(ToString(error_blob) + "\n");
         }
         m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_local_rootsig));
     }
@@ -354,11 +351,19 @@ bool GfxContextDXR::initializeDevice()
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srv_uav_heap));
         m_desc_heap_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
 
-        m_shader_table_entry_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-        m_shader_table_entry_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE); // The ray-gen's descriptor table
-        m_shader_table_entry_size = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_shader_table_entry_size);
+        m_descriptor_stride = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+        m_descriptor_stride += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
+        m_descriptor_stride = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_descriptor_stride);
     }
     return true;
+}
+
+void GfxContextDXR::setSceneData(SceneData& data)
+{
+    SceneData *dst;
+    m_scene_buffer->Map(0, nullptr, (void**)&dst);
+    *dst = data;
+    m_scene_buffer->Unmap(0, nullptr);
 }
 
 void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
@@ -592,7 +597,6 @@ void GfxContextDXR::flush()
         return;
     }
 
-
     // setup shader table
     {
         // ray-gen + miss + hit for each meshes
@@ -601,7 +605,7 @@ void GfxContextDXR::flush()
         // allocate new buffer if required count exceeds capacity
         if (required_count > m_shader_table_entry_capacity) {
             int new_capacity = std::max<int>(required_count, std::max<int>(m_shader_table_entry_capacity * 2, 1024));
-            m_shader_table = createBuffer(m_shader_table_entry_size * new_capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            m_shader_table = createBuffer(m_descriptor_stride * new_capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
             m_shader_table_entry_capacity = new_capacity;
         }
 
@@ -617,17 +621,17 @@ void GfxContextDXR::flush()
             memcpy(data, sop->GetShaderIdentifier(kRayGenShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
             uint64_t heap_start = m_srv_uav_heap->GetGPUDescriptorHandleForHeapStart().ptr;
             *(uint64_t*)(data + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES) = heap_start;
-            data += m_shader_table_entry_size;
+            data += m_descriptor_stride;
 
             // miss
             memcpy(data, sop->GetShaderIdentifier(kMissShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-            data += m_shader_table_entry_size;
+            data += m_descriptor_stride;
 
             // hit for each meshes
             int num_meshes = (int)m_meshes.size();
             for (int i = 0; i < num_meshes; ++i) {
                 memcpy(data, sop->GetShaderIdentifier(kHitGroup), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-                data += m_shader_table_entry_size;
+                data += m_descriptor_stride;
             }
 
             m_shader_table->Unmap(0, nullptr);
@@ -648,19 +652,19 @@ void GfxContextDXR::flush()
         auto addr = m_shader_table->GetGPUVirtualAddress();
         // ray-gen
         dr_desc.RayGenerationShaderRecord.StartAddress = addr;
-        dr_desc.RayGenerationShaderRecord.SizeInBytes = m_shader_table_entry_size;
-        addr += m_shader_table_entry_size;
+        dr_desc.RayGenerationShaderRecord.SizeInBytes = m_descriptor_stride;
+        addr += m_descriptor_stride;
 
         // miss
         dr_desc.MissShaderTable.StartAddress = addr;
-        dr_desc.MissShaderTable.StrideInBytes = m_shader_table_entry_size;
-        dr_desc.MissShaderTable.SizeInBytes = m_shader_table_entry_size;   // Only a s single miss-entry
-        addr += m_shader_table_entry_size;
+        dr_desc.MissShaderTable.StrideInBytes = m_descriptor_stride;
+        dr_desc.MissShaderTable.SizeInBytes = m_descriptor_stride;   // Only a s single miss-entry
+        addr += m_descriptor_stride;
 
         // hit for each meshes
         dr_desc.HitGroupTable.StartAddress = addr;
-        dr_desc.HitGroupTable.StrideInBytes = m_shader_table_entry_size;
-        dr_desc.HitGroupTable.SizeInBytes = m_shader_table_entry_size * m_meshes.size();
+        dr_desc.HitGroupTable.StrideInBytes = m_descriptor_stride;
+        dr_desc.HitGroupTable.SizeInBytes = m_descriptor_stride * m_meshes.size();
 
         // descriptor heaps
         ID3D12DescriptorHeap *desc_heaps[] = {
@@ -671,9 +675,9 @@ void GfxContextDXR::flush()
 
         // bind root signature and shader resources
         m_cmd_list->SetComputeRootSignature(m_global_rootsig);
-        //m_cmd_list->SetComputeRootDescriptorTable(0, m_render_target.resource->GetGPUVirtualAddress());
-        //m_cmd_list->SetComputeRootDescriptorTable(1, m_scene_data->GetGPUVirtualAddress());
-        m_cmd_list->SetComputeRootShaderResourceView(2, m_toplevel_as->GetGPUVirtualAddress());
+        m_cmd_list->SetComputeRootShaderResourceView(0, m_toplevel_as->GetGPUVirtualAddress());
+        //m_cmd_list->SetComputeRootShaderResourceView(1, m_scene_buffer->GetGPUVirtualAddress());
+        //m_cmd_list->SetComputeRootDescriptorTable(2, m_render_target.resource->GetGPUVirtualAddress());
 
         // dispatch
         m_cmd_list->SetPipelineState1(m_pipeline_state.GetInterfacePtr());

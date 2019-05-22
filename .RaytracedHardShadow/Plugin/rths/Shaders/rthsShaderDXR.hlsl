@@ -1,3 +1,5 @@
+#define kMaxLights 32
+
 struct CameraData
 {
     float4 position;
@@ -27,9 +29,9 @@ struct SceneData
     int reverse_point_light_count;
     int pad1[1];
 
-    DirectionalLightData directional_lights[32];
-    PointLightData point_lights[32];
-    PointLightData reverse_point_lights[32];
+    DirectionalLightData directional_lights[kMaxLights];
+    PointLightData point_lights[kMaxLights];
+    PointLightData reverse_point_lights[kMaxLights];
 };
 
 struct RayPayload

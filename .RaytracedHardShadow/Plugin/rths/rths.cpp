@@ -75,6 +75,20 @@ rthsAPI void rthsAddDirectionalLight(IRenderer *self, float4x4 transform)
     self->addDirectionalLight(transform);
 }
 
+rthsAPI void rthsAddPointLight(IRenderer *self, float4x4 transform)
+{
+    if (!self)
+        return;
+    self->addPointLight(transform);
+}
+
+rthsAPI void rthsAddReversePointLight(IRenderer *self, float4x4 transform)
+{
+    if (!self)
+        return;
+    self->addReversePointLight(transform);
+}
+
 rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform, void *vb, void *ib, int vertex_count, int index_count, int index_offset)
 {
     if (!self || !vb || !ib)

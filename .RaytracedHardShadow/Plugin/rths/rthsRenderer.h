@@ -16,6 +16,8 @@ public:
     virtual void setRenderTarget(void *rt) = 0;
     virtual void setCamera(const float4x4& trans, float near_, float far_, float fov) = 0;
     virtual void addDirectionalLight(const float4x4& trans) = 0;
+    virtual void addPointLight(const float4x4& trans) = 0;
+    virtual void addReversePointLight(const float4x4& trans) = 0;
     virtual void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_count, int index_offset) = 0;
 };
 

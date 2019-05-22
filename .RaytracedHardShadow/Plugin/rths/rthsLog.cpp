@@ -22,4 +22,10 @@ void SetErrorLog(const char *format, ...)
     va_end(args);
 }
 
+void SetErrorLog(const std::string& str)
+{
+    g_error_log = str;
+}
+
+
 } // namespace rths

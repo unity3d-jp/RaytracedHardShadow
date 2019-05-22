@@ -1,5 +1,6 @@
 #include "pch.h"
 #ifdef _WIN32
+#include "rthsLog.h"
 #include "rthsRenderer.h"
 #include "rthsGfxContextDXR.h"
 
@@ -19,12 +20,13 @@ public:
     void setRenderTarget(void *rt) override;
     void setCamera(const float4x4& trans, float near_, float far_, float fov) override;
     void addDirectionalLight(const float4x4& trans) override;
+    void addPointLight(const float4x4& trans) override;
+    void addReversePointLight(const float4x4& trans) override;
     void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_count, int index_offset) override;
 
 private:
     TextureDataDXR m_render_target;
-    ID3D12ResourcePtr m_camera_buffer;
-    ID3D12ResourcePtr m_light_buffer;
+    SceneData m_scene_data;
     std::vector<MeshBuffersDXR> m_mesh_buffers;
 };
 
@@ -34,13 +36,14 @@ RendererDXR::RendererDXR()
 
 RendererDXR::~RendererDXR()
 {
-    m_camera_buffer = nullptr;
-    m_light_buffer = nullptr;
     m_mesh_buffers.clear();
 }
 
 void RendererDXR::beginScene()
 {
+    m_scene_data.directional_light_count = 0;
+    m_scene_data.point_light_count = 0;
+    m_scene_data.reverse_point_light_count = 0;
     m_mesh_buffers.clear();
 }
 
@@ -54,6 +57,7 @@ void RendererDXR::render()
     if (!ctx->validateDevice()) {
         return;
     }
+    ctx->setSceneData(m_scene_data);
     ctx->setRenderTarget(m_render_target);
     ctx->setMeshes(m_mesh_buffers);
     ctx->flush();
@@ -72,12 +76,41 @@ void RendererDXR::setRenderTarget(void *rt)
 
 void RendererDXR::setCamera(const float4x4& trans, float near_, float far_, float fov)
 {
-    // todo
+    m_scene_data.camera.position = extract_position(trans);
+    m_scene_data.camera.direction = extract_direction(trans);
+    m_scene_data.camera.near_plane = near_;
+    m_scene_data.camera.far_plane = far_;
+    m_scene_data.camera.fov = fov;
 }
 
 void RendererDXR::addDirectionalLight(const float4x4& trans)
 {
-    // todo
+    if (m_scene_data.directional_light_count == kMaxLights) {
+        SetErrorLog("exceeded max directional lights (%d)\n", kMaxLights);
+        return;
+    }
+    auto& dst = m_scene_data.directional_lights[m_scene_data.directional_light_count++];
+    dst.direction = extract_direction(trans);
+}
+
+void RendererDXR::addPointLight(const float4x4& trans)
+{
+    if (m_scene_data.point_light_count == kMaxLights) {
+        SetErrorLog("exceeded max point lights (%d)\n", kMaxLights);
+        return;
+    }
+    auto& dst = m_scene_data.point_lights[m_scene_data.point_light_count++];
+    dst.position = extract_position(trans);
+}
+
+void RendererDXR::addReversePointLight(const float4x4& trans)
+{
+    if (m_scene_data.reverse_point_light_count == kMaxLights) {
+        SetErrorLog("exceeded max reverse point lights (%d)\n", kMaxLights);
+        return;
+    }
+    auto& dst = m_scene_data.reverse_point_lights[m_scene_data.reverse_point_light_count++];
+    dst.position = extract_position(trans);
 }
 
 void RendererDXR::addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_count, int index_offset)

@@ -13,7 +13,6 @@
 #include <dxcapi.h>
 #include <comdef.h>
 #include "dxcapi.use.h"
-#include "d3dx12.h"
 #endif // _WIN32
 
 // Unity PluginAPI
