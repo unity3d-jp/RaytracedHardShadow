@@ -1,7 +1,6 @@
 #pragma once
 
 #define align_to(_alignment, _val) (((_val + _alignment - 1) / _alignment) * _alignment)
-#define arraysize(a) (sizeof(a)/sizeof(a[0]))
 
 namespace rths {
 

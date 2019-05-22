@@ -68,8 +68,7 @@ Externals\bin\File2Obj /in:$(IntDir)%(Filename).bin /out:$(IntDir)%(Filename).ob
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <PostBuildEvent>
-      <Command>xcopy /Yq $(TargetPath) $(SolutionDir)..\Assets\UTJ\RaytracedHardShadow\Runtime\Plugins\x86_64\
-xcopy /Yq $(SolutionDir)Externals\dxcompiler\*.dll $(SolutionDir)..\Assets\UTJ\RaytracedHardShadow\Runtime\Plugins\x86_64\</Command>
+      <Command>xcopy /Yq $(TargetPath) $(SolutionDir)..\Assets\UTJ\RaytracedHardShadow\Runtime\Plugins\x86_64\</Command>
     </PostBuildEvent>
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -88,8 +87,7 @@ xcopy /Yq $(SolutionDir)Externals\dxcompiler\*.dll $(SolutionDir)..\Assets\UTJ\R
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <PostBuildEvent>
-      <Command>xcopy /Yq $(TargetPath) $(SolutionDir)..\Assets\UTJ\RaytracedHardShadow\Runtime\Plugins\x86_64\
-xcopy /Yq $(SolutionDir)Externals\dxcompiler\*.dll $(SolutionDir)..\Assets\UTJ\RaytracedHardShadow\Runtime\Plugins\x86_64\</Command>
+      <Command>xcopy /Yq $(TargetPath) $(SolutionDir)..\Assets\UTJ\RaytracedHardShadow\Runtime\Plugins\x86_64\</Command>
     </PostBuildEvent>
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>

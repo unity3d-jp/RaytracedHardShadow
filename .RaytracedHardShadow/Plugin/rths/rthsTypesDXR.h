@@ -89,6 +89,12 @@ struct MeshBuffersDXR
     ID3D12ResourcePtr blas; // bottom level acceleration structure
 };
 
+struct Descriptor
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE hcpu;
+    D3D12_GPU_DESCRIPTOR_HANDLE hgpu;
+};
+
 
 extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;

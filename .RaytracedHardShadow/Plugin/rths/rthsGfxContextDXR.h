@@ -48,19 +48,23 @@ private:
     ID3D12RootSignaturePtr m_local_rootsig;
 
     std::vector<MeshBuffersDXR> m_meshes;
-    ID3D12ResourcePtr m_toplevel_as;
+    ID3D12ResourcePtr m_tlas;
+    Descriptor m_tlas_handle;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
     TextureDataDXR m_render_target;
+    Descriptor m_render_target_handle;
     ID3D12ResourcePtr m_scene_buffer;
 
     ID3D12ResourcePtr m_shader_table;
     int m_desc_heap_stride = 0;
-    int m_descriptor_stride = 0;
     int m_shader_table_entry_count = 0;
     int m_shader_table_entry_capacity = 0;
+    int m_shader_record_size = 0;
 
-    ID3D12DescriptorHeapPtr m_srv_uav_heap;
+    ID3D12DescriptorHeapPtr m_srvuav_heap;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_srvuav_cpu_handle_base;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_srvuav_gpu_handle_base;
     static const int kSrvUavHeapSize = 2;
 
     bool m_flushing = false;

@@ -19,6 +19,8 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsFinish(IntPtr self);
         [DllImport("rths")] static extern void rthsSetCamera(IntPtr self, Matrix4x4 trans, float near, float far, float fov);
         [DllImport("rths")] static extern void rthsAddDirectionalLight(IntPtr self, Matrix4x4 trans);
+        [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans);
+        [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans);
         [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib, int vertexCount, uint indexCount, uint indexStart);
 
         public static string S(IntPtr cstring)
@@ -80,12 +82,33 @@ namespace UTJ.RaytracedHardShadow
                 case LightType.Directional:
                     rthsAddDirectionalLight(self, light.transform.localToWorldMatrix);
                     return true;
-
+                case LightType.Point:
+                    rthsAddPointLight(self, light.transform.localToWorldMatrix);
+                    return true;
                 default:
                     Debug.LogWarning("rthsShadowRenderer: " + light.type + " is not supported");
                     return false;
             }
         }
+        public bool AddLight(ShadowCasterLight light)
+        {
+            switch (light.lightType)
+            {
+                case ShadowCasterLightType.Directional:
+                    rthsAddDirectionalLight(self, light.transform.localToWorldMatrix);
+                    return true;
+                case ShadowCasterLightType.Point:
+                    rthsAddPointLight(self, light.transform.localToWorldMatrix);
+                    return true;
+                case ShadowCasterLightType.ReversePoint:
+                    rthsAddReversePointLight(self, light.transform.localToWorldMatrix);
+                    return true;
+                default:
+                    Debug.LogWarning("rthsShadowRenderer: " + light.lightType + " is not supported");
+                    return false;
+            }
+        }
+
 
         public void AddMesh(MeshRenderer mr)
         {

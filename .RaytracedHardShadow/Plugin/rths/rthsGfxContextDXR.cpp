@@ -35,54 +35,13 @@ const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
 };
 
 
-static inline std::string ToString(ID3DBlob* pBlob)
+static inline std::string ToString(ID3DBlob *blob)
 {
-    std::vector<char> infoLog(pBlob->GetBufferSize() + 1);
-    memcpy(infoLog.data(), pBlob->GetBufferPointer(), pBlob->GetBufferSize());
-    infoLog[pBlob->GetBufferSize()] = 0;
-    return std::string(infoLog.data());
+    std::string ret;
+    ret.resize(blob->GetBufferSize());
+    memcpy(&ret[0], blob->GetBufferPointer(), blob->GetBufferSize());
+    return ret;
 }
-
-static const char* GetModulePath()
-{
-    static char s_path[MAX_PATH + 1];
-    if (s_path[0] == 0) {
-        HMODULE mod = 0;
-        ::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)&GetModulePath, &mod);
-        DWORD size = ::GetModuleFileNameA(mod, s_path, sizeof(s_path));
-        for (int i = size - 1; i >= 0; --i) {
-            if (s_path[i] == '\\') {
-                s_path[i] = '\0';
-                break;
-            }
-        }
-    }
-    return s_path;
-}
-
-static void AddDLLSearchPath(const char *v)
-{
-    std::string path;
-    {
-        DWORD size = ::GetEnvironmentVariableA("PATH", nullptr, 0);
-        if (size > 0) {
-            path.resize(size);
-            ::GetEnvironmentVariableA("PATH", &path[0], (DWORD)path.size());
-            path.pop_back(); // delete last '\0'
-        }
-    }
-    if (path.find(v) == std::string::npos) {
-        if (!path.empty()) { path += ";"; }
-        auto pos = path.size();
-        path += v;
-        for (size_t i = pos; i < path.size(); ++i) {
-            char& c = path[i];
-            if (c == '/') { c = '\\'; }
-        }
-        ::SetEnvironmentVariableA("PATH", path.c_str());
-    }
-}
-
 
 
 
@@ -115,7 +74,6 @@ GfxContextDXR* GfxContextDXR::getInstance()
 
 GfxContextDXR::GfxContextDXR()
 {
-    AddDLLSearchPath(GetModulePath());
     initializeDevice();
 }
 
@@ -247,7 +205,7 @@ bool GfxContextDXR::initializeDevice()
         D3D12_DXIL_LIBRARY_DESC dxil_desc{};
         dxil_desc.DXILLibrary.pShaderBytecode = rthsShaderDXR;
         dxil_desc.DXILLibrary.BytecodeLength = sizeof(rthsShaderDXR);
-        dxil_desc.NumExports = arraysize(libExports);
+        dxil_desc.NumExports = _countof(libExports);
         dxil_desc.pExports = libExports;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &dxil_desc);
 
@@ -348,12 +306,22 @@ bool GfxContextDXR::initializeDevice()
         desc.NumDescriptors = 64;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // D3D12_DESCRIPTOR_HEAP_FLAG_NONE
-        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srv_uav_heap));
+        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvuav_heap));
+        m_srvuav_cpu_handle_base = m_srvuav_heap->GetCPUDescriptorHandleForHeapStart();
+        m_srvuav_gpu_handle_base = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart();
         m_desc_heap_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
 
-        m_descriptor_stride = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-        m_descriptor_stride += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
-        m_descriptor_stride = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_descriptor_stride);
+        auto alloc_cpu_handle = [this]() {
+            Descriptor ret;
+            ret.hcpu = m_srvuav_cpu_handle_base;
+            ret.hgpu = m_srvuav_gpu_handle_base;
+            m_srvuav_cpu_handle_base.ptr += m_desc_heap_stride;
+            m_srvuav_gpu_handle_base.ptr += m_desc_heap_stride;
+            return ret;
+        };
+
+        m_tlas_handle = alloc_cpu_handle();
+        m_render_target_handle = alloc_cpu_handle();
     }
     return true;
 }
@@ -372,7 +340,7 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_srv_uav_heap->GetCPUDescriptorHandleForHeapStart());
+    m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
 }
 
 void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
@@ -465,7 +433,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
         // Create the buffers
         auto scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
         m_temporary_buffers.push_back(scratch);
-        m_toplevel_as = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+        m_tlas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
         uint64_t tlas_size = info.ResultDataMaxSizeInBytes;
 
         // The instance desc should be inside a buffer, create and map the buffer
@@ -490,7 +458,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc = {};
         as_desc.Inputs = inputs;
         as_desc.Inputs.InstanceDescs = instance_descs_buf->GetGPUVirtualAddress();
-        as_desc.DestAccelerationStructureData = m_toplevel_as->GetGPUVirtualAddress();
+        as_desc.DestAccelerationStructureData = m_tlas->GetGPUVirtualAddress();
         as_desc.ScratchAccelerationStructureData = scratch->GetGPUVirtualAddress();
 
         m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
@@ -498,18 +466,15 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
         // We need to insert a UAV barrier before using the acceleration structures in a raytracing operation
         D3D12_RESOURCE_BARRIER uav_barrier = {};
         uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        uav_barrier.UAV.pResource = m_toplevel_as;
+        uav_barrier.UAV.pResource = m_tlas;
         m_cmd_list->ResourceBarrier(1, &uav_barrier);
 
         // Create the TLAS SRV
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.RaytracingAccelerationStructure.Location = m_toplevel_as->GetGPUVirtualAddress();
-
-        D3D12_CPU_DESCRIPTOR_HANDLE srv_handle = m_srv_uav_heap->GetCPUDescriptorHandleForHeapStart();
-        srv_handle.ptr += m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        m_device->CreateShaderResourceView(nullptr, &srv_desc, srv_handle);
+        srv_desc.RaytracingAccelerationStructure.Location = m_tlas->GetGPUVirtualAddress();
+        m_device->CreateShaderResourceView(nullptr, &srv_desc, m_tlas_handle.hcpu);
     }
 
 #ifdef rthsDebug
@@ -602,10 +567,15 @@ void GfxContextDXR::flush()
         // ray-gen + miss + hit for each meshes
         int required_count = 2 + (int)m_meshes.size();
 
+        m_shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+        // local root signature is empty for now. so no need to add spaces for variables.
+        //m_shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
+        m_shader_record_size = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_shader_record_size);
+
         // allocate new buffer if required count exceeds capacity
         if (required_count > m_shader_table_entry_capacity) {
             int new_capacity = std::max<int>(required_count, std::max<int>(m_shader_table_entry_capacity * 2, 1024));
-            m_shader_table = createBuffer(m_descriptor_stride * new_capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            m_shader_table = createBuffer(m_shader_record_size * new_capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
             m_shader_table_entry_capacity = new_capacity;
         }
 
@@ -617,22 +587,27 @@ void GfxContextDXR::flush()
             ID3D12StateObjectPropertiesPtr sop;
             m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
 
+            auto add_shader_table = [&data, this](void *shader_id) {
+                auto dst = data;
+                memcpy(dst, shader_id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+                dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+                //*(UINT64*)(dst) = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart().ptr;
+                //dst += m_shader_record_size;
+
+                data += m_shader_record_size;
+            };
+
             // ray-gen
-            memcpy(data, sop->GetShaderIdentifier(kRayGenShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-            uint64_t heap_start = m_srv_uav_heap->GetGPUDescriptorHandleForHeapStart().ptr;
-            *(uint64_t*)(data + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES) = heap_start;
-            data += m_descriptor_stride;
+            add_shader_table(sop->GetShaderIdentifier(kRayGenShader));
 
             // miss
-            memcpy(data, sop->GetShaderIdentifier(kMissShader), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-            data += m_descriptor_stride;
+            add_shader_table(sop->GetShaderIdentifier(kMissShader));
 
             // hit for each meshes
             int num_meshes = (int)m_meshes.size();
-            for (int i = 0; i < num_meshes; ++i) {
-                memcpy(data, sop->GetShaderIdentifier(kHitGroup), D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-                data += m_descriptor_stride;
-            }
+            void *hit = sop->GetShaderIdentifier(kHitGroup);
+            for (int i = 0; i < num_meshes; ++i)
+                add_shader_table(hit);
 
             m_shader_table->Unmap(0, nullptr);
             m_shader_table_entry_count = required_count;
@@ -652,30 +627,30 @@ void GfxContextDXR::flush()
         auto addr = m_shader_table->GetGPUVirtualAddress();
         // ray-gen
         dr_desc.RayGenerationShaderRecord.StartAddress = addr;
-        dr_desc.RayGenerationShaderRecord.SizeInBytes = m_descriptor_stride;
-        addr += m_descriptor_stride;
+        dr_desc.RayGenerationShaderRecord.SizeInBytes = m_shader_record_size;
+        addr += m_shader_record_size;
 
         // miss
         dr_desc.MissShaderTable.StartAddress = addr;
-        dr_desc.MissShaderTable.StrideInBytes = m_descriptor_stride;
-        dr_desc.MissShaderTable.SizeInBytes = m_descriptor_stride;   // Only a s single miss-entry
-        addr += m_descriptor_stride;
+        dr_desc.MissShaderTable.StrideInBytes = m_shader_record_size;
+        dr_desc.MissShaderTable.SizeInBytes = m_shader_record_size; 
+        addr += m_shader_record_size;
 
         // hit for each meshes
         dr_desc.HitGroupTable.StartAddress = addr;
-        dr_desc.HitGroupTable.StrideInBytes = m_descriptor_stride;
-        dr_desc.HitGroupTable.SizeInBytes = m_descriptor_stride * m_meshes.size();
+        dr_desc.HitGroupTable.StrideInBytes = m_shader_record_size;
+        dr_desc.HitGroupTable.SizeInBytes = m_shader_record_size * m_meshes.size();
 
         // descriptor heaps
         ID3D12DescriptorHeap *desc_heaps[] = {
-            m_srv_uav_heap.GetInterfacePtr(),
+            m_srvuav_heap.GetInterfacePtr(),
             // sampler heap will be here
         };
         m_cmd_list->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
 
         // bind root signature and shader resources
         m_cmd_list->SetComputeRootSignature(m_global_rootsig);
-        m_cmd_list->SetComputeRootShaderResourceView(0, m_toplevel_as->GetGPUVirtualAddress());
+        m_cmd_list->SetComputeRootShaderResourceView(0, m_tlas->GetGPUVirtualAddress());
         //m_cmd_list->SetComputeRootShaderResourceView(1, m_scene_buffer->GetGPUVirtualAddress());
         //m_cmd_list->SetComputeRootDescriptorTable(2, m_render_target.resource->GetGPUVirtualAddress());
 

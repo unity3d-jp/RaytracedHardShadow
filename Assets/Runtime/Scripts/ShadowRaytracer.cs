@@ -6,7 +6,7 @@ using UnityEditor;
 namespace UTJ.RaytracedHardShadow
 {
     [ExecuteInEditMode]
-    class ShadowRaytracer : MonoBehaviour
+    public class ShadowRaytracer : MonoBehaviour
     {
 #if UNITY_EDITOR
         [MenuItem("GameObject/RaytracedHardShadow/Create ShadowRaytracer", false, 10)]
@@ -25,6 +25,9 @@ namespace UTJ.RaytracedHardShadow
 
         [Tooltip("Light(s) to cast shadow. Must be directional.")]
         [SerializeField] Light[] m_lights;
+
+        [Tooltip("ShadowCasterLight(s) to cast shadow. Must be directional.")]
+        [SerializeField] ShadowCasterLight[] m_shadowCasterLights;
 
         [Tooltip("Output buffer. Must be R32F format.")]
         [SerializeField] RenderTexture m_shadowBuffer;
@@ -62,6 +65,8 @@ namespace UTJ.RaytracedHardShadow
             m_renderer.SetRenderTarget(m_shadowBuffer);
             m_renderer.SetCamera(cam);
             foreach (var light in m_lights)
+                m_renderer.AddLight(light);
+            foreach (var light in m_shadowCasterLights)
                 m_renderer.AddLight(light);
             foreach (var mr in FindObjectsOfType<MeshRenderer>())
                 m_renderer.AddMesh(mr);
