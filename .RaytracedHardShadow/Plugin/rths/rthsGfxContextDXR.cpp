@@ -179,14 +179,106 @@ bool GfxContextDXR::initializeDevice()
         m_fence_event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
     }
 
+    {
+        // global root signature
+        D3D12_DESCRIPTOR_RANGE ranges[] = {
+            // gRtScene
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            // gOutput
+            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            // gScene
+            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+        };
+
+        D3D12_ROOT_PARAMETER params[_countof(ranges)];
+        for (int i = 0; i < _countof(ranges); i++) {
+            auto& param = params[i];
+            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+            param.DescriptorTable.NumDescriptorRanges = 1;
+            param.DescriptorTable.pDescriptorRanges = &ranges[i];
+        }
+
+        D3D12_ROOT_SIGNATURE_DESC desc = {};
+        desc.NumParameters = _countof(params);
+        desc.pParameters = params;
+        desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+        ID3DBlobPtr sig_blob;
+        ID3DBlobPtr error_blob;
+        HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
+        if (FAILED(hr)) {
+            SetErrorLog(ToString(error_blob) + "\n");
+        }
+        else {
+            hr = m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_global_rootsig));
+            if (FAILED(hr)) {
+                SetErrorLog("CreateRootSignature() failed\n");
+            }
+        }
+    }
+    {
+        // local root signature (empty for now)
+        D3D12_ROOT_SIGNATURE_DESC desc{};
+        desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
+
+        ID3DBlobPtr sig_blob;
+        ID3DBlobPtr error_blob;
+        HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
+        if (FAILED(hr)) {
+            SetErrorLog(ToString(error_blob) + "\n");
+        }
+        else {
+            hr = m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_local_rootsig));
+            if (FAILED(hr)) {
+                SetErrorLog("CreateRootSignature() failed\n");
+            }
+        }
+    }
+
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.NumDescriptors = 64;
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // D3D12_DESCRIPTOR_HEAP_FLAG_NONE
+        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvuav_heap));
+        m_srvuav_cpu_handle_base = m_srvuav_heap->GetCPUDescriptorHandleForHeapStart();
+        m_srvuav_gpu_handle_base = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart();
+        m_desc_heap_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
+
+        auto alloc_handle = [this]() {
+            Descriptor ret;
+            ret.hcpu = m_srvuav_cpu_handle_base;
+            ret.hgpu = m_srvuav_gpu_handle_base;
+            m_srvuav_cpu_handle_base.ptr += m_desc_heap_stride;
+            m_srvuav_gpu_handle_base.ptr += m_desc_heap_stride;
+            return ret;
+        };
+
+        m_tlas_handle = alloc_handle();
+        m_render_target_handle = alloc_handle();
+        m_scene_buffer_handle = alloc_handle();
+    }
+
     // scene constant buffer
     {
-        m_scene_buffer = createBuffer(1024 * 64, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kDefaultHeapProps);
+        m_scene_buffer = createBuffer(1024 * 64, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+        srv_desc.Buffer.FirstElement = 0;
+        srv_desc.Buffer.NumElements = 1;
+        srv_desc.Buffer.StructureByteStride = sizeof(SceneData);
+        srv_desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+        m_device->CreateShaderResourceView(m_scene_buffer, &srv_desc, m_scene_buffer_handle.hcpu);
     }
 
     // setup pipeline state
     {
         std::vector<D3D12_STATE_SUBOBJECT> subobjects;
+        // keep elements' address to use D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION::pSubobjectToAssociate
         subobjects.reserve(32);
 
         auto add_subobject = [&subobjects](D3D12_STATE_SUBOBJECT_TYPE type, auto *ptr) {
@@ -222,16 +314,18 @@ bool GfxContextDXR::initializeDevice()
         rt_shader_desc.MaxAttributeSizeInBytes = 8;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &rt_shader_desc);
 
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, m_local_rootsig.GetInterfacePtr());
+        auto local_rootsig = m_local_rootsig.GetInterfacePtr();
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local_rootsig);
 
         LPCWSTR kExports[] = { kRayGenShader, kMissShader, kHitGroup };
         D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION ass_desc;
-        ass_desc.pSubobjectToAssociate = nullptr;
+        ass_desc.pSubobjectToAssociate = &subobjects.back();
         ass_desc.NumExports = _countof(kExports);
         ass_desc.pExports = kExports;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, &ass_desc);
 
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, m_global_rootsig.GetInterfacePtr());
+        auto global_rootsig = m_global_rootsig.GetInterfacePtr();
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
 
         D3D12_RAYTRACING_PIPELINE_CONFIG rt_pipeline_desc;
         rt_pipeline_desc.MaxTraceRecursionDepth = rthsMaxBounce;
@@ -247,91 +341,20 @@ bool GfxContextDXR::initializeDevice()
             SetErrorLog("CreateStateObject() failed\n");
         }
     }
-
-    {
-        // global root signature
-        D3D12_DESCRIPTOR_RANGE ranges[] = {
-            // gOutput
-            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
-            // gScene
-            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
-        };
-
-        D3D12_ROOT_PARAMETER params[_countof(ranges) + 1]; // +1 for gRtScene
-        {
-            // gRtScene
-            auto& param = params[0];
-            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-            param.Descriptor.ShaderRegister = 0;
-            param.Descriptor.RegisterSpace = 0;
-        }
-        for (int i = 0; i < _countof(ranges); i++) {
-            auto& param = params[i + 1];
-            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-            param.DescriptorTable.NumDescriptorRanges = 1;
-            param.DescriptorTable.pDescriptorRanges = &ranges[i];
-        }
-
-        D3D12_ROOT_SIGNATURE_DESC desc = {};
-        desc.NumParameters = _countof(params);
-        desc.pParameters = params;
-        desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
-
-        ID3DBlobPtr sig_blob;
-        ID3DBlobPtr error_blob;
-        HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
-        if (FAILED(hr)) {
-            SetErrorLog(ToString(error_blob) + "\n");
-        }
-        m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_global_rootsig));
-    }
-    {
-        // local root signature (empty for now)
-        D3D12_ROOT_SIGNATURE_DESC desc{};
-        desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
-
-        ID3DBlobPtr sig_blob;
-        ID3DBlobPtr error_blob;
-        HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
-        if (FAILED(hr)) {
-            SetErrorLog(ToString(error_blob) + "\n");
-        }
-        m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_local_rootsig));
-    }
-
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 64;
-        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // D3D12_DESCRIPTOR_HEAP_FLAG_NONE
-        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvuav_heap));
-        m_srvuav_cpu_handle_base = m_srvuav_heap->GetCPUDescriptorHandleForHeapStart();
-        m_srvuav_gpu_handle_base = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart();
-        m_desc_heap_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
-
-        auto alloc_cpu_handle = [this]() {
-            Descriptor ret;
-            ret.hcpu = m_srvuav_cpu_handle_base;
-            ret.hgpu = m_srvuav_gpu_handle_base;
-            m_srvuav_cpu_handle_base.ptr += m_desc_heap_stride;
-            m_srvuav_gpu_handle_base.ptr += m_desc_heap_stride;
-            return ret;
-        };
-
-        m_tlas_handle = alloc_cpu_handle();
-        m_render_target_handle = alloc_cpu_handle();
-    }
     return true;
 }
 
 void GfxContextDXR::setSceneData(SceneData& data)
 {
     SceneData *dst;
-    m_scene_buffer->Map(0, nullptr, (void**)&dst);
-    *dst = data;
-    m_scene_buffer->Unmap(0, nullptr);
+    auto hr = m_scene_buffer->Map(0, nullptr, (void**)&dst);
+    if (FAILED(hr)) {
+        SetErrorLog("m_scene_buffer->Map() failed\n");
+    }
+    else {
+        *dst = data;
+        m_scene_buffer->Unmap(0, nullptr);
+    }
 }
 
 void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
@@ -570,7 +593,8 @@ void GfxContextDXR::flush()
         m_shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
         // local root signature is empty for now. so no need to add spaces for variables.
         //m_shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
-        m_shader_record_size = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_shader_record_size);
+        //m_shader_record_size = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_shader_record_size);
+        m_shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, m_shader_record_size);
 
         // allocate new buffer if required count exceeds capacity
         if (required_count > m_shader_table_entry_capacity) {
@@ -650,9 +674,9 @@ void GfxContextDXR::flush()
 
         // bind root signature and shader resources
         m_cmd_list->SetComputeRootSignature(m_global_rootsig);
-        m_cmd_list->SetComputeRootShaderResourceView(0, m_tlas->GetGPUVirtualAddress());
-        //m_cmd_list->SetComputeRootShaderResourceView(1, m_scene_buffer->GetGPUVirtualAddress());
-        //m_cmd_list->SetComputeRootDescriptorTable(2, m_render_target.resource->GetGPUVirtualAddress());
+        m_cmd_list->SetComputeRootDescriptorTable(0, m_tlas_handle.hgpu);
+        m_cmd_list->SetComputeRootDescriptorTable(1, m_render_target_handle.hgpu);
+        m_cmd_list->SetComputeRootDescriptorTable(2, m_scene_buffer_handle.hgpu);
 
         // dispatch
         m_cmd_list->SetPipelineState1(m_pipeline_state.GetInterfacePtr());

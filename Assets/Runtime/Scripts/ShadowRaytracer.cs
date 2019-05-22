@@ -64,10 +64,12 @@ namespace UTJ.RaytracedHardShadow
             m_renderer.BeginScene();
             m_renderer.SetRenderTarget(m_shadowBuffer);
             m_renderer.SetCamera(cam);
-            foreach (var light in m_lights)
-                m_renderer.AddLight(light);
-            foreach (var light in m_shadowCasterLights)
-                m_renderer.AddLight(light);
+            if (m_lights != null)
+                foreach (var light in m_lights)
+                    m_renderer.AddLight(light);
+            if (m_shadowCasterLights != null)
+                foreach (var light in m_shadowCasterLights)
+                    m_renderer.AddLight(light);
             foreach (var mr in FindObjectsOfType<MeshRenderer>())
                 m_renderer.AddMesh(mr);
             foreach (var smr in FindObjectsOfType<SkinnedMeshRenderer>())

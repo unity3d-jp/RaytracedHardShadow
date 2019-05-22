@@ -54,7 +54,9 @@ private:
 
     TextureDataDXR m_render_target;
     Descriptor m_render_target_handle;
+
     ID3D12ResourcePtr m_scene_buffer;
+    Descriptor m_scene_buffer_handle;
 
     ID3D12ResourcePtr m_shader_table;
     int m_desc_heap_stride = 0;
@@ -65,7 +67,6 @@ private:
     ID3D12DescriptorHeapPtr m_srvuav_heap;
     D3D12_CPU_DESCRIPTOR_HANDLE m_srvuav_cpu_handle_base;
     D3D12_GPU_DESCRIPTOR_HANDLE m_srvuav_gpu_handle_base;
-    static const int kSrvUavHeapSize = 2;
 
     bool m_flushing = false;
 };
