@@ -53,6 +53,7 @@ inline float3 normalize(const float3& v) { return v / length(v); }
 
 inline float3x4 to_float3x4(const float4x4& v)
 {
+    // copy with transpose
     return float3x4{ {
         {v[0][0], v[1][0], v[2][0], v[3][0]},
         {v[0][1], v[1][1], v[2][1], v[3][1]},

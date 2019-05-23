@@ -84,17 +84,17 @@ GfxContextDXR::~GfxContextDXR()
 ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)
 {
     D3D12_RESOURCE_DESC desc = {};
-    desc.Alignment = 0;
-    desc.DepthOrArraySize = 1;
     desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    desc.Flags = flags;
-    desc.Format = DXGI_FORMAT_UNKNOWN;
+    desc.Alignment = 0;
+    desc.Width = size;
     desc.Height = 1;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.DepthOrArraySize = 1;
     desc.MipLevels = 1;
+    desc.Format = DXGI_FORMAT_UNKNOWN;
     desc.SampleDesc.Count = 1;
     desc.SampleDesc.Quality = 0;
-    desc.Width = size;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.Flags = flags;
 
     ID3D12ResourcePtr ret;
     m_device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, state, nullptr, IID_PPV_ARGS(&ret));
@@ -178,6 +178,21 @@ bool GfxContextDXR::initializeDevice()
         m_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
         m_fence_event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
     }
+
+#ifdef rthsDebug
+    // command queue for read back (debug)
+    {
+        {
+            D3D12_COMMAND_QUEUE_DESC desc = {};
+            desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+            desc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+            m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_copy));
+        }
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&m_cmd_allocator_copy));
+        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_cmd_allocator_copy, nullptr, IID_PPV_ARGS(&m_cmd_list_copy));
+        m_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
+    }
+#endif
 
     {
         // global root signature
@@ -364,6 +379,28 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
+
+#ifdef rthsDebug
+    // setup buffer to read back render target
+    if (m_render_target_readback) {
+        auto desc = m_render_target_readback->GetDesc();
+        if (desc.Width != m_render_target.width || desc.Height != m_render_target.height)
+            m_render_target_readback = nullptr;
+    }
+    if (!m_render_target_readback) {
+        D3D12_HEAP_PROPERTIES heap_props =
+        {
+            D3D12_HEAP_TYPE_READBACK,
+            D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+            D3D12_MEMORY_POOL_UNKNOWN,
+            0,
+            0
+        };
+        m_render_target_readback = createBuffer(
+            m_render_target.width * m_render_target.height * sizeof(float),
+            D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, heap_props);
+    }
+#endif
 }
 
 void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
@@ -698,6 +735,33 @@ void GfxContextDXR::finish()
 
     m_cmd_allocator->Reset();
     m_cmd_list->Reset(m_cmd_allocator, nullptr);
+
+#ifdef rthsDebug
+    if (m_render_target_readback) {
+        m_cmd_list_copy->CopyResource(m_render_target_readback, m_render_target.resource);
+        m_cmd_list_copy->Close();
+
+        ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
+        m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+        m_fence_value++;
+        m_cmd_queue_copy->Signal(m_fence, m_fence_value);
+        m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+
+        ::WaitForSingleObject(m_fence_event, INFINITE);
+        m_cmd_allocator_copy->Reset();
+        m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+
+        std::vector<float> data;
+        data.resize(m_render_target.width * m_render_target.height);
+
+        float* mapped;
+        if (SUCCEEDED(m_render_target_readback->Map(0, nullptr, (void**)&mapped))) {
+            memcpy(data.data(), mapped, data.size() * sizeof(float));
+            m_render_target_readback->Unmap(0, nullptr);
+        }
+    }
+#endif
+
 
     GetResourceTranslator(m_device)->applyTexture(m_render_target);
     m_temporary_buffers.clear();
