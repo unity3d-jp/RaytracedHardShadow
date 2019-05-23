@@ -71,10 +71,11 @@ private:
     bool m_flushing = false;
 
 #ifdef rthsDebug
-    ID3D12ResourcePtr m_render_target_readback;
     ID3D12CommandAllocatorPtr m_cmd_allocator_copy;
     ID3D12GraphicsCommandList4Ptr m_cmd_list_copy;
     ID3D12CommandQueuePtr m_cmd_queue_copy;
+    ID3D12ResourcePtr m_render_target_readback;
+    ID3D12ResourcePtr m_render_target_upload;
 #endif
 };
 

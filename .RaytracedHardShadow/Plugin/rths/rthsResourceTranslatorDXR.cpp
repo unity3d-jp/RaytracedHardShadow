@@ -78,7 +78,7 @@ ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, 
     desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
 
     D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_SHARED;
-    D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COMMON;
 
     ID3D12ResourcePtr ret;
     auto hr = GfxContextDXR::getInstance()->getDevice()->CreateCommittedResource(&kDefaultHeapProps, flags, &desc, initial_state, nullptr, IID_PPV_ARGS(&ret));

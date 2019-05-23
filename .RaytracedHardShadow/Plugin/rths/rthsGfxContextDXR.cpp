@@ -376,6 +376,60 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
+
+
+#ifdef rthsDebug
+    // debug fill
+    if (m_render_target_upload) {
+        auto desc = m_render_target_upload->GetDesc();
+        if (desc.Width != m_render_target.width || desc.Height != m_render_target.height)
+            m_render_target_upload = nullptr;
+    }
+    if (!m_render_target_upload) {
+        m_render_target_upload = createBuffer(
+            m_render_target.width * m_render_target.height * sizeof(float),
+            D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+    }
+    if (m_render_target_upload) {
+        float* mapped;
+        if (SUCCEEDED(m_render_target_upload->Map(0, nullptr, (void**)&mapped))) {
+            int n = m_render_target.width * m_render_target.height;
+            float r = 1.0f / (float)n;
+            for (int i = 0; i < n; ++i) {
+                mapped[i] = (float)i * r;
+            }
+            m_render_target_upload->Unmap(0, nullptr);
+        }
+
+        D3D12_TEXTURE_COPY_LOCATION dst;
+        dst.pResource = m_render_target.resource;
+        dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        dst.SubresourceIndex = 0;
+
+        D3D12_TEXTURE_COPY_LOCATION src;
+        src.pResource = m_render_target_upload;
+        src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        src.PlacedFootprint.Offset = 0;
+        src.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
+        src.PlacedFootprint.Footprint.Width = m_render_target.width;
+        src.PlacedFootprint.Footprint.Height = m_render_target.height;
+        src.PlacedFootprint.Footprint.Depth = 1;
+        src.PlacedFootprint.Footprint.RowPitch = m_render_target.width * sizeof(float);
+
+        m_cmd_list_copy->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+        m_cmd_list_copy->Close();
+
+        ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
+        m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+        m_fence_value++;
+        m_cmd_queue_copy->Signal(m_fence, m_fence_value);
+        m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+
+        ::WaitForSingleObject(m_fence_event, INFINITE);
+        m_cmd_allocator_copy->Reset();
+        m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+    }
+#endif
 }
 
 void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
@@ -650,7 +704,7 @@ void GfxContextDXR::flush()
         }
     }
 
-    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // dispatch rays
     {
@@ -695,7 +749,7 @@ void GfxContextDXR::flush()
         m_cmd_list->DispatchRays(&dr_desc);
     }
 
-    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
 
     submitCommandList();
     m_flushing = true;
@@ -763,7 +817,7 @@ void GfxContextDXR::finish()
         m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
 
         std::vector<float> data;
-        data.resize(m_render_target.width * m_render_target.height);
+        data.resize(m_render_target.width * m_render_target.height, std::numeric_limits<float>::quiet_NaN());
 
         float* mapped;
         if (SUCCEEDED(m_render_target_readback->Map(0, nullptr, (void**)&mapped))) {
