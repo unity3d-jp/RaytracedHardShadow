@@ -76,6 +76,8 @@ private:
     ID3D12CommandQueuePtr m_cmd_queue_copy;
     ID3D12ResourcePtr m_render_target_readback;
     ID3D12ResourcePtr m_render_target_upload;
+    ID3D12ResourcePtr m_vertex_buffer_readback;
+    ID3D12ResourcePtr m_index_buffer_readback;
 #endif
 };
 

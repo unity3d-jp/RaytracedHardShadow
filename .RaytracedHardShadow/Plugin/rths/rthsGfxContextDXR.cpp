@@ -459,12 +459,96 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
 
         if (!mesh.vertex_buffer.resource)
             mesh.vertex_buffer = GetResourceTranslator(m_device)->translateVertexBuffer(mesh.vertex_buffer.buffer);
-        if (!mesh.vertex_buffer.resource)
-            mesh.vertex_buffer = GetResourceTranslator(m_device)->translateIndexBuffer(mesh.index_buffer.buffer);
+        if (!mesh.index_buffer.resource)
+            mesh.index_buffer = GetResourceTranslator(m_device)->translateIndexBuffer(mesh.index_buffer.buffer);
         if (!mesh.vertex_buffer.resource) {
             invalid_mesh_detected = true;
             continue;
         }
+
+#ifdef rthsDebug
+        {
+            // read back vb and ib for debug
+            std::vector<float> vertex_buffer_data;
+            std::vector<int> index_buffer_data;
+
+            // setup read back vertex buffer
+            if (m_vertex_buffer_readback) {
+                auto desc = m_vertex_buffer_readback->GetDesc();
+                if (desc.Width < mesh.vertex_buffer.size)
+                    m_vertex_buffer_readback = nullptr;
+            }
+            if (!m_vertex_buffer_readback) {
+                // typical vertex structure is position + normal + tangent + uv1 + uv2 (14 floats)
+                m_vertex_buffer_readback = createBuffer(
+                    std::max<int>(mesh.vertex_buffer.size, 14 * 65536),
+                    D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
+            }
+
+            // do read back 
+            if (m_vertex_buffer_readback) {
+                m_cmd_list_copy->CopyBufferRegion(m_vertex_buffer_readback, 0, mesh.vertex_buffer.resource, 0, mesh.vertex_buffer.size);
+                m_cmd_list_copy->Close();
+
+                ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
+                m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+                m_fence_value++;
+                m_cmd_queue_copy->Signal(m_fence, m_fence_value);
+                m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+
+                ::WaitForSingleObject(m_fence_event, INFINITE);
+                m_cmd_allocator_copy->Reset();
+                m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+
+                vertex_buffer_data.resize(mesh.vertex_buffer.size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
+
+                float* mapped;
+                if (SUCCEEDED(m_vertex_buffer_readback->Map(0, nullptr, (void**)&mapped))) {
+                    memcpy(vertex_buffer_data.data(), mapped, vertex_buffer_data.size() * sizeof(float));
+                    // * break here to check data *
+                    m_vertex_buffer_readback->Unmap(0, nullptr);
+                }
+            }
+
+
+            // setup read back index buffer
+            if (m_index_buffer_readback) {
+                auto desc = m_index_buffer_readback->GetDesc();
+                if (desc.Width < mesh.index_buffer.size)
+                    m_index_buffer_readback = nullptr;
+            }
+            if (!m_index_buffer_readback) {
+                m_index_buffer_readback = createBuffer(
+                    std::max<int>(mesh.index_buffer.size, 65536 * 3),
+                    D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
+            }
+
+            // do read back
+            if (m_index_buffer_readback) {
+                m_cmd_list_copy->CopyBufferRegion(m_index_buffer_readback, 0, mesh.index_buffer.resource, 0, mesh.index_buffer.size);
+                m_cmd_list_copy->Close();
+
+                ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
+                m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+                m_fence_value++;
+                m_cmd_queue_copy->Signal(m_fence, m_fence_value);
+                m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+
+                ::WaitForSingleObject(m_fence_event, INFINITE);
+                m_cmd_allocator_copy->Reset();
+                m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+
+                index_buffer_data.resize(mesh.index_buffer.size / sizeof(int), std::numeric_limits<int>::max());
+
+                int* mapped;
+                if (SUCCEEDED(m_index_buffer_readback->Map(0, nullptr, (void**)&mapped))) {
+                    memcpy(index_buffer_data.data(), mapped, index_buffer_data.size() * sizeof(int));
+                    // * break here to check data *
+                    m_index_buffer_readback->Unmap(0, nullptr);
+                }
+            }
+        }
+#endif
 
         auto& geom_desc = geom_descs[i];
         geom_desc = {};
@@ -477,9 +561,11 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
             geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
         }
         if (mesh.index_buffer.resource) {
+            // todo: this index format detection can be incorrect
+            int index_size = mesh.index_buffer.size / mesh.index_count;
             geom_desc.Triangles.IndexBuffer = mesh.index_buffer.resource->GetGPUVirtualAddress() + (sizeof(int32_t) * mesh.index_offset);
             geom_desc.Triangles.IndexCount = mesh.index_count;
-            geom_desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+            geom_desc.Triangles.IndexFormat = index_size == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
         }
         // transform is handled by top level acceleration structure
 
