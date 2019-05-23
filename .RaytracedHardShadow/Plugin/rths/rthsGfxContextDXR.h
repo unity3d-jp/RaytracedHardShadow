@@ -59,7 +59,7 @@ private:
     Descriptor m_scene_buffer_handle;
 
     ID3D12ResourcePtr m_shader_table;
-    int m_desc_heap_stride = 0;
+    int m_desc_handle_stride = 0;
     int m_shader_table_entry_count = 0;
     int m_shader_table_entry_capacity = 0;
     int m_shader_record_size = 0;

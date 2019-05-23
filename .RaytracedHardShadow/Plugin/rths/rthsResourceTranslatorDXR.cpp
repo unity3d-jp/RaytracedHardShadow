@@ -80,9 +80,8 @@ ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, 
     D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_SHARED;
     D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COPY_SOURCE;
 
-    auto device = GfxContextDXR::getInstance()->getDevice();
     ID3D12ResourcePtr ret;
-    auto hr = device->CreateCommittedResource(&kDefaultHeapProps, flags, &desc, initial_state, nullptr, IID_PPV_ARGS(&ret));
+    auto hr = GfxContextDXR::getInstance()->getDevice()->CreateCommittedResource(&kDefaultHeapProps, flags, &desc, initial_state, nullptr, IID_PPV_ARGS(&ret));
     return ret;
 
 }

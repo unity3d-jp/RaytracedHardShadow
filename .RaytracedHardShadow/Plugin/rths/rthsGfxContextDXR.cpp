@@ -259,14 +259,14 @@ bool GfxContextDXR::initializeDevice()
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvuav_heap));
         m_srvuav_cpu_handle_base = m_srvuav_heap->GetCPUDescriptorHandleForHeapStart();
         m_srvuav_gpu_handle_base = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart();
-        m_desc_heap_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
+        m_desc_handle_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
 
         auto alloc_handle = [this]() {
             Descriptor ret;
             ret.hcpu = m_srvuav_cpu_handle_base;
             ret.hgpu = m_srvuav_gpu_handle_base;
-            m_srvuav_cpu_handle_base.ptr += m_desc_heap_stride;
-            m_srvuav_gpu_handle_base.ptr += m_desc_heap_stride;
+            m_srvuav_cpu_handle_base.ptr += m_desc_handle_stride;
+            m_srvuav_gpu_handle_base.ptr += m_desc_handle_stride;
             return ret;
         };
 
@@ -277,17 +277,14 @@ bool GfxContextDXR::initializeDevice()
 
     // scene constant buffer
     {
-        m_scene_buffer = createBuffer(1024 * 64, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+        // size of constant buffer must be multiple of 256
+        int cb_size = align_to(256, sizeof(SceneData));
+        m_scene_buffer = createBuffer(cb_size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
 
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.Format = DXGI_FORMAT_UNKNOWN;
-        srv_desc.Buffer.FirstElement = 0;
-        srv_desc.Buffer.NumElements = 1;
-        srv_desc.Buffer.StructureByteStride = sizeof(SceneData);
-        srv_desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-        m_device->CreateShaderResourceView(m_scene_buffer, &srv_desc, m_scene_buffer_handle.hcpu);
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = {};
+        cbv_desc.BufferLocation = m_scene_buffer->GetGPUVirtualAddress();
+        cbv_desc.SizeInBytes = cb_size;
+        m_device->CreateConstantBufferView(&cbv_desc, m_scene_buffer_handle.hcpu);
     }
 
     // setup pipeline state
@@ -379,28 +376,6 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
-
-#ifdef rthsDebug
-    // setup buffer to read back render target
-    if (m_render_target_readback) {
-        auto desc = m_render_target_readback->GetDesc();
-        if (desc.Width != m_render_target.width || desc.Height != m_render_target.height)
-            m_render_target_readback = nullptr;
-    }
-    if (!m_render_target_readback) {
-        D3D12_HEAP_PROPERTIES heap_props =
-        {
-            D3D12_HEAP_TYPE_READBACK,
-            D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-            D3D12_MEMORY_POOL_UNKNOWN,
-            0,
-            0
-        };
-        m_render_target_readback = createBuffer(
-            m_render_target.width * m_render_target.height * sizeof(float),
-            D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, heap_props);
-    }
-#endif
 }
 
 void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
@@ -737,8 +712,44 @@ void GfxContextDXR::finish()
     m_cmd_list->Reset(m_cmd_allocator, nullptr);
 
 #ifdef rthsDebug
+    // setup buffer to read back render target
     if (m_render_target_readback) {
-        m_cmd_list_copy->CopyResource(m_render_target_readback, m_render_target.resource);
+        auto desc = m_render_target_readback->GetDesc();
+        if (desc.Width != m_render_target.width || desc.Height != m_render_target.height)
+            m_render_target_readback = nullptr;
+    }
+    if (!m_render_target_readback) {
+        D3D12_HEAP_PROPERTIES heap_props =
+        {
+            D3D12_HEAP_TYPE_READBACK,
+            D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+            D3D12_MEMORY_POOL_UNKNOWN,
+            0,
+            0
+        };
+        m_render_target_readback = createBuffer(
+            m_render_target.width * m_render_target.height * sizeof(float),
+            D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, heap_props);
+    }
+
+    // read back and check result
+    if (m_render_target_readback) {
+        D3D12_TEXTURE_COPY_LOCATION dst;
+        dst.pResource = m_render_target_readback;
+        dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        dst.PlacedFootprint.Offset = 0;
+        dst.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
+        dst.PlacedFootprint.Footprint.Width = m_render_target.width;
+        dst.PlacedFootprint.Footprint.Height = m_render_target.height;
+        dst.PlacedFootprint.Footprint.Depth = 1;
+        dst.PlacedFootprint.Footprint.RowPitch = m_render_target.width * sizeof(float);
+
+        D3D12_TEXTURE_COPY_LOCATION src;
+        src.pResource = m_render_target.resource;
+        src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        src.SubresourceIndex = 0;
+
+        m_cmd_list_copy->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         m_cmd_list_copy->Close();
 
         ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
