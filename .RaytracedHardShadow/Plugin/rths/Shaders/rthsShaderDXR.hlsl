@@ -39,7 +39,8 @@ struct RayPayload
     float shadow;
 };
 
-RaytracingAccelerationStructure gRtScene : register(t0, space0);
+// global rootsig params
+RaytracingAccelerationStructure gRtScene : register(t0);
 RWTexture2D<float> gOutput : register(u0);
 ConstantBuffer<SceneData> gScene : register(b0);
 
@@ -56,7 +57,7 @@ void RayGen()
     float aspectRatio = dims.x / dims.y;
 
     RayDesc ray;
-    ray.Origin = float3(0, 0, -2);
+    ray.Origin = float3(0, 0, -10);
     ray.Direction = normalize(float3(d.x * aspectRatio, -d.y, 1));
 
     ray.TMin = 0;
@@ -65,16 +66,17 @@ void RayGen()
     RayPayload payload;
     TraceRay(gRtScene, 0, 0xFF, 0, 0, 0, ray, payload);
     gOutput[launchIndex.xy] = payload.shadow;
+    //gOutput[launchIndex.xy] = 1.0;
 }
 
 [shader("miss")]
 void Miss(inout RayPayload payload : SV_RayPayload)
 {
-    payload.shadow = 1.0;
+    payload.shadow = 0.5;
 }
 
 [shader("closesthit")]
 void Hit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
-    payload.shadow = 0.0;
+    payload.shadow = 1.0;
 }

@@ -2,7 +2,7 @@
 #ifdef _WIN32
 #include "rthsTypesDXR.h"
 
-#define rthsMaxBounce 2
+#define rthsMaxBounce 8
 
 namespace rths {
 

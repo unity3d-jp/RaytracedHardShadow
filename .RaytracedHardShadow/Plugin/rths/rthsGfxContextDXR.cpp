@@ -16,6 +16,14 @@ static const WCHAR* kMissShader = L"Miss";
 static const WCHAR* kClosestHitShader = L"Hit";
 static const WCHAR* kHitGroup = L"HitGroup";
 
+const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
+{
+    D3D12_HEAP_TYPE_DEFAULT,
+    D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+    D3D12_MEMORY_POOL_UNKNOWN,
+    0,
+    0
+};
 const D3D12_HEAP_PROPERTIES kUploadHeapProps =
 {
     D3D12_HEAP_TYPE_UPLOAD,
@@ -24,14 +32,13 @@ const D3D12_HEAP_PROPERTIES kUploadHeapProps =
     0,
     0,
 };
-
-const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
+const D3D12_HEAP_PROPERTIES kReadbackHeapProps =
 {
-    D3D12_HEAP_TYPE_DEFAULT,
+    D3D12_HEAP_TYPE_READBACK,
     D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
     D3D12_MEMORY_POOL_UNKNOWN,
     0,
-    0
+    0,
 };
 
 
@@ -198,20 +205,20 @@ bool GfxContextDXR::initializeDevice()
         // global root signature
         D3D12_DESCRIPTOR_RANGE ranges[] = {
             // gRtScene
-            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 0 },
             // gOutput
-            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 1 },
             // gScene
-            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 2 },
         };
 
         D3D12_ROOT_PARAMETER params[_countof(ranges)];
         for (int i = 0; i < _countof(ranges); i++) {
             auto& param = params[i];
             param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
             param.DescriptorTable.NumDescriptorRanges = 1;
             param.DescriptorTable.pDescriptorRanges = &ranges[i];
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
         }
 
         D3D12_ROOT_SIGNATURE_DESC desc = {};
@@ -255,7 +262,7 @@ bool GfxContextDXR::initializeDevice()
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
         desc.NumDescriptors = 64;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // D3D12_DESCRIPTOR_HEAP_FLAG_NONE
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvuav_heap));
         m_srvuav_cpu_handle_base = m_srvuav_heap->GetCPUDescriptorHandleForHeapStart();
         m_srvuav_gpu_handle_base = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart();
@@ -300,17 +307,18 @@ bool GfxContextDXR::initializeDevice()
             subobjects.push_back(so);
         };
 
-        D3D12_EXPORT_DESC libExports[] = {
+        D3D12_EXPORT_DESC export_descs[] = {
             { kRayGenShader,     nullptr, D3D12_EXPORT_FLAG_NONE },
             { kClosestHitShader, nullptr, D3D12_EXPORT_FLAG_NONE },
             { kMissShader,       nullptr, D3D12_EXPORT_FLAG_NONE },
         };
+        LPCWSTR exports[] = { kRayGenShader, kMissShader, kHitGroup };
 
         D3D12_DXIL_LIBRARY_DESC dxil_desc{};
         dxil_desc.DXILLibrary.pShaderBytecode = rthsShaderDXR;
         dxil_desc.DXILLibrary.BytecodeLength = sizeof(rthsShaderDXR);
-        dxil_desc.NumExports = _countof(libExports);
-        dxil_desc.pExports = libExports;
+        dxil_desc.NumExports = _countof(export_descs);
+        dxil_desc.pExports = export_descs;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &dxil_desc);
 
         D3D12_HIT_GROUP_DESC hit_desc{};
@@ -322,21 +330,20 @@ bool GfxContextDXR::initializeDevice()
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc);
 
         D3D12_RAYTRACING_SHADER_CONFIG rt_shader_desc{};
-        rt_shader_desc.MaxPayloadSizeInBytes = 4;
-        rt_shader_desc.MaxAttributeSizeInBytes = 8;
+        rt_shader_desc.MaxPayloadSizeInBytes = sizeof(float) * 1;
+        rt_shader_desc.MaxAttributeSizeInBytes = sizeof(float) * 2; // size of BuiltInTriangleIntersectionAttributes
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &rt_shader_desc);
 
-        auto local_rootsig = m_local_rootsig.GetInterfacePtr();
+        ID3D12RootSignature *local_rootsig = m_local_rootsig.GetInterfacePtr();
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local_rootsig);
 
-        LPCWSTR kExports[] = { kRayGenShader, kMissShader, kHitGroup };
         D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION ass_desc;
         ass_desc.pSubobjectToAssociate = &subobjects.back();
-        ass_desc.NumExports = _countof(kExports);
-        ass_desc.pExports = kExports;
+        ass_desc.NumExports = _countof(exports);
+        ass_desc.pExports = exports;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, &ass_desc);
 
-        auto global_rootsig = m_global_rootsig.GetInterfacePtr();
+        ID3D12RootSignature *global_rootsig = m_global_rootsig.GetInterfacePtr();
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
 
         D3D12_RAYTRACING_PIPELINE_CONFIG rt_pipeline_desc;
@@ -373,14 +380,19 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
 {
     m_render_target = GetResourceTranslator(m_device)->createTemporaryTexture(rt.texture);
 
-    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
+    auto desc = m_render_target.resource->GetDesc();
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    uav_desc.Format = desc.Format;
+    uav_desc.Texture2D.MipSlice = 0;
+    uav_desc.Texture2D.PlaneSlice = 0;
     m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
 
 
 #ifdef rthsDebug
-    // debug fill
+    // fill render target for debug
     if (m_render_target_upload) {
+        // check resize
         auto desc = m_render_target_upload->GetDesc();
         if (desc.Width != m_render_target.width || desc.Height != m_render_target.height)
             m_render_target_upload = nullptr;
@@ -395,9 +407,8 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
         if (SUCCEEDED(m_render_target_upload->Map(0, nullptr, (void**)&mapped))) {
             int n = m_render_target.width * m_render_target.height;
             float r = 1.0f / (float)n;
-            for (int i = 0; i < n; ++i) {
+            for (int i = 0; i < n; ++i)
                 mapped[i] = (float)i * r;
-            }
             m_render_target_upload->Unmap(0, nullptr);
         }
 
@@ -470,7 +481,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
             geom_desc.Triangles.IndexCount = mesh.index_count;
             geom_desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
         }
-        // transform is handled by top level acceleration structures
+        // transform is handled by top level acceleration structure
 
         // Get the size requirements for the scratch and AS buffers
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = {};
@@ -659,7 +670,6 @@ void GfxContextDXR::flush()
         m_shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
         // local root signature is empty for now. so no need to add spaces for variables.
         //m_shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
-        //m_shader_record_size = align_to(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, m_shader_record_size);
         m_shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, m_shader_record_size);
 
         // allocate new buffer if required count exceeds capacity
@@ -708,8 +718,7 @@ void GfxContextDXR::flush()
 
     // dispatch rays
     {
-
-        D3D12_DISPATCH_RAYS_DESC dr_desc = {};
+        D3D12_DISPATCH_RAYS_DESC dr_desc {};
         dr_desc.Width = m_render_target.width;
         dr_desc.Height = m_render_target.height;
         dr_desc.Depth = 1;
@@ -768,22 +777,15 @@ void GfxContextDXR::finish()
 #ifdef rthsDebug
     // setup buffer to read back render target
     if (m_render_target_readback) {
+        // check resize
         auto desc = m_render_target_readback->GetDesc();
         if (desc.Width != m_render_target.width || desc.Height != m_render_target.height)
             m_render_target_readback = nullptr;
     }
     if (!m_render_target_readback) {
-        D3D12_HEAP_PROPERTIES heap_props =
-        {
-            D3D12_HEAP_TYPE_READBACK,
-            D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-            D3D12_MEMORY_POOL_UNKNOWN,
-            0,
-            0
-        };
         m_render_target_readback = createBuffer(
             m_render_target.width * m_render_target.height * sizeof(float),
-            D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, heap_props);
+            D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
     }
 
     // read back and check result
@@ -822,6 +824,7 @@ void GfxContextDXR::finish()
         float* mapped;
         if (SUCCEEDED(m_render_target_readback->Map(0, nullptr, (void**)&mapped))) {
             memcpy(data.data(), mapped, data.size() * sizeof(float));
+            // * break here to check data *
             m_render_target_readback->Unmap(0, nullptr);
         }
     }
