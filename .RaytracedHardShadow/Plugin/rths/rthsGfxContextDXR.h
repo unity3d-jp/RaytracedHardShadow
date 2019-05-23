@@ -29,6 +29,10 @@ private:
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     void addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
     uint64_t submitCommandList();
+    bool readbackBuffer(void *dst, ID3D12Resource *src, size_t size);
+    bool uploadBuffer(ID3D12Resource *dst, const void *src, size_t size);
+    bool readbackTexture(void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride);
+    bool uploadTexture(ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride);
 
 
 private:
@@ -70,15 +74,9 @@ private:
 
     bool m_flushing = false;
 
-#ifdef rthsDebug
     ID3D12CommandAllocatorPtr m_cmd_allocator_copy;
     ID3D12GraphicsCommandList4Ptr m_cmd_list_copy;
     ID3D12CommandQueuePtr m_cmd_queue_copy;
-    ID3D12ResourcePtr m_render_target_readback;
-    ID3D12ResourcePtr m_render_target_upload;
-    ID3D12ResourcePtr m_vertex_buffer_readback;
-    ID3D12ResourcePtr m_index_buffer_readback;
-#endif
 };
 
 } // namespace rths

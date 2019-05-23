@@ -388,57 +388,16 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
     uav_desc.Texture2D.PlaneSlice = 0;
     m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
 
-
 #ifdef rthsDebug
-    // fill render target for debug
-    if (m_render_target_upload) {
-        // check resize
-        auto desc = m_render_target_upload->GetDesc();
-        if (desc.Width != m_render_target.width || desc.Height != m_render_target.height)
-            m_render_target_upload = nullptr;
-    }
-    if (!m_render_target_upload) {
-        m_render_target_upload = createBuffer(
-            m_render_target.width * m_render_target.height * sizeof(float),
-            D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-    }
-    if (m_render_target_upload) {
-        float* mapped;
-        if (SUCCEEDED(m_render_target_upload->Map(0, nullptr, (void**)&mapped))) {
-            int n = m_render_target.width * m_render_target.height;
-            float r = 1.0f / (float)n;
-            for (int i = 0; i < n; ++i)
-                mapped[i] = (float)i * r;
-            m_render_target_upload->Unmap(0, nullptr);
-        }
+    {
+        int n = m_render_target.width * m_render_target.height;
+        float r = 1.0f / (float)n;
 
-        D3D12_TEXTURE_COPY_LOCATION dst;
-        dst.pResource = m_render_target.resource;
-        dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        dst.SubresourceIndex = 0;
-
-        D3D12_TEXTURE_COPY_LOCATION src;
-        src.pResource = m_render_target_upload;
-        src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        src.PlacedFootprint.Offset = 0;
-        src.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
-        src.PlacedFootprint.Footprint.Width = m_render_target.width;
-        src.PlacedFootprint.Footprint.Height = m_render_target.height;
-        src.PlacedFootprint.Footprint.Depth = 1;
-        src.PlacedFootprint.Footprint.RowPitch = m_render_target.width * sizeof(float);
-
-        m_cmd_list_copy->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-        m_cmd_list_copy->Close();
-
-        ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-        m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
-        m_fence_value++;
-        m_cmd_queue_copy->Signal(m_fence, m_fence_value);
-        m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
-
-        ::WaitForSingleObject(m_fence_event, INFINITE);
-        m_cmd_allocator_copy->Reset();
-        m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+        std::vector<float> data;
+        data.resize(n);
+        for (int i = 0; i < n; ++i)
+            data[i] = r * (float)i;
+        uploadTexture(m_render_target.resource, data.data(), m_render_target.width, m_render_target.height, sizeof(float));
     }
 #endif
 }
@@ -470,82 +429,20 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
         {
             // read back vb and ib for debug
             std::vector<float> vertex_buffer_data;
-            std::vector<int> index_buffer_data;
+            std::vector<uint32_t> index_buffer_data32;
+            std::vector<uint16_t> index_buffer_data16;
 
-            // setup read back vertex buffer
-            if (m_vertex_buffer_readback) {
-                auto desc = m_vertex_buffer_readback->GetDesc();
-                if (desc.Width < mesh.vertex_buffer.size)
-                    m_vertex_buffer_readback = nullptr;
+            vertex_buffer_data.resize(mesh.vertex_buffer.size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
+            readbackBuffer(vertex_buffer_data.data(), mesh.vertex_buffer.resource, mesh.vertex_buffer.size);
+
+            int index_size = mesh.index_buffer.size / mesh.index_count;
+            if (index_size == 2) {
+                index_buffer_data16.resize(mesh.index_buffer.size / sizeof(uint16_t), std::numeric_limits<uint16_t>::max());
+                readbackBuffer(index_buffer_data16.data(), mesh.index_buffer.resource, mesh.index_buffer.size);
             }
-            if (!m_vertex_buffer_readback) {
-                // typical vertex structure is position + normal + tangent + uv1 + uv2 (14 floats)
-                m_vertex_buffer_readback = createBuffer(
-                    std::max<int>(mesh.vertex_buffer.size, 14 * 65536),
-                    D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
-            }
-
-            // do read back 
-            if (m_vertex_buffer_readback) {
-                m_cmd_list_copy->CopyBufferRegion(m_vertex_buffer_readback, 0, mesh.vertex_buffer.resource, 0, mesh.vertex_buffer.size);
-                m_cmd_list_copy->Close();
-
-                ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-                m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
-                m_fence_value++;
-                m_cmd_queue_copy->Signal(m_fence, m_fence_value);
-                m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
-
-                ::WaitForSingleObject(m_fence_event, INFINITE);
-                m_cmd_allocator_copy->Reset();
-                m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
-
-                vertex_buffer_data.resize(mesh.vertex_buffer.size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
-
-                float* mapped;
-                if (SUCCEEDED(m_vertex_buffer_readback->Map(0, nullptr, (void**)&mapped))) {
-                    memcpy(vertex_buffer_data.data(), mapped, vertex_buffer_data.size() * sizeof(float));
-                    // * break here to check data *
-                    m_vertex_buffer_readback->Unmap(0, nullptr);
-                }
-            }
-
-
-            // setup read back index buffer
-            if (m_index_buffer_readback) {
-                auto desc = m_index_buffer_readback->GetDesc();
-                if (desc.Width < mesh.index_buffer.size)
-                    m_index_buffer_readback = nullptr;
-            }
-            if (!m_index_buffer_readback) {
-                m_index_buffer_readback = createBuffer(
-                    std::max<int>(mesh.index_buffer.size, 65536 * 3),
-                    D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
-            }
-
-            // do read back
-            if (m_index_buffer_readback) {
-                m_cmd_list_copy->CopyBufferRegion(m_index_buffer_readback, 0, mesh.index_buffer.resource, 0, mesh.index_buffer.size);
-                m_cmd_list_copy->Close();
-
-                ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-                m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
-                m_fence_value++;
-                m_cmd_queue_copy->Signal(m_fence, m_fence_value);
-                m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
-
-                ::WaitForSingleObject(m_fence_event, INFINITE);
-                m_cmd_allocator_copy->Reset();
-                m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
-
-                index_buffer_data.resize(mesh.index_buffer.size / sizeof(int), std::numeric_limits<int>::max());
-
-                int* mapped;
-                if (SUCCEEDED(m_index_buffer_readback->Map(0, nullptr, (void**)&mapped))) {
-                    memcpy(index_buffer_data.data(), mapped, index_buffer_data.size() * sizeof(int));
-                    // * break here to check data *
-                    m_index_buffer_readback->Unmap(0, nullptr);
-                }
+            else {
+                index_buffer_data32.resize(mesh.index_buffer.size / sizeof(uint32_t), std::numeric_limits<uint32_t>::max());
+                readbackBuffer(index_buffer_data32.data(), mesh.index_buffer.resource, mesh.index_buffer.size);
             }
         }
 #endif
@@ -732,6 +629,141 @@ uint64_t GfxContextDXR::submitCommandList()
     return m_fence_value;
 }
 
+
+bool GfxContextDXR::readbackBuffer(void *dst, ID3D12Resource *src, size_t size)
+{
+    auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
+    m_cmd_list_copy->CopyBufferRegion(readback_buf, 0, src, 0, size);
+    m_cmd_list_copy->Close();
+
+    ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
+    m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+    m_fence_value++;
+    m_cmd_queue_copy->Signal(m_fence, m_fence_value);
+    m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+
+    ::WaitForSingleObject(m_fence_event, INFINITE);
+    m_cmd_allocator_copy->Reset();
+    m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+
+    float* mapped;
+    if (SUCCEEDED(readback_buf->Map(0, nullptr, (void**)&mapped))) {
+        memcpy(dst, mapped, size);
+        // * break here to check data *
+        readback_buf->Unmap(0, nullptr);
+        return true;
+    }
+    return false;
+}
+
+bool GfxContextDXR::uploadBuffer(ID3D12Resource *dst, const void *src, size_t size)
+{
+    auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+    void *mapped;
+    if (SUCCEEDED(upload_buf->Map(0, nullptr, &mapped))) {
+        memcpy(mapped, src, size);
+        upload_buf->Unmap(0, nullptr);
+
+        m_cmd_list_copy->CopyBufferRegion(dst, 0, upload_buf, 0, size);
+        m_cmd_list_copy->Close();
+
+        ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
+        m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+        m_fence_value++;
+        m_cmd_queue_copy->Signal(m_fence, m_fence_value);
+        m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+
+        ::WaitForSingleObject(m_fence_event, INFINITE);
+        m_cmd_allocator_copy->Reset();
+        m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+        return true;
+    }
+    return false;
+}
+
+bool GfxContextDXR::readbackTexture(void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride)
+{
+    size_t size = width * height * stride;
+    auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
+
+    D3D12_TEXTURE_COPY_LOCATION dst_loc;
+    dst_loc.pResource = readback_buf;
+    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    dst_loc.PlacedFootprint.Offset = 0;
+    dst_loc.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
+    dst_loc.PlacedFootprint.Footprint.Width = (UINT)width;
+    dst_loc.PlacedFootprint.Footprint.Height = (UINT)height;
+    dst_loc.PlacedFootprint.Footprint.Depth = 1;
+    dst_loc.PlacedFootprint.Footprint.RowPitch = (UINT)(width * stride);
+
+    D3D12_TEXTURE_COPY_LOCATION src_loc;
+    src_loc.pResource = m_render_target.resource;
+    src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    src_loc.SubresourceIndex = 0;
+
+    m_cmd_list_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
+    m_cmd_list_copy->Close();
+
+    ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
+    m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+    m_fence_value++;
+    m_cmd_queue_copy->Signal(m_fence, m_fence_value);
+    m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+
+    ::WaitForSingleObject(m_fence_event, INFINITE);
+    m_cmd_allocator_copy->Reset();
+    m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+
+    float* mapped;
+    if (SUCCEEDED(readback_buf->Map(0, nullptr, (void**)&mapped))) {
+        memcpy(dst, mapped, size);
+        readback_buf->Unmap(0, nullptr);
+        return true;
+    }
+    return false;
+}
+
+bool GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride)
+{
+    size_t size = width * height * stride;
+    auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+    void *mapped;
+    if (SUCCEEDED(upload_buf->Map(0, nullptr, &mapped))) {
+        memcpy(mapped, src, size);
+        upload_buf->Unmap(0, nullptr);
+
+        D3D12_TEXTURE_COPY_LOCATION dst_loc;
+        dst_loc.pResource = m_render_target.resource;
+        dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        dst_loc.SubresourceIndex = 0;
+
+        D3D12_TEXTURE_COPY_LOCATION src_loc;
+        src_loc.pResource = upload_buf;
+        src_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        src_loc.PlacedFootprint.Offset = 0;
+        src_loc.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
+        src_loc.PlacedFootprint.Footprint.Width = (UINT)width;
+        src_loc.PlacedFootprint.Footprint.Height = (UINT)height;
+        src_loc.PlacedFootprint.Footprint.Depth = 1;
+        src_loc.PlacedFootprint.Footprint.RowPitch = (UINT)(width * stride);
+
+        m_cmd_list_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
+        m_cmd_list_copy->Close();
+
+        ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
+        m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+        m_fence_value++;
+        m_cmd_queue_copy->Signal(m_fence, m_fence_value);
+        m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+
+        ::WaitForSingleObject(m_fence_event, INFINITE);
+        m_cmd_allocator_copy->Reset();
+        m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+        return true;
+    }
+    return false;
+}
+
 void GfxContextDXR::sync()
 {
     submitCommandList();
@@ -861,61 +893,12 @@ void GfxContextDXR::finish()
     m_cmd_list->Reset(m_cmd_allocator, nullptr);
 
 #ifdef rthsDebug
-    // setup buffer to read back render target
-    if (m_render_target_readback) {
-        // check resize
-        auto desc = m_render_target_readback->GetDesc();
-        if (desc.Width != m_render_target.width || desc.Height != m_render_target.height)
-            m_render_target_readback = nullptr;
-    }
-    if (!m_render_target_readback) {
-        m_render_target_readback = createBuffer(
-            m_render_target.width * m_render_target.height * sizeof(float),
-            D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
-    }
-
-    // read back and check result
-    if (m_render_target_readback) {
-        D3D12_TEXTURE_COPY_LOCATION dst;
-        dst.pResource = m_render_target_readback;
-        dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        dst.PlacedFootprint.Offset = 0;
-        dst.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
-        dst.PlacedFootprint.Footprint.Width = m_render_target.width;
-        dst.PlacedFootprint.Footprint.Height = m_render_target.height;
-        dst.PlacedFootprint.Footprint.Depth = 1;
-        dst.PlacedFootprint.Footprint.RowPitch = m_render_target.width * sizeof(float);
-
-        D3D12_TEXTURE_COPY_LOCATION src;
-        src.pResource = m_render_target.resource;
-        src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        src.SubresourceIndex = 0;
-
-        m_cmd_list_copy->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-        m_cmd_list_copy->Close();
-
-        ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-        m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
-        m_fence_value++;
-        m_cmd_queue_copy->Signal(m_fence, m_fence_value);
-        m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
-
-        ::WaitForSingleObject(m_fence_event, INFINITE);
-        m_cmd_allocator_copy->Reset();
-        m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
-
+    {
         std::vector<float> data;
         data.resize(m_render_target.width * m_render_target.height, std::numeric_limits<float>::quiet_NaN());
-
-        float* mapped;
-        if (SUCCEEDED(m_render_target_readback->Map(0, nullptr, (void**)&mapped))) {
-            memcpy(data.data(), mapped, data.size() * sizeof(float));
-            // * break here to check data *
-            m_render_target_readback->Unmap(0, nullptr);
-        }
+        readbackTexture(data.data(), m_render_target.resource, m_render_target.width, m_render_target.height, sizeof(float));
     }
 #endif
-
 
     GetResourceTranslator(m_device)->applyTexture(m_render_target);
     m_temporary_buffers.clear();
