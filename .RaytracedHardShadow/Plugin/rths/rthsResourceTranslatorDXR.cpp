@@ -133,30 +133,99 @@ BufferDataDXR& D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
         return ret;
     ret.buffer = ptr;
 
-    HRESULT hr;
-
     auto buf_unity = (ID3D11Buffer*)ptr;
     D3D11_BUFFER_DESC src_desc{};
     buf_unity->GetDesc(&src_desc);
 
-    // create temporary buffer that can be shared with d3d12
-    D3D11_BUFFER_DESC tmp_desc = src_desc;
-    tmp_desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
-    hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
-    if (SUCCEEDED(hr)) {
-        // copy contents of VB to temporary
-        m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
+    // d3d12 shared buffer (seems don't work...)
+#if 0
+    {
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Alignment = 0;
+        desc.Width = src_desc.ByteWidth;
+        desc.Height = 1;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Format = DXGI_FORMAT_UNKNOWN;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
-        // translate temporary as d3d12 resource
-        IDXGIResourcePtr ires;
-        hr = ret.temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
-        hr = ires->GetSharedHandle(&ret.handle);
-        hr = GfxContextDXR::getInstance()->getDevice()->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.resource));
+        D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_SHARED;
+        D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COPY_DEST;
 
-        ret.size = src_desc.ByteWidth;
+        auto hr = GfxContextDXR::getInstance()->getDevice()->CreateCommittedResource(&kDefaultHeapProps, flags, &desc, initial_state, nullptr, IID_PPV_ARGS(&ret.resource));
+        if (SUCCEEDED(hr)) {
+            hr = GfxContextDXR::getInstance()->getDevice()->CreateSharedHandle(ret.resource, nullptr, GENERIC_ALL, nullptr, &ret.handle);
+            if (SUCCEEDED(hr)) {
+                hr = m_unity_device->OpenSharedResource1(ret.handle, IID_PPV_ARGS(&ret.temporary_d3d11));
+                if (SUCCEEDED(hr)) {
+                    m_unity_dev_context->CopyResource((ID3D11Buffer*)ret.buffer, ret.temporary_d3d11);
+                }
+            }
+        }
+        return ret;
     }
+#endif
 
-    return ret;
+    // d3d11 shared buffer (seems don't work...)
+#if 0
+    {
+        // create temporary buffer that can be shared with d3d12
+        D3D11_BUFFER_DESC tmp_desc = src_desc;
+        tmp_desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+        HRESULT hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
+        if (SUCCEEDED(hr)) {
+            // copy contents of VB to temporary
+            m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
+
+            D3D11_MAPPED_SUBRESOURCE mapped;
+            m_unity_dev_context->Map(ret.temporary_d3d11, 0, D3D11_MAP_READ, 0, &mapped);
+            m_unity_dev_context->Unmap(ret.temporary_d3d11, 0);
+
+            // translate temporary as d3d12 resource
+            IDXGIResourcePtr ires;
+            hr = ret.temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
+            hr = ires->GetSharedHandle(&ret.handle);
+            hr = GfxContextDXR::getInstance()->getDevice()->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.resource));
+
+            ret.size = src_desc.ByteWidth;
+        }
+        return ret;
+    }
+#endif
+
+    // copy data via CPU (very slow but works)
+#if 1
+    {
+        D3D11_BUFFER_DESC tmp_desc = src_desc;
+        tmp_desc.Usage = D3D11_USAGE_STAGING;
+        tmp_desc.BindFlags = 0;
+        tmp_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+        ID3D11BufferPtr tmp_buf;
+        HRESULT hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &tmp_buf);
+        if (SUCCEEDED(hr)) {
+            m_unity_dev_context->CopyResource(tmp_buf, buf_unity);
+
+            D3D11_MAPPED_SUBRESOURCE mapped;
+            hr = m_unity_dev_context->Map(tmp_buf, 0, D3D11_MAP_READ, 0, &mapped);
+            if (SUCCEEDED(hr)) {
+                auto ctx = GfxContextDXR::getInstance();
+                ret.resource = ctx->createBuffer(src_desc.ByteWidth, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, kDefaultHeapProps);
+                ctx->uploadBuffer(ret.resource, mapped.pData, src_desc.ByteWidth);
+                // state must be D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+                ctx->addResourceBarrier(ret.resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                ret.size = src_desc.ByteWidth;
+
+                m_unity_dev_context->Unmap(tmp_buf, 0);
+            }
+        }
+        return ret;
+    }
+#endif
 }
 
 BufferDataDXR& D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
@@ -172,24 +241,58 @@ BufferDataDXR& D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
     D3D11_BUFFER_DESC src_desc{};
     buf_unity->GetDesc(&src_desc);
 
-    // create temporary buffer that can be shared with d3d12
-    D3D11_BUFFER_DESC tmp_desc = src_desc;
-    tmp_desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
-    hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
-    if (SUCCEEDED(hr)) {
-        // copy contents of IB to temporary
-        m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
+    // d3d11 shared buffer (seems don't work...)
+#if 0
+    {
+        D3D11_BUFFER_DESC tmp_desc = src_desc;
+        tmp_desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
+        hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
+        if (SUCCEEDED(hr)) {
+            // copy contents of IB to temporary
+            m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
 
-        // translate temporary as d3d12 resource
-        IDXGIResourcePtr ires;
-        hr = ret.temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
-        hr = ires->GetSharedHandle(&ret.handle);
+            // translate temporary as d3d12 resource
+            IDXGIResourcePtr ires;
+            hr = ret.temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
+            hr = ires->GetSharedHandle(&ret.handle);
 
-        auto device = GfxContextDXR::getInstance()->getDevice();
-        hr = device->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.resource));
-        ret.size = src_desc.ByteWidth;
+            auto device = GfxContextDXR::getInstance()->getDevice();
+            hr = device->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.resource));
+            ret.size = src_desc.ByteWidth;
+        }
+        return ret;
     }
-    return ret;
+#endif
+
+    // copy data via CPU (very slow but works)
+#if 1
+    {
+        D3D11_BUFFER_DESC tmp_desc = src_desc;
+        tmp_desc.Usage = D3D11_USAGE_STAGING;
+        tmp_desc.BindFlags = 0;
+        tmp_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+        ID3D11BufferPtr tmp_buf;
+        HRESULT hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &tmp_buf);
+        if (SUCCEEDED(hr)) {
+            m_unity_dev_context->CopyResource(tmp_buf, buf_unity);
+
+            D3D11_MAPPED_SUBRESOURCE mapped;
+            hr = m_unity_dev_context->Map(tmp_buf, 0, D3D11_MAP_READ, 0, &mapped);
+            if (SUCCEEDED(hr)) {
+                auto ctx = GfxContextDXR::getInstance();
+                ret.resource = ctx->createBuffer(src_desc.ByteWidth, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, kDefaultHeapProps);
+                ctx->uploadBuffer(ret.resource, mapped.pData, src_desc.ByteWidth);
+                // state must be D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+                ctx->addResourceBarrier(ret.resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                ret.size = src_desc.ByteWidth;
+
+                m_unity_dev_context->Unmap(tmp_buf, 0);
+            }
+        }
+        return ret;
+    }
+#endif
 }
 
 
