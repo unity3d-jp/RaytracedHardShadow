@@ -7,6 +7,12 @@
     // debug layer
     #define rthsEnableD3D12DebugLayer
 
+    // VB & IB validation
+    #define rthsEnableBufferValidation
+
+    // render target validation
+    #define rthsEnableRenderTargetValidation
+
     // GPU based validation
     // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/using-d3d12-debug-layer-gpu-based-validation
     #define rthsEnableD3D12GBV
@@ -82,6 +88,7 @@ struct MeshBuffersDXR
     BufferDataDXR vertex_buffer;
     BufferDataDXR index_buffer;
     int vertex_count = 0;
+    int index_bits = 0;
     int index_count = 0;
     int index_offset = 0;
     float3x4 transform;

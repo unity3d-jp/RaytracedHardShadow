@@ -21,7 +21,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsAddDirectionalLight(IntPtr self, Matrix4x4 trans);
         [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans);
         [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans);
-        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib, int vertexCount, uint indexCount, uint indexStart);
+        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib, int vertexCount, uint indexBits, uint indexCount, uint indexStart);
 
         public static string S(IntPtr cstring)
         {
@@ -116,9 +116,11 @@ namespace UTJ.RaytracedHardShadow
             var mesh = mf.sharedMesh;
             if (mesh == null)
                 return;
+
+            uint indexBits = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 16u : 32u;
             rthsAddMesh(self, mr.transform.localToWorldMatrix,
                 mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
-                mesh.vertexCount, mesh.GetIndexCount(0), mesh.GetIndexStart(0));
+                mesh.vertexCount, indexBits, mesh.GetIndexCount(0), mesh.GetIndexStart(0));
         }
 
         public void AddMesh(SkinnedMeshRenderer smr)
@@ -127,9 +129,11 @@ namespace UTJ.RaytracedHardShadow
                 return;
             var mesh = new Mesh();
             smr.BakeMesh(mesh);
+
+            uint indexBits = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 16u : 32u;
             rthsAddMesh(self, smr.transform.localToWorldMatrix,
                 mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
-                mesh.vertexCount, mesh.GetIndexCount(0), mesh.GetIndexStart(0));
+                mesh.vertexCount, indexBits, mesh.GetIndexCount(0), mesh.GetIndexStart(0));
         }
     }
 }

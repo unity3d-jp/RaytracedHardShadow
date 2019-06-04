@@ -388,7 +388,7 @@ void GfxContextDXR::setRenderTarget(TextureDataDXR rt)
     uav_desc.Texture2D.PlaneSlice = 0;
     m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
 
-#ifdef rthsDebug
+#ifdef rthsEnableRenderTargetValidation
     {
         int n = m_render_target.width * m_render_target.height;
         float r = 1.0f / (float)n;
@@ -425,7 +425,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
             continue;
         }
 
-#ifdef rthsDebug
+#ifdef rthsEnableBufferValidation
         {
             // read back VB and IB for debug
             std::vector<float> vertex_buffer_data;
@@ -435,8 +435,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
             vertex_buffer_data.resize(mesh.vertex_buffer.size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
             readbackBuffer(vertex_buffer_data.data(), mesh.vertex_buffer.resource, mesh.vertex_buffer.size);
 
-            int index_size = mesh.index_buffer.size / mesh.index_count;
-            if (index_size == 2) {
+            if (mesh.index_bits == 16) {
                 index_buffer_data16.resize(mesh.index_buffer.size / sizeof(uint16_t), std::numeric_limits<uint16_t>::max());
                 readbackBuffer(index_buffer_data16.data(), mesh.index_buffer.resource, mesh.index_buffer.size);
             }
@@ -458,11 +457,10 @@ void GfxContextDXR::setMeshes(std::vector<MeshBuffersDXR>& meshes)
             geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
         }
         if (mesh.index_buffer.resource) {
-            // todo: this index format detection can be incorrect
-            int index_size = mesh.index_buffer.size / mesh.index_count;
+            int index_size = mesh.index_bits / 8;
             geom_desc.Triangles.IndexBuffer = mesh.index_buffer.resource->GetGPUVirtualAddress() + (index_size * mesh.index_offset);
             geom_desc.Triangles.IndexCount = mesh.index_count;
-            geom_desc.Triangles.IndexFormat = index_size == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+            geom_desc.Triangles.IndexFormat = mesh.index_bits == 16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
         }
         // transform is handled by top level acceleration structure
 
@@ -892,7 +890,7 @@ void GfxContextDXR::finish()
     m_cmd_allocator->Reset();
     m_cmd_list->Reset(m_cmd_allocator, nullptr);
 
-#ifdef rthsDebug
+#ifdef rthsEnableRenderTargetValidation
     {
         std::vector<float> data;
         data.resize(m_render_target.width * m_render_target.height, std::numeric_limits<float>::quiet_NaN());

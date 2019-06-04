@@ -22,7 +22,7 @@ public:
     void addDirectionalLight(const float4x4& trans) override;
     void addPointLight(const float4x4& trans) override;
     void addReversePointLight(const float4x4& trans) override;
-    void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_count, int index_offset) override;
+    void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset) override;
 
 private:
     TextureDataDXR m_render_target;
@@ -113,12 +113,13 @@ void RendererDXR::addReversePointLight(const float4x4& trans)
     dst.position = extract_position(trans);
 }
 
-void RendererDXR::addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_count, int index_offset)
+void RendererDXR::addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset)
 {
     MeshBuffersDXR tmp;
     tmp.vertex_buffer.buffer = vb;
     tmp.index_buffer.buffer = ib;
     tmp.vertex_count = vertex_count;
+    tmp.index_bits = index_bits;
     tmp.index_count = index_count;
     tmp.index_offset = index_offset;
     tmp.transform = to_float3x4(trans);

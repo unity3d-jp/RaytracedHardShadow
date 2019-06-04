@@ -18,7 +18,7 @@ public:
     virtual void addDirectionalLight(const float4x4& trans) = 0;
     virtual void addPointLight(const float4x4& trans) = 0;
     virtual void addReversePointLight(const float4x4& trans) = 0;
-    virtual void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_count, int index_offset) = 0;
+    virtual void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset) = 0;
 };
 
 IRenderer* CreateRendererDXR();
