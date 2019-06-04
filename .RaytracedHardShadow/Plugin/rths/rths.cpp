@@ -61,11 +61,11 @@ rthsAPI void rthsFinish(IRenderer *self)
     self->finish();
 }
 
-rthsAPI void rthsSetCamera(IRenderer *self, float4x4 transform, float near_, float far_, float fov)
+rthsAPI void rthsSetCamera(IRenderer *self, float4x4 transform, float4x4 view, float4x4 proj, float near_, float far_, float fov)
 {
     if (!self)
         return;
-    self->setCamera(transform, near_, far_, fov);
+    self->setCamera(transform, view, proj, near_, far_, fov);
 }
 
 rthsAPI void rthsAddDirectionalLight(IRenderer *self, float4x4 transform)

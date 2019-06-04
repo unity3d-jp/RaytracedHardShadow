@@ -17,7 +17,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsEndScene(IntPtr self);
         [DllImport("rths")] static extern void rthsRender(IntPtr self);
         [DllImport("rths")] static extern void rthsFinish(IntPtr self);
-        [DllImport("rths")] static extern void rthsSetCamera(IntPtr self, Matrix4x4 trans, float near, float far, float fov);
+        [DllImport("rths")] static extern void rthsSetCamera(IntPtr self, Matrix4x4 trans, Matrix4x4 view, Matrix4x4 proj, float near, float far, float fov);
         [DllImport("rths")] static extern void rthsAddDirectionalLight(IntPtr self, Matrix4x4 trans);
         [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans);
         [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans);
@@ -72,7 +72,7 @@ namespace UTJ.RaytracedHardShadow
 
         public void SetCamera(Camera cam)
         {
-            rthsSetCamera(self, cam.transform.localToWorldMatrix, cam.nearClipPlane, cam.farClipPlane, cam.fieldOfView);
+            rthsSetCamera(self, cam.transform.localToWorldMatrix, cam.worldToCameraMatrix, cam.projectionMatrix, cam.nearClipPlane, cam.farClipPlane, cam.fieldOfView);
         }
 
         public bool AddLight(Light light)

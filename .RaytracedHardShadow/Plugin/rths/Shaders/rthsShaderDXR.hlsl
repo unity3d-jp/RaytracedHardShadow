@@ -2,8 +2,9 @@
 
 struct CameraData
 {
+    float4x4 view;
+    float4x4 proj;
     float4 position;
-    float4 direction;
     float near_plane;
     float far_plane;
     float fov;
@@ -43,30 +44,39 @@ RWTexture2D<float> gOutput : register(u0);
 RaytracingAccelerationStructure gRtScene : register(t0);
 ConstantBuffer<SceneData> gScene : register(b0);
 
+float3 CameraPosition() { return gScene.camera.position.xyz; }
+float3 CameraRight() { return gScene.camera.view[0].xyz; }
+float3 CameraUp() { return gScene.camera.view[1].xyz; }
+float3 CameraForward() { return -gScene.camera.view[2].xyz; }
+float CameraFocalLength() { return abs(gScene.camera.proj[1][1]); }
+float CameraNearPlane() { return gScene.camera.near_plane; }
+float CameraFarPlane() { return gScene.camera.far_plane; }
+
+
 [shader("raygeneration")]
 void RayGen()
 {
-    uint3 launchIndex = DispatchRaysIndex();
-    uint3 launchDim = DispatchRaysDimensions();
+    uint3 screen_idx = DispatchRaysIndex();
+    uint3 screen_dim = DispatchRaysDimensions();
 
-    float2 crd = float2(launchIndex.xy);
-    float2 dims = float2(launchDim.xy);
-
-    float2 d = ((crd / dims) * 2.f - 1.f);
-    float aspectRatio = dims.x / dims.y;
+    float aspect_ratio = (float)screen_dim.x / (float)screen_dim.y;
+    float2 screen_pos = ((float2(screen_idx.xy) / float2(screen_dim.xy)) * 2.0f - 1.0f);
+    screen_pos.x *= aspect_ratio;
 
     RayDesc ray;
-    ray.Origin = float3(0, 0, -10);
-    ray.Direction = normalize(float3(d.x * aspectRatio, -d.y, 1));
-
-    ray.TMin = 0;
-    ray.TMax = 100000;
+    ray.Origin = CameraPosition();
+    ray.Direction = normalize(
+        CameraRight() * screen_pos.x +
+        CameraUp() * screen_pos.y +
+        CameraForward() * CameraFocalLength());
+    ray.TMin = CameraNearPlane();
+    ray.TMax = CameraFarPlane();
 
     RayPayload payload;
     payload.shadow = 0.0;
 
     TraceRay(gRtScene, 0, 0xFF, 0, 0, 0, ray, payload);
-    gOutput[launchIndex.xy] = payload.shadow;
+    gOutput[screen_idx.xy] = payload.shadow;
 }
 
 [shader("miss")]

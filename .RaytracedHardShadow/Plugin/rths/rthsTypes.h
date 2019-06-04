@@ -43,6 +43,7 @@ struct float4x4
 };
 
 
+inline float3 operator-(const float3& l) { return{ -l.x, -l.y, -l.z }; }
 inline float3 operator*(const float3& l, float r) { return{ l.x * r, l.y * r, l.z * r }; }
 inline float3 operator/(const float3& l, float r) { return{ l.x / r, l.y / r, l.z / r }; }
 
@@ -73,13 +74,11 @@ inline float3 extract_direction(const float4x4& m)
 
 struct CameraData
 {
+    float4x4 view;
+    float4x4 proj;
     union {
         float3 position;
         float4 position4;
-    };
-    union {
-        float3 direction;
-        float4 direction4;
     };
     float near_plane;
     float far_plane;

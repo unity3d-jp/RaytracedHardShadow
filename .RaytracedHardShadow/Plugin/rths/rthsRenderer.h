@@ -14,7 +14,7 @@ public:
     virtual void finish() = 0;
 
     virtual void setRenderTarget(void *rt) = 0;
-    virtual void setCamera(const float4x4& trans, float near_, float far_, float fov) = 0;
+    virtual void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) = 0;
     virtual void addDirectionalLight(const float4x4& trans) = 0;
     virtual void addPointLight(const float4x4& trans) = 0;
     virtual void addReversePointLight(const float4x4& trans) = 0;

@@ -18,7 +18,7 @@ public:
     void finish() override;
 
     void setRenderTarget(void *rt) override;
-    void setCamera(const float4x4& trans, float near_, float far_, float fov) override;
+    void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) override;
     void addDirectionalLight(const float4x4& trans) override;
     void addPointLight(const float4x4& trans) override;
     void addReversePointLight(const float4x4& trans) override;
@@ -74,10 +74,11 @@ void RendererDXR::setRenderTarget(void *rt)
     m_render_target.texture = rt;
 }
 
-void RendererDXR::setCamera(const float4x4& trans, float near_, float far_, float fov)
+void RendererDXR::setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov)
 {
+    m_scene_data.camera.view = view;
+    m_scene_data.camera.proj = proj;
     m_scene_data.camera.position = extract_position(trans);
-    m_scene_data.camera.direction = extract_direction(trans);
     m_scene_data.camera.near_plane = near_;
     m_scene_data.camera.far_plane = far_;
     m_scene_data.camera.fov = fov;
