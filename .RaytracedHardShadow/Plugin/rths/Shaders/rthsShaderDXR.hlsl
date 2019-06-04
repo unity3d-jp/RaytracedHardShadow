@@ -39,9 +39,8 @@ struct RayPayload
     float shadow;
 };
 
-// global rootsig params
-RaytracingAccelerationStructure gRtScene : register(t0);
 RWTexture2D<float> gOutput : register(u0);
+RaytracingAccelerationStructure gRtScene : register(t0);
 ConstantBuffer<SceneData> gScene : register(b0);
 
 [shader("raygeneration")]
@@ -64,15 +63,16 @@ void RayGen()
     ray.TMax = 100000;
 
     RayPayload payload;
+    payload.shadow = 0.0;
+
     TraceRay(gRtScene, 0, 0xFF, 0, 0, 0, ray, payload);
     gOutput[launchIndex.xy] = payload.shadow;
-    //gOutput[launchIndex.xy] = 1.0;
 }
 
 [shader("miss")]
 void Miss(inout RayPayload payload : SV_RayPayload)
 {
-    payload.shadow = 0.5;
+    // nothing to do for now
 }
 
 [shader("closesthit")]
