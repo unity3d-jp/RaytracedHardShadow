@@ -20,6 +20,9 @@ namespace UTJ.RaytracedHardShadow
 #endif
 
 #pragma warning disable 649
+        [Tooltip("Output buffer. Must be R32F format.")]
+        [SerializeField] RenderTexture m_shadowBuffer;
+
         [Tooltip("If this field is null, Camera.main will be used.")]
         [SerializeField] Camera m_camera;
 
@@ -29,14 +32,11 @@ namespace UTJ.RaytracedHardShadow
         [Tooltip("ShadowCasterLight(s) to cast shadow. Must be directional.")]
         [SerializeField] ShadowCasterLight[] m_shadowCasterLights;
 
-        [Tooltip("Output buffer. Must be R32F format.")]
-        [SerializeField] RenderTexture m_shadowBuffer;
-
         rthsShadowRenderer m_renderer;
 #pragma warning restore 649
 
 
-        void Awake()
+        void OnEnable()
         {
             m_renderer = rthsShadowRenderer.Create();
             if (!m_renderer)
@@ -45,7 +45,7 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        void OnDestroy()
+        void OnDisable()
         {
             m_renderer.Destroy();
         }
@@ -55,7 +55,15 @@ namespace UTJ.RaytracedHardShadow
             if (!m_renderer || m_shadowBuffer == null)
                 return;
             var cam = m_camera != null ? m_camera : Camera.main;
-            if (cam == null || m_lights.Length == 0)
+            if (cam == null)
+                return;
+
+            int numLights = 0;
+            if (m_lights != null)
+                numLights += m_lights.Length;
+            if (m_shadowCasterLights != null)
+                numLights += m_shadowCasterLights.Length;
+            if (numLights == 0)
                 return;
 
             if (!m_shadowBuffer.IsCreated())

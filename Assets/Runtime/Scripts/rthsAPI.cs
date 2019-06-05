@@ -19,8 +19,9 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsFinish(IntPtr self);
         [DllImport("rths")] static extern void rthsSetCamera(IntPtr self, Matrix4x4 trans, Matrix4x4 view, Matrix4x4 proj, float near, float far, float fov);
         [DllImport("rths")] static extern void rthsAddDirectionalLight(IntPtr self, Matrix4x4 trans);
-        [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans);
-        [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans);
+        [DllImport("rths")] static extern void rthsAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
+        [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans, float range);
+        [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
         [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib, int vertexCount, uint indexBits, uint indexCount, uint indexStart);
 
         public static string S(IntPtr cstring)
@@ -82,8 +83,11 @@ namespace UTJ.RaytracedHardShadow
                 case LightType.Directional:
                     rthsAddDirectionalLight(self, light.transform.localToWorldMatrix);
                     return true;
+                case LightType.Spot:
+                    rthsAddSpotLight(self, light.transform.localToWorldMatrix, light.range, light.spotAngle);
+                    return true;
                 case LightType.Point:
-                    rthsAddPointLight(self, light.transform.localToWorldMatrix);
+                    rthsAddPointLight(self, light.transform.localToWorldMatrix, light.range);
                     return true;
                 default:
                     Debug.LogWarning("rthsShadowRenderer: " + light.type + " is not supported");
@@ -97,11 +101,14 @@ namespace UTJ.RaytracedHardShadow
                 case ShadowCasterLightType.Directional:
                     rthsAddDirectionalLight(self, light.transform.localToWorldMatrix);
                     return true;
+                case ShadowCasterLightType.Spot:
+                    rthsAddSpotLight(self, light.transform.localToWorldMatrix, light.range, light.spotAngle);
+                    return true;
                 case ShadowCasterLightType.Point:
-                    rthsAddPointLight(self, light.transform.localToWorldMatrix);
+                    rthsAddPointLight(self, light.transform.localToWorldMatrix, light.range);
                     return true;
                 case ShadowCasterLightType.ReversePoint:
-                    rthsAddReversePointLight(self, light.transform.localToWorldMatrix);
+                    rthsAddReversePointLight(self, light.transform.localToWorldMatrix, light.range);
                     return true;
                 default:
                     Debug.LogWarning("rthsShadowRenderer: " + light.lightType + " is not supported");
@@ -110,6 +117,20 @@ namespace UTJ.RaytracedHardShadow
         }
 
 
+        public void AddMesh(GameObject go)
+        {
+            {
+                var mr = go.GetComponent<MeshRenderer>();
+                if (mr != null)
+                    AddMesh(mr);
+            }
+            {
+                var smr = go.GetComponent<SkinnedMeshRenderer>();
+                if (smr != null)
+                    AddMesh(smr);
+            }
+        }
+
         public void AddMesh(MeshRenderer mr)
         {
             var mf = mr.GetComponent<MeshFilter>();
@@ -117,10 +138,7 @@ namespace UTJ.RaytracedHardShadow
             if (mesh == null)
                 return;
 
-            uint indexBits = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 16u : 32u;
-            rthsAddMesh(self, mr.transform.localToWorldMatrix,
-                mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
-                mesh.vertexCount, indexBits, mesh.GetIndexCount(0), mesh.GetIndexStart(0));
+            AddMesh(mesh, mr.transform.localToWorldMatrix);
         }
 
         public void AddMesh(SkinnedMeshRenderer smr)
@@ -130,8 +148,13 @@ namespace UTJ.RaytracedHardShadow
             var mesh = new Mesh();
             smr.BakeMesh(mesh);
 
+            AddMesh(mesh, smr.transform.localToWorldMatrix);
+        }
+
+        public void AddMesh(Mesh mesh, Matrix4x4 trans)
+        {
             uint indexBits = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 16u : 32u;
-            rthsAddMesh(self, smr.transform.localToWorldMatrix,
+            rthsAddMesh(self, trans,
                 mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
                 mesh.vertexCount, indexBits, mesh.GetIndexCount(0), mesh.GetIndexStart(0));
         }

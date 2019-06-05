@@ -61,11 +61,11 @@ rthsAPI void rthsFinish(IRenderer *self)
     self->finish();
 }
 
-rthsAPI void rthsSetCamera(IRenderer *self, float4x4 transform, float4x4 view, float4x4 proj, float near_, float far_, float fov)
+rthsAPI void rthsSetCamera(IRenderer *self, float4x4 transform, float4x4 view, float4x4 proj, float near_plane, float far_plane, float fov)
 {
     if (!self)
         return;
-    self->setCamera(transform, view, proj, near_, far_, fov);
+    self->setCamera(transform, view, proj, near_plane, far_plane, fov);
 }
 
 rthsAPI void rthsAddDirectionalLight(IRenderer *self, float4x4 transform)
@@ -75,18 +75,25 @@ rthsAPI void rthsAddDirectionalLight(IRenderer *self, float4x4 transform)
     self->addDirectionalLight(transform);
 }
 
-rthsAPI void rthsAddPointLight(IRenderer *self, float4x4 transform)
+rthsAPI void rthsAddSpotLight(IRenderer *self, float4x4 transform, float range, float spot_angle)
 {
     if (!self)
         return;
-    self->addPointLight(transform);
+    self->addSpotLight(transform, range, spot_angle);
 }
 
-rthsAPI void rthsAddReversePointLight(IRenderer *self, float4x4 transform)
+rthsAPI void rthsAddPointLight(IRenderer *self, float4x4 transform, float range)
 {
     if (!self)
         return;
-    self->addReversePointLight(transform);
+    self->addPointLight(transform, range);
+}
+
+rthsAPI void rthsAddReversePointLight(IRenderer *self, float4x4 transform, float range)
+{
+    if (!self)
+        return;
+    self->addReversePointLight(transform, range);
 }
 
 rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset)

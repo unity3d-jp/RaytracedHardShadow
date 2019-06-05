@@ -2,6 +2,10 @@
 
 namespace rths {
 
+constexpr float PI = 3.14159265358979323846264338327950288419716939937510f;
+constexpr float DegToRad = PI / 180.0f;
+constexpr float RadToDeg = 1.0f / (PI / 180.0f);
+
 struct float2
 {
     float x,y;
@@ -94,27 +98,35 @@ struct DirectionalLightData
     };
 };
 
-struct PointLightData
+struct SpotLightData
 {
-    union {
-        float3 position;
-        float4 position4;
-    };
+    float3 position;
+    float range;
+    float3 direction;
+    float spot_angle; // radian
 };
 
-#define kMaxLights 32
+struct PointLightData
+{
+    float3 position;
+    float range;
+};
+
+#define kMaxLights 16
+
 struct SceneData
 {
     CameraData camera;
 
     int directional_light_count;
+    int spot_light_count;
     int point_light_count;
     int reverse_point_light_count;
-    int pad1;
 
     DirectionalLightData directional_lights[kMaxLights];
-    PointLightData point_lights[kMaxLights];
-    PointLightData reverse_point_lights[kMaxLights];
+    SpotLightData        spot_lights[kMaxLights];
+    PointLightData       point_lights[kMaxLights];
+    PointLightData       reverse_point_lights[kMaxLights];
 };
 
 } // namespace rths

@@ -8,6 +8,7 @@ namespace UTJ.RaytracedHardShadow
     public enum ShadowCasterLightType
     {
         Directional,
+        Spot,
         Point,
         ReversePoint,
     }
@@ -27,11 +28,25 @@ namespace UTJ.RaytracedHardShadow
 #endif
 
         [SerializeField] ShadowCasterLightType m_lightType;
+        [SerializeField] float m_range = 10.0f;
+        [SerializeField] float m_spotAngle = 30.0f;
 
         public ShadowCasterLightType lightType
         {
             get { return m_lightType; }
             set { m_lightType = value; }
+        }
+
+        public float range
+        {
+            get { return m_range; }
+            set { m_range = value; }
+        }
+
+        public float spotAngle
+        {
+            get { return m_spotAngle; }
+            set { m_spotAngle = value; }
         }
     }
 }

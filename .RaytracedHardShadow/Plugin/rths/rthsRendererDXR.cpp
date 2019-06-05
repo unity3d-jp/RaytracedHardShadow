@@ -20,8 +20,9 @@ public:
     void setRenderTarget(void *rt) override;
     void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) override;
     void addDirectionalLight(const float4x4& trans) override;
-    void addPointLight(const float4x4& trans) override;
-    void addReversePointLight(const float4x4& trans) override;
+    void addSpotLight(const float4x4& trans, float range, float spot_angle) override;
+    void addPointLight(const float4x4& trans, float range) override;
+    void addReversePointLight(const float4x4& trans, float range) override;
     void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset) override;
 
 private:
@@ -42,6 +43,7 @@ RendererDXR::~RendererDXR()
 void RendererDXR::beginScene()
 {
     m_scene_data.directional_light_count = 0;
+    m_scene_data.spot_light_count = 0;
     m_scene_data.point_light_count = 0;
     m_scene_data.reverse_point_light_count = 0;
     m_mesh_buffers.clear();
@@ -94,7 +96,20 @@ void RendererDXR::addDirectionalLight(const float4x4& trans)
     dst.direction = extract_direction(trans);
 }
 
-void RendererDXR::addPointLight(const float4x4& trans)
+void RendererDXR::addSpotLight(const float4x4& trans, float range, float spot_angle)
+{
+    if (m_scene_data.spot_light_count == kMaxLights) {
+        SetErrorLog("exceeded max spot lights (%d)\n", kMaxLights);
+        return;
+    }
+    auto& dst = m_scene_data.spot_lights[m_scene_data.spot_light_count++];
+    dst.position = extract_position(trans);
+    dst.range = range;
+    dst.direction = extract_direction(trans);
+    dst.spot_angle = spot_angle * DegToRad;
+}
+
+void RendererDXR::addPointLight(const float4x4& trans, float range)
 {
     if (m_scene_data.point_light_count == kMaxLights) {
         SetErrorLog("exceeded max point lights (%d)\n", kMaxLights);
@@ -102,9 +117,10 @@ void RendererDXR::addPointLight(const float4x4& trans)
     }
     auto& dst = m_scene_data.point_lights[m_scene_data.point_light_count++];
     dst.position = extract_position(trans);
+    dst.range = range;
 }
 
-void RendererDXR::addReversePointLight(const float4x4& trans)
+void RendererDXR::addReversePointLight(const float4x4& trans, float range)
 {
     if (m_scene_data.reverse_point_light_count == kMaxLights) {
         SetErrorLog("exceeded max reverse point lights (%d)\n", kMaxLights);
@@ -112,6 +128,7 @@ void RendererDXR::addReversePointLight(const float4x4& trans)
     }
     auto& dst = m_scene_data.reverse_point_lights[m_scene_data.reverse_point_light_count++];
     dst.position = extract_position(trans);
+    dst.range = range;
 }
 
 void RendererDXR::addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset)
