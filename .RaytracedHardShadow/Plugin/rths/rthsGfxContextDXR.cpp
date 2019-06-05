@@ -331,7 +331,7 @@ bool GfxContextDXR::initializeDevice()
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc);
 
         D3D12_RAYTRACING_SHADER_CONFIG rt_shader_desc{};
-        rt_shader_desc.MaxPayloadSizeInBytes = sizeof(float) * 1;
+        rt_shader_desc.MaxPayloadSizeInBytes = sizeof(float) * 4;
         rt_shader_desc.MaxAttributeSizeInBytes = sizeof(float) * 2; // size of BuiltInTriangleIntersectionAttributes
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &rt_shader_desc);
 
@@ -684,6 +684,8 @@ bool GfxContextDXR::readbackTexture(void *dst, ID3D12Resource *src, size_t width
 {
     size_t size = width * height * stride;
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
+    if (!readback_buf)
+        return false;
 
     D3D12_TEXTURE_COPY_LOCATION dst_loc{};
     dst_loc.pResource = readback_buf;
@@ -726,6 +728,9 @@ bool GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src, size_t w
 {
     size_t size = width * height * stride;
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+    if (!upload_buf)
+        return false;
+
     void *mapped;
     if (SUCCEEDED(upload_buf->Map(0, nullptr, &mapped))) {
         memcpy(mapped, src, size);

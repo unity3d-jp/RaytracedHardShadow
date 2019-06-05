@@ -83,7 +83,7 @@ struct CameraData
     float near_plane;
     float far_plane;
     float fov;
-    float pad1[1];
+    float pad1;
 };
 
 struct DirectionalLightData
@@ -110,7 +110,7 @@ struct SceneData
     int directional_light_count;
     int point_light_count;
     int reverse_point_light_count;
-    int pad1[1];
+    int pad1;
 
     DirectionalLightData directional_lights[kMaxLights];
     PointLightData point_lights[kMaxLights];
