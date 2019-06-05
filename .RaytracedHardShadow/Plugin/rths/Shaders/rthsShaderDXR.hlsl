@@ -180,7 +180,7 @@ void Hit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectio
             float distance = length(light.position - pos);
 
             if (distance < light.range) {
-                ray.Origin = light.position + (dir * light.range);
+                ray.Origin = pos;
                 ray.Direction = -dir;
                 ray.TMin = 0.0f;
                 ray.TMax = light.range - distance;
