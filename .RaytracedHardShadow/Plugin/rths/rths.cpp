@@ -5,6 +5,8 @@
 
 #ifdef _WIN32
     #define rthsAPI extern "C" __declspec(dllexport)
+    #include "rthsGfxContextDXR.h"
+    #include "rthsResourceTranslatorDXR.h"
 #else
     #define rthsAPI extern "C" 
 #endif
@@ -96,9 +98,35 @@ rthsAPI void rthsAddReversePointLight(IRenderer *self, float4x4 transform, float
     self->addReversePointLight(transform, range);
 }
 
-rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform, void *vb, void *ib, int vertex_count, int index_bits, int index_count)
+rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform,
+    void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset, bool is_dynamic)
 {
     if (!self || !vb || !ib)
         return;
-    self->addMesh(transform, vb, ib, vertex_count, index_bits, index_count);
+    self->addMesh(transform, vb, ib, vertex_count, index_bits, index_count, index_offset, is_dynamic);
+}
+
+
+// Unity plugin load event
+extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
+UnityPluginLoad(IUnityInterfaces* unityInterfaces)
+{
+    using namespace rths;
+#ifdef _WIN32
+    GfxContextDXR::initializeInstance();
+
+    auto* graphics = unityInterfaces->Get<IUnityGraphics>();
+    switch (graphics->GetRenderer()) {
+    case kUnityGfxRendererD3D11:
+        InitializeResourceTranslator(unityInterfaces->Get<IUnityGraphicsD3D11>()->GetDevice());
+        break;
+    case kUnityGfxRendererD3D12:
+        InitializeResourceTranslator(unityInterfaces->Get<IUnityGraphicsD3D12>()->GetDevice());
+        break;
+    default:
+        // graphics API not supported
+        SetErrorLog("Graphics API must be D3D11 or D3D12");
+        break;
+    }
+#endif
 }

@@ -51,7 +51,7 @@ private:
     ID3D12RootSignaturePtr m_global_rootsig;
     ID3D12RootSignaturePtr m_local_rootsig;
 
-    std::map<void*, MeshDataDXRPtr> m_mesh_records;
+    std::map<MeshID, MeshDataDXRPtr> m_mesh_records;
     std::vector<MeshInstanceDXR> m_mesh_instances;
 
     ID3D12ResourcePtr m_tlas;

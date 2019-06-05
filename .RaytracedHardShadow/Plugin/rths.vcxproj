@@ -21,6 +21,8 @@
     <ClCompile Include="rths\rthsRenderer.cpp" />
     <ClCompile Include="rths\rthsRendererDXR.cpp" />
     <ClCompile Include="rths\rthsResourceTranslatorDXR.cpp" />
+    <ClCompile Include="rths\rthsTypes.cpp" />
+    <ClCompile Include="rths\rthsTypesDXR.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\rths.h" />

@@ -22,7 +22,8 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
         [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans, float range);
         [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
-        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib, int vertexCount, uint indexBits, uint indexCount);
+        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans,
+            IntPtr vb, IntPtr ib, int vertexCount, uint indexBits, uint indexCount, uint indexOffset, byte isDynamic);
 
         public static string S(IntPtr cstring)
         {
@@ -131,32 +132,49 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void AddMesh(MeshRenderer mr)
+        public void AddMesh(MeshRenderer mr, bool forceDynamic = false)
         {
             var mf = mr.GetComponent<MeshFilter>();
             var mesh = mf.sharedMesh;
             if (mesh == null)
                 return;
 
-            AddMesh(mesh, mr.transform.localToWorldMatrix);
+            AddMesh(mesh, mr.transform.localToWorldMatrix, false);
         }
 
-        public void AddMesh(SkinnedMeshRenderer smr)
+        public void AddMesh(SkinnedMeshRenderer smr, bool forceDynamic = false)
         {
             if (smr.sharedMesh == null)
                 return;
-            var mesh = new Mesh();
-            smr.BakeMesh(mesh);
 
-            AddMesh(mesh, smr.transform.localToWorldMatrix);
+            var sharedMesh = smr.sharedMesh;
+            if (smr.rootBone != null || sharedMesh.blendShapeCount != 0 || smr.GetComponent<Cloth>() != null)
+            {
+                // mesh is skinned or has blendshapes or cloth. in this case bake is needed.
+                var mesh = new Mesh();
+                smr.BakeMesh(mesh);
+                AddMesh(mesh, smr.transform.localToWorldMatrix, true);
+            }
+            else
+            {
+                AddMesh(smr.sharedMesh, smr.transform.localToWorldMatrix, forceDynamic);
+            }
         }
 
-        public void AddMesh(Mesh mesh, Matrix4x4 trans)
+        public void AddMesh(Mesh mesh, Matrix4x4 trans, bool isDynamic_)
         {
             uint indexBits = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 16u : 32u;
-            rthsAddMesh(self, trans,
-                mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
-                mesh.vertexCount, indexBits, mesh.GetIndexCount(0));
+            byte isDynamic = (byte)(isDynamic_ ? 1 : 0);
+            int numSubmeshes = mesh.subMeshCount;
+            for (int smi = 0; smi < numSubmeshes; ++smi)
+            {
+                if (mesh.GetTopology(smi) == MeshTopology.Triangles)
+                {
+                    rthsAddMesh(self, trans,
+                        mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
+                        mesh.vertexCount, indexBits, mesh.GetIndexCount(smi), mesh.GetIndexStart(smi), isDynamic);
+                }
+            }
         }
     }
 }

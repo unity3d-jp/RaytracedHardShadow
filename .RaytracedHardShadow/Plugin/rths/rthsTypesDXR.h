@@ -90,9 +90,11 @@ struct MeshDataDXR
     int vertex_count = 0;
     int index_bits = 0;
     int index_count = 0;
+    int index_offset = 0;
 
     ID3D12ResourcePtr blas; // bottom level acceleration structure
 };
+MeshID identifier(const MeshDataDXR& data);
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
 
 struct MeshInstanceDXR

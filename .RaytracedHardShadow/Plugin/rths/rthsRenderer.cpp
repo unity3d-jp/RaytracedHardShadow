@@ -85,7 +85,7 @@ void RendererBase::addReversePointLight(const float4x4& trans, float range)
     dst.range = range;
 }
 
-void RendererBase::addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count)
+void RendererBase::addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset, bool is_dynamic)
 {
     MeshData tmp;
     tmp.vertex_buffer = vb;
@@ -93,6 +93,8 @@ void RendererBase::addMesh(const float4x4& trans, void *vb, void *ib, int vertex
     tmp.vertex_count = vertex_count;
     tmp.index_bits = index_bits;
     tmp.index_count = index_count;
+    tmp.index_offset = index_offset;
+    tmp.is_dynamic = is_dynamic;
     tmp.transform = to_float3x4(trans);
     m_mesh_data.push_back(std::move(tmp));
 }

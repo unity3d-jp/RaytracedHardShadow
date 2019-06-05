@@ -143,7 +143,24 @@ struct MeshData
     int vertex_count = 0;
     int index_bits = 0;
     int index_count = 0;
+    int index_offset = 0;
+    bool is_dynamic = false; // true if skinned, has blendshapes, etc
     float3x4 transform;
 };
+
+struct MeshID
+{
+    uint64_t vertex_buffer = 0;
+    uint64_t index_buffer = 0;
+    uint32_t vertex_count = 0;
+    uint32_t index_count = 0;
+    uint32_t index_offset = 0;
+    uint32_t pad = 0;
+
+    bool operator==(const MeshID& v) const;
+    bool operator<(const MeshID& v) const;
+};
+
+MeshID identifier(const MeshData& data);
 
 } // namespace rths

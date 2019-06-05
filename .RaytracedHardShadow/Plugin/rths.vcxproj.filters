@@ -33,6 +33,12 @@
     <ClCompile Include="rths\rthsRenderer.cpp">
       <Filter>rths</Filter>
     </ClCompile>
+    <ClCompile Include="rths\rthsTypes.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\rthsTypesDXR.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\pch.h">

@@ -1,7 +1,7 @@
 #include "pch.h"
-#ifdef _WIN32
 #include "rthsLog.h"
 #include "rthsRenderer.h"
+#ifdef _WIN32
 #include "rthsGfxContextDXR.h"
 
 namespace rths {
@@ -17,6 +17,7 @@ public:
 
 private:
 };
+
 
 RendererDXR::RendererDXR()
 {
@@ -52,4 +53,16 @@ IRenderer* CreateRendererDXR()
 }
 
 } // namespace rths
-#endif
+
+#else // _WIN32
+
+namespace rths {
+
+IRenderer* CreateRendererDXR()
+{
+    return nullptr;
+}
+
+} // namespace rths
+
+#endif // _WIN32

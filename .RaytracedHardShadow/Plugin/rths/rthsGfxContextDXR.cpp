@@ -411,13 +411,14 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
     size_t num_meshes = meshes.size();
     for (size_t i = 0; i < num_meshes; ++i) {
         auto& src = meshes[i];
-        auto& data = m_mesh_records[src.vertex_buffer];
+        auto& data = m_mesh_records[identifier(src)];
 
         if (!data) {
             data.reset(new MeshDataDXR());
             data->vertex_count = src.vertex_count;
             data->index_bits = src.index_bits;
             data->index_count = src.index_count;
+            data->index_offset = src.index_offset;
         }
         if (!data->vertex_buffer.resource) {
             data->vertex_buffer = GetResourceTranslator(m_device)->translateVertexBuffer(src.vertex_buffer);
@@ -466,7 +467,8 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
                 geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
             }
             if (data->index_buffer.resource) {
-                geom_desc.Triangles.IndexBuffer = data->index_buffer.resource->GetGPUVirtualAddress();
+                int index_size = data->index_bits / 8;
+                geom_desc.Triangles.IndexBuffer = data->index_buffer.resource->GetGPUVirtualAddress() + (index_size * data->index_offset);
                 geom_desc.Triangles.IndexCount = data->index_count;
                 geom_desc.Triangles.IndexFormat = data->index_bits == 16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
             }
@@ -903,27 +905,4 @@ void GfxContextDXR::finish()
 }
 
 } // namespace rths
-
-
-// Unity plugin load event
-extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
-UnityPluginLoad(IUnityInterfaces* unityInterfaces)
-{
-    using namespace rths;
-    GfxContextDXR::initializeInstance();
-
-    auto* graphics = unityInterfaces->Get<IUnityGraphics>();
-    switch (graphics->GetRenderer()) {
-    case kUnityGfxRendererD3D11:
-        InitializeResourceTranslator(unityInterfaces->Get<IUnityGraphicsD3D11>()->GetDevice());
-        break;
-    case kUnityGfxRendererD3D12:
-        InitializeResourceTranslator(unityInterfaces->Get<IUnityGraphicsD3D12>()->GetDevice());
-        break;
-    default:
-        // graphics API not supported
-        SetErrorLog("Graphics API must be D3D11 or D3D12");
-        break;
-    }
-}
 #endif
