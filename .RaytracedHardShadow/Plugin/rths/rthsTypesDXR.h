@@ -83,17 +83,22 @@ struct BufferDataDXR
     HANDLE handle = nullptr;
 };
 
-struct MeshBuffersDXR
+struct MeshDataDXR
 {
     BufferDataDXR vertex_buffer;
     BufferDataDXR index_buffer;
     int vertex_count = 0;
     int index_bits = 0;
     int index_count = 0;
-    int index_offset = 0;
-    float3x4 transform;
 
     ID3D12ResourcePtr blas; // bottom level acceleration structure
+};
+using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
+
+struct MeshInstanceDXR
+{
+    MeshDataDXRPtr mesh;
+    float3x4 transform;
 };
 
 struct Descriptor

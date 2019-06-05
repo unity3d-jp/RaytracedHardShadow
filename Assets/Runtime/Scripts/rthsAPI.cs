@@ -22,7 +22,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
         [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans, float range);
         [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
-        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib, int vertexCount, uint indexBits, uint indexCount, uint indexStart);
+        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans, IntPtr vb, IntPtr ib, int vertexCount, uint indexBits, uint indexCount);
 
         public static string S(IntPtr cstring)
         {
@@ -156,7 +156,7 @@ namespace UTJ.RaytracedHardShadow
             uint indexBits = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 16u : 32u;
             rthsAddMesh(self, trans,
                 mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
-                mesh.vertexCount, indexBits, mesh.GetIndexCount(0), mesh.GetIndexStart(0));
+                mesh.vertexCount, indexBits, mesh.GetIndexCount(0));
         }
     }
 }

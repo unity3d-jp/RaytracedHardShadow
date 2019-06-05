@@ -19,8 +19,8 @@ public:
 
     bool initializeDevice();
     void setSceneData(SceneData& data);
-    void setRenderTarget(TextureDataDXR rt);
-    void setMeshes(std::vector<MeshBuffersDXR>& meshes);
+    void setRenderTarget(TextureData& rt);
+    void setMeshes(std::vector<MeshData>& meshes);
     void sync();
     void flush();
     void finish();
@@ -51,7 +51,9 @@ private:
     ID3D12RootSignaturePtr m_global_rootsig;
     ID3D12RootSignaturePtr m_local_rootsig;
 
-    std::vector<MeshBuffersDXR> m_meshes;
+    std::map<void*, MeshDataDXRPtr> m_mesh_records;
+    std::vector<MeshInstanceDXR> m_mesh_instances;
+
     ID3D12ResourcePtr m_tlas;
     Descriptor m_tlas_handle;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;

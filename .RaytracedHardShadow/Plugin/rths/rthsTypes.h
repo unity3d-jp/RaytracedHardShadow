@@ -129,4 +129,21 @@ struct SceneData
     PointLightData       reverse_point_lights[kMaxLights];
 };
 
+struct TextureData
+{
+    void *texture = nullptr; // unity
+    int width = 0;
+    int height = 0;
+};
+
+struct MeshData
+{
+    void *vertex_buffer = nullptr; // unity
+    void *index_buffer = nullptr; // unity
+    int vertex_count = 0;
+    int index_bits = 0;
+    int index_count = 0;
+    float3x4 transform;
+};
+
 } // namespace rths

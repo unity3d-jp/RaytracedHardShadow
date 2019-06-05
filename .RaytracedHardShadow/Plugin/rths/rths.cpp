@@ -96,9 +96,9 @@ rthsAPI void rthsAddReversePointLight(IRenderer *self, float4x4 transform, float
     self->addReversePointLight(transform, range);
 }
 
-rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset)
+rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform, void *vb, void *ib, int vertex_count, int index_bits, int index_count)
 {
     if (!self || !vb || !ib)
         return;
-    self->addMesh(transform, vb, ib, vertex_count, index_bits, index_count, index_offset);
+    self->addMesh(transform, vb, ib, vertex_count, index_bits, index_count);
 }

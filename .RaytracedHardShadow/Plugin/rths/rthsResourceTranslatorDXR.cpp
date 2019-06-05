@@ -145,7 +145,7 @@ BufferDataDXR& D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
     tmp_desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
     HRESULT hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
     if (SUCCEEDED(hr)) {
-        // copy contents of VB to temporary
+        // copy contents to temporary
         m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
 
         // translate temporary as d3d12 resource
@@ -179,7 +179,7 @@ BufferDataDXR& D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
     tmp_desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
     HRESULT hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
     if (SUCCEEDED(hr)) {
-        // copy contents of VB to temporary
+        // copy contents to temporary
         m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
 
         // translate temporary as d3d12 resource

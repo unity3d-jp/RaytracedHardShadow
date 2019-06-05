@@ -30,6 +30,9 @@
     <ClCompile Include="rths\rthsResourceTranslatorDXR.cpp">
       <Filter>rths</Filter>
     </ClCompile>
+    <ClCompile Include="rths\rthsRenderer.cpp">
+      <Filter>rths</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\pch.h">

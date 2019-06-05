@@ -19,7 +19,31 @@ public:
     virtual void addSpotLight(const float4x4& trans, float range, float spot_angle) = 0;
     virtual void addPointLight(const float4x4& trans, float range) = 0;
     virtual void addReversePointLight(const float4x4& trans, float range) = 0;
-    virtual void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset) = 0;
+    virtual void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count) = 0;
+};
+
+
+class RendererBase : public IRenderer
+{
+public:
+    RendererBase();
+    ~RendererBase() override;
+
+    void beginScene() override;
+    void endScene() override;
+
+    void setRenderTarget(void *rt) override;
+    void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) override;
+    void addDirectionalLight(const float4x4& trans) override;
+    void addSpotLight(const float4x4& trans, float range, float spot_angle) override;
+    void addPointLight(const float4x4& trans, float range) override;
+    void addReversePointLight(const float4x4& trans, float range) override;
+    void addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count) override;
+
+protected:
+    TextureData m_render_target;
+    SceneData m_scene_data;
+    std::vector<MeshData> m_mesh_data;
 };
 
 IRenderer* CreateRendererDXR();
