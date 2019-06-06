@@ -29,7 +29,7 @@ namespace UTJ.RaytracedHardShadow
 
         [SerializeField] ShadowCasterLightType m_lightType;
         [SerializeField] float m_range = 10.0f;
-        [SerializeField] float m_spotAngle = 30.0f;
+        [SerializeField] [Range(1.0f, 179.0f)] float m_spotAngle = 30.0f;
 
         public ShadowCasterLightType lightType
         {
