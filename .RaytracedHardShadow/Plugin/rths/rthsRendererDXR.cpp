@@ -12,6 +12,7 @@ public:
     RendererDXR();
     ~RendererDXR() override;
 
+    void update() override;
     void render() override;
     void finish() override;
 
@@ -25,6 +26,12 @@ RendererDXR::RendererDXR()
 
 RendererDXR::~RendererDXR()
 {
+}
+
+void RendererDXR::update()
+{
+    auto ctx = GfxContextDXR::getInstance();
+    ctx->releaseUnusedResources();
 }
 
 void RendererDXR::render()

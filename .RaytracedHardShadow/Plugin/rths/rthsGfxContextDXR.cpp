@@ -944,7 +944,10 @@ void GfxContextDXR::finish()
 
     // copy render target content to Unity side
     GetResourceTranslator(m_device)->applyTexture(m_render_target);
+}
 
+void GfxContextDXR::releaseUnusedResources()
+{
     // erase unused texture / buffer / mesh data
     auto erase_unused_records = [](auto& records, const char *message) {
         int num_erased = 0;

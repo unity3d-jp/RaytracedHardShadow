@@ -8,17 +8,6 @@ namespace UTJ.RaytracedHardShadow
     [ExecuteInEditMode]
     public class ShadowRaytracer : MonoBehaviour
     {
-#if UNITY_EDITOR
-        [MenuItem("GameObject/RaytracedHardShadow/Create ShadowRaytracer", false, 10)]
-        public static void CreateMeshSyncServer(MenuCommand menuCommand)
-        {
-            var go = new GameObject();
-            go.name = "ShadowRaytracer";
-            var srt = go.AddComponent<ShadowRaytracer>();
-            Undo.RegisterCreatedObjectUndo(go, "ShadowRaytracer");
-        }
-#endif
-
 #pragma warning disable 649
         [Tooltip("Output buffer. Must be R32F format.")]
         [SerializeField] RenderTexture m_shadowBuffer;
@@ -26,10 +15,10 @@ namespace UTJ.RaytracedHardShadow
         [Tooltip("If this field is null, Camera.main will be used.")]
         [SerializeField] Camera m_camera;
 
-        [Tooltip("Light(s) to cast shadow. Must be directional.")]
+        [Tooltip("Lights to cast shadow.")]
         [SerializeField] Light[] m_lights;
 
-        [Tooltip("ShadowCasterLight(s) to cast shadow. Must be directional.")]
+        [Tooltip("ShadowCasterLights to cast shadow.")]
         [SerializeField] ShadowCasterLight[] m_shadowCasterLights;
 
         rthsShadowRenderer m_renderer;
@@ -48,6 +37,11 @@ namespace UTJ.RaytracedHardShadow
         void OnDisable()
         {
             m_renderer.Destroy();
+        }
+
+        void Update()
+        {
+            m_renderer.Update();
         }
 
         void LateUpdate()

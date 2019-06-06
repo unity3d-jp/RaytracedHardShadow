@@ -25,7 +25,14 @@ rthsAPI IRenderer* rthsCreateRenderer()
 
 rthsAPI void rthsDestroyRenderer(IRenderer *self)
 {
-    return delete self;
+    delete self;
+}
+
+rthsAPI void rthsUpdate(IRenderer *self)
+{
+    if (!self)
+        return;
+    self->update();
 }
 
 rthsAPI void rthsSetRenderTarget(IRenderer *self, void *render_target)

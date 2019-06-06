@@ -16,17 +16,6 @@ namespace UTJ.RaytracedHardShadow
     [ExecuteInEditMode]
     public class ShadowCasterLight : MonoBehaviour
     {
-#if UNITY_EDITOR
-        [MenuItem("GameObject/RaytracedHardShadow/Create Shadow Caster Light", false, 10)]
-        public static void CreateMeshSyncServer(MenuCommand menuCommand)
-        {
-            var go = new GameObject();
-            go.name = "Shadow Caster Light";
-            var srt = go.AddComponent<ShadowCasterLight>();
-            Undo.RegisterCreatedObjectUndo(go, "ShadowRaytracer");
-        }
-#endif
-
         [SerializeField] ShadowCasterLightType m_lightType;
         [SerializeField] float m_range = 10.0f;
         [SerializeField] [Range(1.0f, 179.0f)] float m_spotAngle = 30.0f;

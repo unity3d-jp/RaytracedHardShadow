@@ -12,6 +12,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsCreateRenderer();
         [DllImport("rths")] static extern void rthsDestroyRenderer(IntPtr self);
 
+        [DllImport("rths")] static extern void rthsUpdate(IntPtr self);
         [DllImport("rths")] static extern void rthsSetRenderTarget(IntPtr self, IntPtr rt);
         [DllImport("rths")] static extern void rthsBeginScene(IntPtr self);
         [DllImport("rths")] static extern void rthsEndScene(IntPtr self);
@@ -44,7 +45,13 @@ namespace UTJ.RaytracedHardShadow
 
         public void Destroy()
         {
-            rthsDestroyRenderer(self); self = IntPtr.Zero;
+            rthsDestroyRenderer(self);
+            self = IntPtr.Zero;
+        }
+
+        public void Update()
+        {
+            rthsUpdate(self);
         }
 
         public void SetRenderTarget(RenderTexture rt)

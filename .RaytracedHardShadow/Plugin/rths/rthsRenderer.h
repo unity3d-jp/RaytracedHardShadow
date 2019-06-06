@@ -8,6 +8,7 @@ class IRenderer
 public:
     virtual ~IRenderer() {}
 
+    virtual void update() = 0;
     virtual void beginScene() = 0;
     virtual void endScene() = 0;
     virtual void render() = 0;
