@@ -418,6 +418,22 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
 {
     m_mesh_instances.clear();
 
+    auto get_vertex_buffer = [this](void *buffer) {
+        auto& record = m_buffer_records[buffer];
+        ++record.used;
+        if (!record.data.resource)
+            record.data = GetResourceTranslator(m_device)->translateVertexBuffer(buffer);
+        return record.data;
+    };
+
+    auto get_index_buffer = [this](void *buffer) {
+        auto& record = m_buffer_records[buffer];
+        ++record.used;
+        if (!record.data.resource)
+            record.data = GetResourceTranslator(m_device)->translateIndexBuffer(buffer);
+        return record.data;
+    };
+
     size_t num_meshes = meshes.size();
     for (size_t i = 0; i < num_meshes; ++i) {
         auto& src = meshes[i];
@@ -433,7 +449,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
             data->index_offset = src.index_offset;
         }
         if (!data->vertex_buffer.resource) {
-            data->vertex_buffer = GetResourceTranslator(m_device)->translateVertexBuffer(src.vertex_buffer);
+            data->vertex_buffer = get_vertex_buffer(src.vertex_buffer);
             if (!data->vertex_buffer.resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate vertex buffer\n");
                 continue;
@@ -453,7 +469,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
 #endif
         }
         if (!data->index_buffer.resource) {
-            data->index_buffer = GetResourceTranslator(m_device)->translateIndexBuffer(src.index_buffer);
+            data->index_buffer = get_index_buffer(src.index_buffer);
             if (!data->index_buffer.resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate index buffer\n");
                 continue;
@@ -922,18 +938,19 @@ void GfxContextDXR::finish()
         std::vector<float> data;
         data.resize(m_render_target.width * m_render_target.height, std::numeric_limits<float>::quiet_NaN());
         readbackTexture(data.data(), m_render_target.resource, m_render_target.width, m_render_target.height, sizeof(float));
+        // break here to inspect data
     }
 #endif
 
     // copy render target content to Unity side
     GetResourceTranslator(m_device)->applyTexture(m_render_target);
 
-    // erase unused texture data
-    {
+    // erase unused texture / buffer / mesh data
+    auto erase_unused_records = [](auto& records, const char *message) {
         int num_erased = 0;
-        for (auto it = m_texture_records.begin(); it != m_texture_records.end(); /**/) {
+        for (auto it = records.begin(); it != records.end(); /**/) {
             if (it->second.used == 0) {
-                m_texture_records.erase(it++);
+                records.erase(it++);
                 ++num_erased;
             }
             else {
@@ -942,27 +959,13 @@ void GfxContextDXR::finish()
             }
         }
         if (num_erased > 0) {
-            DebugPrint("GfxContextDXR::finish(): erased %d texture records\n", num_erased);
+            DebugPrint(message, num_erased);
         }
-    }
+    };
+    erase_unused_records(m_texture_records, "GfxContextDXR::finish(): erased %d texture records\n");
+    erase_unused_records(m_buffer_records, "GfxContextDXR::finish(): erased %d buffer records\n");
+    erase_unused_records(m_mesh_records, "GfxContextDXR::finish(): erased %d mesh records\n");
 
-    // erase unused mesh data
-    {
-        int num_erased = 0;
-        for (auto it = m_mesh_records.begin(); it != m_mesh_records.end(); /**/) {
-            if (it->second.used == 0) {
-                m_mesh_records.erase(it++);
-                ++num_erased;
-            }
-            else {
-                it->second.used = 0;
-                ++it;
-            }
-        }
-        if (num_erased > 0) {
-            DebugPrint("GfxContextDXR::finish(): erased %d mesh records\n", num_erased);
-        }
-    }
     m_temporary_buffers.clear();
 }
 

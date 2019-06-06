@@ -40,6 +40,13 @@ private:
         int used = 0;
     };
 
+    struct BufferRecord
+    {
+        BufferDataDXR data;
+        int used = 0;
+    };
+    using BufferID = void*;
+
     struct MeshRecord
     {
         MeshDataDXRPtr data;
@@ -81,6 +88,7 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE m_srvuav_gpu_handle_base;
 
     std::map<TextureID, TextureRecord> m_texture_records;
+    std::map<BufferID, BufferRecord> m_buffer_records;
     std::map<MeshID, MeshRecord> m_mesh_records;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
