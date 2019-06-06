@@ -22,10 +22,13 @@ public:
     BufferDataDXR translateVertexBuffer(void *ptr) override;
     BufferDataDXR translateIndexBuffer(void *ptr) override;
 
+    void copyResource(ID3D11Resource *dst, ID3D11Resource *src);
+
 private:
     // note: sharing resources from d3d12 to d3d11 require d3d11.1.
     ID3D11Device1Ptr m_unity_device = nullptr;
     ID3D11DeviceContextPtr m_unity_dev_context = nullptr;
+    ID3D11QueryPtr m_query_event = nullptr;
 };
 
 class D3D12ResourceTranslator : public ResourceTranslatorBase
@@ -79,6 +82,11 @@ D3D11ResourceTranslator::D3D11ResourceTranslator(ID3D11Device *device)
 {
     device->QueryInterface(IID_PPV_ARGS(&m_unity_device));
     m_unity_device->GetImmediateContext(&m_unity_dev_context);
+
+    {
+        D3D11_QUERY_DESC qdesc = { D3D11_QUERY_EVENT , 0 };
+        m_unity_device->CreateQuery(&qdesc, &m_query_event);
+    }
 }
 
 D3D11ResourceTranslator::~D3D11ResourceTranslator()
@@ -131,7 +139,7 @@ BufferDataDXR D3D11ResourceTranslator::translateVertexBuffer(void *ptr)
     HRESULT hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
     if (SUCCEEDED(hr)) {
         // copy contents to temporary
-        m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
+        copyResource(ret.temporary_d3d11, buf_unity);
 
         // translate temporary as d3d12 resource
         IDXGIResourcePtr ires;
@@ -163,7 +171,7 @@ BufferDataDXR D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
     HRESULT hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
     if (SUCCEEDED(hr)) {
         // copy contents to temporary
-        m_unity_dev_context->CopyResource(ret.temporary_d3d11, buf_unity);
+        copyResource(ret.temporary_d3d11, buf_unity);
 
         // translate temporary as d3d12 resource
         IDXGIResourcePtr ires;
@@ -175,6 +183,17 @@ BufferDataDXR D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
         }
     }
     return ret;
+}
+
+void D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resource *src)
+{
+    m_unity_dev_context->CopyResource(dst, src);
+
+    // wait for completion of CopyResource()
+    m_unity_dev_context->End(m_query_event);
+    while (m_unity_dev_context->GetData(m_query_event, nullptr, 0, 0) == S_FALSE) {
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
 }
 
 
