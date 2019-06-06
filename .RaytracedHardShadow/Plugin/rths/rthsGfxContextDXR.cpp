@@ -197,7 +197,6 @@ bool GfxContextDXR::initializeDevice()
         }
         m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&m_cmd_allocator_copy));
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_cmd_allocator_copy, nullptr, IID_PPV_ARGS(&m_cmd_list_copy));
-        m_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
     }
 #endif
 
@@ -965,9 +964,9 @@ void GfxContextDXR::releaseUnusedResources()
             DebugPrint(message, num_erased);
         }
     };
-    erase_unused_records(m_texture_records, "GfxContextDXR::finish(): erased %d texture records\n");
-    erase_unused_records(m_buffer_records, "GfxContextDXR::finish(): erased %d buffer records\n");
-    erase_unused_records(m_mesh_records, "GfxContextDXR::finish(): erased %d mesh records\n");
+    erase_unused_records(m_texture_records, "GfxContextDXR::releaseUnusedResources(): erased %d texture records\n");
+    erase_unused_records(m_buffer_records, "GfxContextDXR::releaseUnusedResources(): erased %d buffer records\n");
+    erase_unused_records(m_mesh_records, "GfxContextDXR::releaseUnusedResources(): erased %d mesh records\n");
 
     m_temporary_buffers.clear();
 }

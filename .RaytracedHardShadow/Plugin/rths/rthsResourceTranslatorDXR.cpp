@@ -25,10 +25,14 @@ public:
     void copyResource(ID3D11Resource *dst, ID3D11Resource *src);
 
 private:
-    // note: sharing resources from d3d12 to d3d11 require d3d11.1.
-    ID3D11Device1Ptr m_unity_device = nullptr;
-    ID3D11DeviceContextPtr m_unity_dev_context = nullptr;
-    ID3D11QueryPtr m_query_event = nullptr;
+    // note:
+    // sharing resources from d3d12 to d3d11 require d3d11.1. also, fence is supported only d3d11.4 or newer.
+    ID3D11Device5Ptr m_unity_device = nullptr;
+    ID3D11DeviceContext4Ptr m_unity_context = nullptr;
+
+    ID3D11FencePtr m_fence = nullptr;
+    HANDLE m_fence_event = nullptr;
+    uint64_t m_fence_value = 0;
 };
 
 class D3D12ResourceTranslator : public ResourceTranslatorBase
@@ -81,12 +85,13 @@ ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, 
 D3D11ResourceTranslator::D3D11ResourceTranslator(ID3D11Device *device)
 {
     device->QueryInterface(IID_PPV_ARGS(&m_unity_device));
-    m_unity_device->GetImmediateContext(&m_unity_dev_context);
 
-    {
-        D3D11_QUERY_DESC qdesc = { D3D11_QUERY_EVENT , 0 };
-        m_unity_device->CreateQuery(&qdesc, &m_query_event);
-    }
+    ID3D11DeviceContextPtr device_context;
+    m_unity_device->GetImmediateContext(&device_context);
+    device_context->QueryInterface(IID_PPV_ARGS(&m_unity_context));
+
+    m_unity_device->CreateFence(0, D3D11_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
+    m_fence_event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
 }
 
 D3D11ResourceTranslator::~D3D11ResourceTranslator()
@@ -117,7 +122,7 @@ TextureDataDXR D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
 void D3D11ResourceTranslator::applyTexture(TextureDataDXR& src)
 {
     if (src.temporary_d3d11) {
-        m_unity_dev_context->CopyResource((ID3D11Texture2D*)src.texture, src.temporary_d3d11);
+        copyResource((ID3D11Texture2D*)src.texture, src.temporary_d3d11);
     }
 }
 
@@ -187,13 +192,13 @@ BufferDataDXR D3D11ResourceTranslator::translateIndexBuffer(void *ptr)
 
 void D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resource *src)
 {
-    m_unity_dev_context->CopyResource(dst, src);
+    m_unity_context->CopyResource(dst, src);
 
     // wait for completion of CopyResource()
-    m_unity_dev_context->End(m_query_event);
-    while (m_unity_dev_context->GetData(m_query_event, nullptr, 0, 0) == S_FALSE) {
-        std::this_thread::sleep_for(std::chrono::microseconds(100));
-    }
+    m_fence_value++;
+    m_unity_context->Signal(m_fence, m_fence_value);
+    m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+    ::WaitForSingleObject(m_fence_event, INFINITE);
 }
 
 
