@@ -6,6 +6,8 @@ constexpr float PI = 3.14159265358979323846264338327950288419716939937510f;
 constexpr float DegToRad = PI / 180.0f;
 constexpr float RadToDeg = 1.0f / (PI / 180.0f);
 
+using nanosec = uint64_t;
+
 struct float2
 {
     float x,y;
@@ -135,6 +137,16 @@ struct TextureData
     int width = 0;
     int height = 0;
 };
+struct TextureID
+{
+    uint64_t texture = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+
+    bool operator==(const TextureID& v) const;
+    bool operator<(const TextureID& v) const;
+};
+TextureID identifier(const TextureData& data);
 
 struct MeshData
 {
@@ -147,7 +159,6 @@ struct MeshData
     bool is_dynamic = false; // true if skinned, has blendshapes, etc
     float3x4 transform;
 };
-
 struct MeshID
 {
     uint64_t vertex_buffer = 0;
@@ -160,7 +171,6 @@ struct MeshID
     bool operator==(const MeshID& v) const;
     bool operator<(const MeshID& v) const;
 };
-
 MeshID identifier(const MeshData& data);
 
 } // namespace rths

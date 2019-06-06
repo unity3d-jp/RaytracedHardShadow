@@ -3,6 +3,12 @@
 
 namespace rths {
 
+nanosec Now()
+{
+    using namespace std::chrono;
+    return duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
+}
+
 std::string ToUTF8(const char *src)
 {
 #ifdef _WIN32

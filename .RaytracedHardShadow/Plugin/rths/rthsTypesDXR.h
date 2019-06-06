@@ -7,12 +7,6 @@
     // debug layer
     #define rthsEnableD3D12DebugLayer
 
-    // VB & IB validation
-    #define rthsEnableBufferValidation
-
-    // render target validation
-    #define rthsEnableRenderTargetValidation
-
     // GPU based validation
     // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/using-d3d12-debug-layer-gpu-based-validation
     #define rthsEnableD3D12GBV
@@ -20,6 +14,12 @@
     // DREAD (this requires Windows SDK 10.0.18362.0 or newer)
     // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
     #define rthsEnableD3D12DREAD
+
+    //// VB & IB validation
+    //#define rthsEnableBufferValidation
+
+    //// render target validation
+    //#define rthsEnableRenderTargetValidation
 #endif
 
 
@@ -72,6 +72,7 @@ struct TextureDataDXR
     ID3D11Texture2DPtr temporary_d3d11;
     HANDLE handle = nullptr;
 };
+TextureID identifier(const TextureDataDXR& data);
 
 struct BufferDataDXR
 {

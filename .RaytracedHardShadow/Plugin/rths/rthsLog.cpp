@@ -27,5 +27,18 @@ void SetErrorLog(const std::string& str)
     g_error_log = str;
 }
 
+void DebugPrintImpl(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+#ifdef _WIN32
+    char buf[1024];
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    ::OutputDebugStringA(buf);
+#else
+    vprintf(fmt, args);
+#endif
+    va_end(args);
+}
 
 } // namespace rths

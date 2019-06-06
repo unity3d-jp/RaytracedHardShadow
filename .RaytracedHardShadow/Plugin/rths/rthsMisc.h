@@ -4,6 +4,9 @@
 
 namespace rths {
 
+using nanosec = uint64_t;
+nanosec Now();
+
 std::string ToUTF8(const char *src);
 std::string ToUTF8(const std::string& src);
 std::string ToANSI(const char *src);

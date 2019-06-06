@@ -4,6 +4,15 @@
 
 namespace rths {
 
+TextureID identifier(const TextureDataDXR& data)
+{
+    TextureID ret;
+    ret.texture = (uint64_t)data.texture;
+    ret.width = (uint32_t)data.width;
+    ret.height = (uint32_t)data.height;
+    return ret;
+}
+
 MeshID identifier(const MeshDataDXR& data)
 {
     MeshID ret;
