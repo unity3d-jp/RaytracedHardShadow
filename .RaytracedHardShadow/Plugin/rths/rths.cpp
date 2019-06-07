@@ -120,8 +120,6 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
 {
     using namespace rths;
 #ifdef _WIN32
-    GfxContextDXR::initializeInstance();
-
     auto* graphics = unityInterfaces->Get<IUnityGraphics>();
     switch (graphics->GetRenderer()) {
     case kUnityGfxRendererD3D11:
@@ -133,7 +131,9 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
     default:
         // graphics API not supported
         SetErrorLog("Graphics API must be D3D11 or D3D12");
-        break;
+        return;
     }
+
+    GfxContextDXR::initializeInstance();
 #endif
 }

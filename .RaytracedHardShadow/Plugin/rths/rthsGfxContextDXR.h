@@ -15,7 +15,7 @@ public:
 
     bool valid() const;
     bool validateDevice();
-    ID3D12Device5* getDevice();
+    ID3D12Device5Ptr getDevice();
 
     bool initializeDevice();
     void setSceneData(SceneData& data);
@@ -33,6 +33,7 @@ public:
     bool uploadBuffer(ID3D12Resource *dst, const void *src, size_t size);
     bool readbackTexture(void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride);
     bool uploadTexture(ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride);
+    void executeAndWaitCopy();
 
 private:
     struct TextureRecord
@@ -72,7 +73,6 @@ private:
 
     ID3D12FencePtr m_fence;
     HANDLE m_fence_event;
-    uint64_t m_fence_value = 0;
 
     ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_global_rootsig;

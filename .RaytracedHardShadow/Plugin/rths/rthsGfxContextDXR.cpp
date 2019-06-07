@@ -172,6 +172,12 @@ bool GfxContextDXR::initializeDevice()
         return false;
     }
 
+    // fence
+    {
+        m_fence = GetResourceTranslator()->getFence(m_device);
+        m_fence_event = GetResourceTranslator()->getFenceEvent();
+    }
+
     // command queue related objects
     {
         {
@@ -182,8 +188,6 @@ bool GfxContextDXR::initializeDevice()
         }
         m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
-        m_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
-        m_fence_event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
     }
 
 #ifdef rthsDebug
@@ -380,7 +384,7 @@ void GfxContextDXR::setRenderTarget(TextureData& rt)
 {
     auto& record = m_texture_records[identifier(rt)];
     if (!record.data.resource) {
-        record.data = GetResourceTranslator(m_device)->createTemporaryTexture(rt.texture);
+        record.data = GetResourceTranslator()->createTemporaryTexture(rt.texture);
         if (!record.data.resource) {
             DebugPrint("GfxContextDXR::setRenderTarget(): failed to translate texture\n");
             return;
@@ -421,7 +425,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
         auto& record = m_buffer_records[buffer];
         ++record.used;
         if (!record.data.resource)
-            record.data = GetResourceTranslator(m_device)->translateVertexBuffer(buffer);
+            record.data = GetResourceTranslator()->translateVertexBuffer(buffer);
         return record.data;
     };
 
@@ -429,7 +433,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
         auto& record = m_buffer_records[buffer];
         ++record.used;
         if (!record.data.resource)
-            record.data = GetResourceTranslator(m_device)->translateIndexBuffer(buffer);
+            record.data = GetResourceTranslator()->translateIndexBuffer(buffer);
         return record.data;
     };
 
@@ -637,10 +641,8 @@ bool GfxContextDXR::validateDevice()
     return true;
 }
 
-ID3D12Device5* GfxContextDXR::getDevice()
-{
-    return m_device;
-}
+ID3D12Device5Ptr GfxContextDXR::getDevice() { return m_device; }
+
 
 void GfxContextDXR::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
 {
@@ -658,10 +660,11 @@ uint64_t GfxContextDXR::submitCommandList()
     m_cmd_list->Close();
     ID3D12CommandList* cmd_list = m_cmd_list.GetInterfacePtr();
     m_cmd_queue->ExecuteCommandLists(1, &cmd_list);
-    m_fence_value++;
-    m_cmd_queue->Signal(m_fence, m_fence_value);
-    m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
-    return m_fence_value;
+
+    auto fence_value = GetResourceTranslator()->inclementFenceValue();
+    m_cmd_queue->Signal(m_fence, fence_value);
+    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
+    return fence_value;
 }
 
 
@@ -670,16 +673,7 @@ bool GfxContextDXR::readbackBuffer(void *dst, ID3D12Resource *src, size_t size)
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
     m_cmd_list_copy->CopyBufferRegion(readback_buf, 0, src, 0, size);
     m_cmd_list_copy->Close();
-
-    ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-    m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
-    m_fence_value++;
-    m_cmd_queue_copy->Signal(m_fence, m_fence_value);
-    m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
-
-    ::WaitForSingleObject(m_fence_event, INFINITE);
-    m_cmd_allocator_copy->Reset();
-    m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+    executeAndWaitCopy();
 
     float* mapped;
     if (SUCCEEDED(readback_buf->Map(0, nullptr, (void**)&mapped))) {
@@ -701,16 +695,7 @@ bool GfxContextDXR::uploadBuffer(ID3D12Resource *dst, const void *src, size_t si
 
         m_cmd_list_copy->CopyBufferRegion(dst, 0, upload_buf, 0, size);
         m_cmd_list_copy->Close();
-
-        ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-        m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
-        m_fence_value++;
-        m_cmd_queue_copy->Signal(m_fence, m_fence_value);
-        m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
-
-        ::WaitForSingleObject(m_fence_event, INFINITE);
-        m_cmd_allocator_copy->Reset();
-        m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+        executeAndWaitCopy();
         return true;
     }
     return false;
@@ -740,16 +725,7 @@ bool GfxContextDXR::readbackTexture(void *dst, ID3D12Resource *src, size_t width
 
     m_cmd_list_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
     m_cmd_list_copy->Close();
-
-    ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-    m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
-    m_fence_value++;
-    m_cmd_queue_copy->Signal(m_fence, m_fence_value);
-    m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
-
-    ::WaitForSingleObject(m_fence_event, INFINITE);
-    m_cmd_allocator_copy->Reset();
-    m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+    executeAndWaitCopy();
 
     float* mapped;
     if (SUCCEEDED(readback_buf->Map(0, nullptr, (void**)&mapped))) {
@@ -789,20 +765,26 @@ bool GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src, size_t w
 
         m_cmd_list_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
         m_cmd_list_copy->Close();
-
-        ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-        m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
-        m_fence_value++;
-        m_cmd_queue_copy->Signal(m_fence, m_fence_value);
-        m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
-
-        ::WaitForSingleObject(m_fence_event, INFINITE);
-        m_cmd_allocator_copy->Reset();
-        m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+        executeAndWaitCopy();
         return true;
     }
     return false;
 }
+
+void GfxContextDXR::executeAndWaitCopy()
+{
+    ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
+    m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+
+    auto fence_value = GetResourceTranslator()->inclementFenceValue();
+    m_cmd_queue_copy->Signal(m_fence, fence_value);
+    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
+    ::WaitForSingleObject(m_fence_event, INFINITE);
+
+    m_cmd_allocator_copy->Reset();
+    m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+}
+
 
 void GfxContextDXR::sync()
 {
@@ -942,7 +924,7 @@ void GfxContextDXR::finish()
 #endif
 
     // copy render target content to Unity side
-    GetResourceTranslator(m_device)->applyTexture(m_render_target);
+    GetResourceTranslator()->applyTexture(m_render_target);
 }
 
 void GfxContextDXR::releaseUnusedResources()

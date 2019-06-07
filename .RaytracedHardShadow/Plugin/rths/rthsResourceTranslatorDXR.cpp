@@ -17,6 +17,11 @@ class D3D11ResourceTranslator : public ResourceTranslatorBase
 public:
     D3D11ResourceTranslator(ID3D11Device *device);
     ~D3D11ResourceTranslator() override;
+
+    ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
+    HANDLE getFenceEvent() override;
+    uint64_t inclementFenceValue() override;
+
     TextureDataDXR createTemporaryTexture(void *ptr) override;
     void applyTexture(TextureDataDXR& tex) override;
     BufferDataDXR translateVertexBuffer(void *ptr) override;
@@ -40,6 +45,11 @@ class D3D12ResourceTranslator : public ResourceTranslatorBase
 public:
     D3D12ResourceTranslator(ID3D12Device *device);
     ~D3D12ResourceTranslator() override;
+
+    ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
+    HANDLE getFenceEvent() override;
+    uint64_t inclementFenceValue() override;
+
     TextureDataDXR createTemporaryTexture(void *ptr) override;
     void applyTexture(TextureDataDXR& tex) override;
     BufferDataDXR translateVertexBuffer(void *ptr) override;
@@ -48,6 +58,10 @@ public:
 private:
     ID3D12Device *m_device = nullptr;
     ID3D12Device *m_unity_device = nullptr;
+
+    ID3D12FencePtr m_fence = nullptr;
+    HANDLE m_fence_event = nullptr;
+    uint64_t m_fence_value = 0;
 };
 
 
@@ -97,6 +111,28 @@ D3D11ResourceTranslator::D3D11ResourceTranslator(ID3D11Device *device)
 D3D11ResourceTranslator::~D3D11ResourceTranslator()
 {
 }
+
+ID3D12FencePtr D3D11ResourceTranslator::getFence(ID3D12Device *dxr_device)
+{
+    ID3D12FencePtr ret;
+    HANDLE hfence;
+    auto hr = m_fence->CreateSharedHandle(nullptr, GENERIC_ALL, nullptr, &hfence);
+    if (SUCCEEDED(hr)) {
+        hr = dxr_device->OpenSharedHandle(hfence, IID_PPV_ARGS(&ret));
+    }
+    return ret;
+}
+
+HANDLE D3D11ResourceTranslator::getFenceEvent()
+{
+    return m_fence_event;
+}
+
+uint64_t D3D11ResourceTranslator::inclementFenceValue()
+{
+    return ++m_fence_value;
+}
+
 
 TextureDataDXR D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
 {
@@ -195,9 +231,9 @@ void D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resource *
     m_unity_context->CopyResource(dst, src);
 
     // wait for completion of CopyResource()
-    m_fence_value++;
-    m_unity_context->Signal(m_fence, m_fence_value);
-    m_fence->SetEventOnCompletion(m_fence_value, m_fence_event);
+    auto fence_value = inclementFenceValue();
+    m_unity_context->Signal(m_fence, fence_value);
+    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
     ::WaitForSingleObject(m_fence_event, INFINITE);
 }
 
@@ -211,6 +247,22 @@ D3D12ResourceTranslator::D3D12ResourceTranslator(ID3D12Device *device)
 
 D3D12ResourceTranslator::~D3D12ResourceTranslator()
 {
+}
+
+ID3D12FencePtr D3D12ResourceTranslator::getFence(ID3D12Device * dxr_device)
+{
+    // todo
+    return ID3D12FencePtr();
+}
+
+HANDLE D3D12ResourceTranslator::getFenceEvent()
+{
+    return m_fence_event;
+}
+
+uint64_t D3D12ResourceTranslator::inclementFenceValue()
+{
+    return ++m_fence_value;
 }
 
 TextureDataDXR D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
@@ -260,7 +312,7 @@ void FinalizeResourceTranslator()
     g_resource_translator = nullptr;
 }
 
-IResourceTranslator* GetResourceTranslator(ID3D12Device *my)
+IResourceTranslator* GetResourceTranslator()
 {
     return g_resource_translator;
 }
