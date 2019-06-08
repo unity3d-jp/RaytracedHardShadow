@@ -18,11 +18,9 @@ public:
     virtual BufferDataDXR translateVertexBuffer(void *ptr) = 0;
     virtual BufferDataDXR translateIndexBuffer(void *ptr) = 0;
 };
+using IResourceTranslatorPtr = std::shared_ptr<IResourceTranslator>;
 
-void InitializeResourceTranslator(ID3D11Device *unity_gfx_device);
-void InitializeResourceTranslator(ID3D12Device *unity_gfx_device);
-void FinalizeResourceTranslator();
-IResourceTranslator* GetResourceTranslator();
+IResourceTranslatorPtr CreateResourceTranslator();
 
 } // namespace rths
 #endif

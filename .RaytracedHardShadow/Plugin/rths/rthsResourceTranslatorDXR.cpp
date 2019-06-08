@@ -294,28 +294,17 @@ BufferDataDXR D3D12ResourceTranslator::translateIndexBuffer(void *ptr)
 }
 
 
-IResourceTranslator *g_resource_translator;
+ID3D11Device *g_unity_d3d11_device;
+ID3D12Device *g_unity_d3d12_device;
 
-void InitializeResourceTranslator(ID3D11Device *d3d11)
+IResourceTranslatorPtr CreateResourceTranslator()
 {
-    g_resource_translator = new D3D11ResourceTranslator(d3d11);
-}
-
-void InitializeResourceTranslator(ID3D12Device *d3d12)
-{
-    g_resource_translator = new D3D12ResourceTranslator(d3d12);
-}
-
-void FinalizeResourceTranslator()
-{
-    delete g_resource_translator;
-    g_resource_translator = nullptr;
-}
-
-IResourceTranslator* GetResourceTranslator()
-{
-    return g_resource_translator;
+    if (g_unity_d3d11_device)
+        return std::make_shared<D3D11ResourceTranslator>(g_unity_d3d11_device);
+    if (g_unity_d3d12_device)
+        return std::make_shared<D3D12ResourceTranslator>(g_unity_d3d12_device);
+    return IResourceTranslatorPtr();
 }
 
 } // namespace rths
-#endif
+#endif // _WIN32

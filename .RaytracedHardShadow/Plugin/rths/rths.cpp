@@ -114,6 +114,13 @@ rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform,
 }
 
 
+#ifdef _WIN32
+namespace rths {
+    extern ID3D11Device *g_unity_d3d11_device;
+    extern ID3D12Device *g_unity_d3d12_device;
+} // namespace rths
+#endif // _WIN32
+
 // Unity plugin load event
 extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
 UnityPluginLoad(IUnityInterfaces* unityInterfaces)
@@ -123,10 +130,10 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
     auto* graphics = unityInterfaces->Get<IUnityGraphics>();
     switch (graphics->GetRenderer()) {
     case kUnityGfxRendererD3D11:
-        InitializeResourceTranslator(unityInterfaces->Get<IUnityGraphicsD3D11>()->GetDevice());
+        g_unity_d3d11_device = unityInterfaces->Get<IUnityGraphicsD3D11>()->GetDevice();
         break;
     case kUnityGfxRendererD3D12:
-        InitializeResourceTranslator(unityInterfaces->Get<IUnityGraphicsD3D12>()->GetDevice());
+        g_unity_d3d12_device = unityInterfaces->Get<IUnityGraphicsD3D12>()->GetDevice();
         break;
     default:
         // graphics API not supported
@@ -135,5 +142,5 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
     }
 
     GfxContextDXR::initializeInstance();
-#endif
+#endif // _WIN32
 }

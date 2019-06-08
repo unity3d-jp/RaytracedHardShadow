@@ -1,6 +1,7 @@
 #pragma once
 #ifdef _WIN32
 #include "rthsTypesDXR.h"
+#include "rthsResourceTranslatorDXR.h"
 
 #define rthsMaxBounce 2
 
@@ -59,6 +60,7 @@ private:
     GfxContextDXR();
     ~GfxContextDXR();
 
+    IResourceTranslatorPtr m_resource_translator;
     ID3D12Device5Ptr m_device;
 
     // command list for raytrace

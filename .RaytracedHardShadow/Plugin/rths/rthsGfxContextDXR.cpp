@@ -110,6 +110,10 @@ ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAG
 
 bool GfxContextDXR::initializeDevice()
 {
+    m_resource_translator = CreateResourceTranslator();
+    if (!m_resource_translator)
+        return false;
+
 #ifdef rthsEnableD3D12DebugLayer
     {
         // enable d3d12 debug features
@@ -174,8 +178,8 @@ bool GfxContextDXR::initializeDevice()
 
     // fence
     {
-        m_fence = GetResourceTranslator()->getFence(m_device);
-        m_fence_event = GetResourceTranslator()->getFenceEvent();
+        m_fence = m_resource_translator->getFence(m_device);
+        m_fence_event = m_resource_translator->getFenceEvent();
     }
 
     // command queue related objects
@@ -384,7 +388,7 @@ void GfxContextDXR::setRenderTarget(TextureData& rt)
 {
     auto& record = m_texture_records[identifier(rt)];
     if (!record.data.resource) {
-        record.data = GetResourceTranslator()->createTemporaryTexture(rt.texture);
+        record.data = m_resource_translator->createTemporaryTexture(rt.texture);
         if (!record.data.resource) {
             DebugPrint("GfxContextDXR::setRenderTarget(): failed to translate texture\n");
             return;
@@ -425,7 +429,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
         auto& record = m_buffer_records[buffer];
         ++record.used;
         if (!record.data.resource)
-            record.data = GetResourceTranslator()->translateVertexBuffer(buffer);
+            record.data = m_resource_translator->translateVertexBuffer(buffer);
         return record.data;
     };
 
@@ -433,7 +437,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
         auto& record = m_buffer_records[buffer];
         ++record.used;
         if (!record.data.resource)
-            record.data = GetResourceTranslator()->translateIndexBuffer(buffer);
+            record.data = m_resource_translator->translateIndexBuffer(buffer);
         return record.data;
     };
 
@@ -661,7 +665,7 @@ uint64_t GfxContextDXR::submitCommandList()
     ID3D12CommandList* cmd_list = m_cmd_list.GetInterfacePtr();
     m_cmd_queue->ExecuteCommandLists(1, &cmd_list);
 
-    auto fence_value = GetResourceTranslator()->inclementFenceValue();
+    auto fence_value = m_resource_translator->inclementFenceValue();
     m_cmd_queue->Signal(m_fence, fence_value);
     m_fence->SetEventOnCompletion(fence_value, m_fence_event);
     return fence_value;
@@ -776,7 +780,7 @@ void GfxContextDXR::executeAndWaitCopy()
     ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
     m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
 
-    auto fence_value = GetResourceTranslator()->inclementFenceValue();
+    auto fence_value = m_resource_translator->inclementFenceValue();
     m_cmd_queue_copy->Signal(m_fence, fence_value);
     m_fence->SetEventOnCompletion(fence_value, m_fence_event);
     ::WaitForSingleObject(m_fence_event, INFINITE);
@@ -924,7 +928,7 @@ void GfxContextDXR::finish()
 #endif
 
     // copy render target content to Unity side
-    GetResourceTranslator()->applyTexture(m_render_target);
+    m_resource_translator->applyTexture(m_render_target);
 }
 
 void GfxContextDXR::releaseUnusedResources()
