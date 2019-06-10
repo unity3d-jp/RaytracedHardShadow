@@ -559,36 +559,43 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
         m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
 
+        ID3D12ResourcePtr scratch_buf;
+        ID3D12ResourcePtr instance_descs_buf;
+
         // Create the buffers
-        auto scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
-        m_temporary_buffers.push_back(scratch);
+        scratch_buf = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
+        m_temporary_buffers.push_back(scratch_buf);
         m_tlas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
         uint64_t tlas_size = info.ResultDataMaxSizeInBytes;
 
-        // The instance desc should be inside a buffer, create and map the buffer
-        auto instance_descs_buf = createBuffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-        m_temporary_buffers.push_back(instance_descs_buf);
-        D3D12_RAYTRACING_INSTANCE_DESC* instance_descs;
-        instance_descs_buf->Map(0, nullptr, (void**)&instance_descs);
-        ZeroMemory(instance_descs, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes);
-        for (uint32_t i = 0; i < num_meshes; i++) {
-            auto& instance = m_mesh_instances[i];
+        if (num_meshes > 0) {
+            // The instance desc should be inside a buffer, create and map the buffer
+            instance_descs_buf = createBuffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            m_temporary_buffers.push_back(instance_descs_buf);
+            D3D12_RAYTRACING_INSTANCE_DESC* instance_descs;
+            instance_descs_buf->Map(0, nullptr, (void**)&instance_descs);
+            ZeroMemory(instance_descs, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes);
+            for (uint32_t i = 0; i < num_meshes; i++) {
+                auto& instance = m_mesh_instances[i];
 
-            (float3x4&)instance_descs[i].Transform = instance.transform;
-            instance_descs[i].InstanceID = i; // This value will be exposed to the shader via InstanceID()
-            instance_descs[i].InstanceMask = 0xFF;
-            instance_descs[i].InstanceContributionToHitGroupIndex = i;
-            instance_descs[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
-            instance_descs[i].AccelerationStructure = instance.mesh->blas->GetGPUVirtualAddress();
+                (float3x4&)instance_descs[i].Transform = instance.transform;
+                instance_descs[i].InstanceID = i; // This value will be exposed to the shader via InstanceID()
+                instance_descs[i].InstanceMask = 0xFF;
+                instance_descs[i].InstanceContributionToHitGroupIndex = i;
+                instance_descs[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
+                instance_descs[i].AccelerationStructure = instance.mesh->blas->GetGPUVirtualAddress();
+            }
+            instance_descs_buf->Unmap(0, nullptr);
         }
-        instance_descs_buf->Unmap(0, nullptr);
 
         // Create the TLAS
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
         as_desc.DestAccelerationStructureData = m_tlas->GetGPUVirtualAddress();
         as_desc.Inputs = inputs;
-        as_desc.Inputs.InstanceDescs = instance_descs_buf->GetGPUVirtualAddress();
-        as_desc.ScratchAccelerationStructureData = scratch->GetGPUVirtualAddress();
+        if (instance_descs_buf)
+            as_desc.Inputs.InstanceDescs = instance_descs_buf->GetGPUVirtualAddress();
+        if (scratch_buf)
+            as_desc.ScratchAccelerationStructureData = scratch_buf->GetGPUVirtualAddress();
 
         m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
 

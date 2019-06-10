@@ -18,7 +18,32 @@ namespace UTJ.RaytracedHardShadowEditor
 
         public override void OnInspectorGUI()
         {
-            DrawDefaultInspector();
+            //DrawDefaultInspector();
+
+            var t = target as ShadowRaytracer;
+            var so = serializedObject;
+
+            EditorGUILayout.PropertyField(so.FindProperty("m_shadowBuffer"));
+            EditorGUILayout.Space();
+
+            EditorGUILayout.PropertyField(so.FindProperty("m_camera"));
+            EditorGUILayout.Space();
+
+            EditorGUILayout.PropertyField(so.FindProperty("m_lightScope"));
+            if (t.lightScope == ShadowRaytracer.ObjectScope.SelectedScenes)
+                EditorGUILayout.PropertyField(so.FindProperty("m_lightScenes"), true);
+            else if (t.lightScope == ShadowRaytracer.ObjectScope.SelectedObjects)
+                EditorGUILayout.PropertyField(so.FindProperty("m_lightObjects"), true);
+            EditorGUILayout.Space();
+
+            EditorGUILayout.PropertyField(so.FindProperty("m_geometryScope"));
+            if (t.geometryScope == ShadowRaytracer.ObjectScope.SelectedScenes)
+                EditorGUILayout.PropertyField(so.FindProperty("m_geometryScenes"), true);
+            else if (t.geometryScope == ShadowRaytracer.ObjectScope.SelectedObjects)
+                EditorGUILayout.PropertyField(so.FindProperty("m_geometryObjects"), true);
+            EditorGUILayout.Space();
+
+            so.ApplyModifiedProperties();
         }
     }
 }
