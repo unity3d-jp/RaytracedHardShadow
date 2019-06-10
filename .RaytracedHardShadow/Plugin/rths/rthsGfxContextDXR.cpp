@@ -179,7 +179,6 @@ bool GfxContextDXR::initializeDevice()
     // fence
     {
         m_fence = m_resource_translator->getFence(m_device);
-        m_fence_event = m_resource_translator->getFenceEvent();
     }
 
     // command queue related objects
@@ -219,7 +218,7 @@ bool GfxContextDXR::initializeDevice()
         m_desc_handle_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
 
         auto alloc_handle = [this]() {
-            Descriptor ret;
+            DescriptorHandle ret;
             ret.hcpu = m_srvuav_cpu_handle_base;
             ret.hgpu = m_srvuav_gpu_handle_base;
             m_srvuav_cpu_handle_base.ptr += m_desc_handle_stride;
@@ -723,7 +722,7 @@ bool GfxContextDXR::readbackTexture(void *dst, ID3D12Resource *src, size_t width
     dst_loc.PlacedFootprint.Footprint.RowPitch = (UINT)(width * stride);
 
     D3D12_TEXTURE_COPY_LOCATION src_loc{};
-    src_loc.pResource = m_render_target.resource;
+    src_loc.pResource = src;
     src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     src_loc.SubresourceIndex = 0;
 
@@ -753,7 +752,7 @@ bool GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src, size_t w
         upload_buf->Unmap(0, nullptr);
 
         D3D12_TEXTURE_COPY_LOCATION dst_loc{};
-        dst_loc.pResource = m_render_target.resource;
+        dst_loc.pResource = dst;
         dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         dst_loc.SubresourceIndex = 0;
 

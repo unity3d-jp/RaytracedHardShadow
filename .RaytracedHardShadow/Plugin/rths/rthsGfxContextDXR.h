@@ -74,7 +74,7 @@ private:
     ID3D12CommandQueuePtr m_cmd_queue_copy;
 
     ID3D12FencePtr m_fence;
-    HANDLE m_fence_event;
+    FenceEvent m_fence_event;
 
     ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_global_rootsig;
@@ -96,14 +96,14 @@ private:
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
     ID3D12ResourcePtr m_scene_buffer;
-    Descriptor m_scene_buffer_handle;
+    DescriptorHandle m_scene_buffer_handle;
 
     TextureDataDXR m_render_target;
-    Descriptor m_render_target_handle;
+    DescriptorHandle m_render_target_handle;
 
     std::vector<MeshInstanceDXR> m_mesh_instances;
     ID3D12ResourcePtr m_tlas;
-    Descriptor m_tlas_handle;
+    DescriptorHandle m_tlas_handle;
 
     bool m_flushing = false;
 };

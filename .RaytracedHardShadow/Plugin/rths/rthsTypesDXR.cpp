@@ -24,5 +24,25 @@ MeshID identifier(const MeshDataDXR& data)
     return ret;
 }
 
+
+DescriptorHandle::operator bool() const
+{
+    return hcpu.ptr != 0 && hgpu.ptr != 0;
+}
+
+
+FenceEvent::FenceEvent()
+{
+    m_handle = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
+}
+
+FenceEvent::~FenceEvent()
+{
+    ::CloseHandle(m_handle);
+}
+FenceEvent::operator HANDLE() const
+{
+    return m_handle;
+}
 } // namespace rths
 #endif // _WIN32

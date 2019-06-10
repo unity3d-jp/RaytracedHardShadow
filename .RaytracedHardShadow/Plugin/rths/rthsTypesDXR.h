@@ -107,16 +107,29 @@ struct MeshInstanceDXR
     float3x4 transform;
 };
 
-struct Descriptor
+struct DescriptorHandle
 {
-    D3D12_CPU_DESCRIPTOR_HANDLE hcpu;
-    D3D12_GPU_DESCRIPTOR_HANDLE hgpu;
+    D3D12_CPU_DESCRIPTOR_HANDLE hcpu{};
+    D3D12_GPU_DESCRIPTOR_HANDLE hgpu{};
+
+    operator bool() const;
 };
 
 
 extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
 
+// thin wrapper for Windows' event
+class FenceEvent
+{
+public:
+    FenceEvent();
+    ~FenceEvent();
+    operator HANDLE() const;
+
+private:
+    HANDLE m_handle = nullptr;
+};
 
 } // namespace rths
 #endif // _WIN32

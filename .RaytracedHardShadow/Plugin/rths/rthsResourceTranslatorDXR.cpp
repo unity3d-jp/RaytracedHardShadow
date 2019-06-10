@@ -19,7 +19,6 @@ public:
     ~D3D11ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
-    HANDLE getFenceEvent() override;
     uint64_t inclementFenceValue() override;
 
     TextureDataDXR createTemporaryTexture(void *ptr) override;
@@ -36,8 +35,8 @@ private:
     ID3D11DeviceContext4Ptr m_unity_context = nullptr;
 
     ID3D11FencePtr m_fence = nullptr;
-    HANDLE m_fence_event = nullptr;
     uint64_t m_fence_value = 0;
+    FenceEvent m_fence_event;
 };
 
 class D3D12ResourceTranslator : public ResourceTranslatorBase
@@ -47,7 +46,6 @@ public:
     ~D3D12ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
-    HANDLE getFenceEvent() override;
     uint64_t inclementFenceValue() override;
 
     TextureDataDXR createTemporaryTexture(void *ptr) override;
@@ -60,8 +58,8 @@ private:
     ID3D12Device *m_unity_device = nullptr;
 
     ID3D12FencePtr m_fence = nullptr;
-    HANDLE m_fence_event = nullptr;
     uint64_t m_fence_value = 0;
+    FenceEvent m_fence_event;
 };
 
 
@@ -105,7 +103,6 @@ D3D11ResourceTranslator::D3D11ResourceTranslator(ID3D11Device *device)
     device_context->QueryInterface(IID_PPV_ARGS(&m_unity_context));
 
     m_unity_device->CreateFence(0, D3D11_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
-    m_fence_event = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
 }
 
 D3D11ResourceTranslator::~D3D11ResourceTranslator()
@@ -121,11 +118,6 @@ ID3D12FencePtr D3D11ResourceTranslator::getFence(ID3D12Device *dxr_device)
         hr = dxr_device->OpenSharedHandle(hfence, IID_PPV_ARGS(&ret));
     }
     return ret;
-}
-
-HANDLE D3D11ResourceTranslator::getFenceEvent()
-{
-    return m_fence_event;
 }
 
 uint64_t D3D11ResourceTranslator::inclementFenceValue()
@@ -253,11 +245,6 @@ ID3D12FencePtr D3D12ResourceTranslator::getFence(ID3D12Device * dxr_device)
 {
     // todo
     return ID3D12FencePtr();
-}
-
-HANDLE D3D12ResourceTranslator::getFenceEvent()
-{
-    return m_fence_event;
 }
 
 uint64_t D3D12ResourceTranslator::inclementFenceValue()
