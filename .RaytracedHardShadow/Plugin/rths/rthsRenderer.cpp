@@ -14,10 +14,7 @@ RendererBase::~RendererBase()
 
 void RendererBase::beginScene()
 {
-    m_scene_data.directional_light_count = 0;
-    m_scene_data.spot_light_count = 0;
-    m_scene_data.point_light_count = 0;
-    m_scene_data.reverse_point_light_count = 0;
+    m_scene_data.light_count = 0;
     m_mesh_data.clear();
 }
 
@@ -42,21 +39,23 @@ void RendererBase::setCamera(const float4x4& trans, const float4x4& view, const 
 
 void RendererBase::addDirectionalLight(const float4x4& trans)
 {
-    if (m_scene_data.directional_light_count == kMaxLights) {
-        SetErrorLog("exceeded max directional lights (%d)\n", kMaxLights);
+    if (m_scene_data.light_count == kMaxLights) {
+        SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
         return;
     }
-    auto& dst = m_scene_data.directional_lights[m_scene_data.directional_light_count++];
+    auto& dst = m_scene_data.lights[m_scene_data.light_count++];
+    dst.light_type = LightType::Directional;
     dst.direction = extract_direction(trans);
 }
 
 void RendererBase::addSpotLight(const float4x4& trans, float range, float spot_angle)
 {
-    if (m_scene_data.spot_light_count == kMaxLights) {
-        SetErrorLog("exceeded max spot lights (%d)\n", kMaxLights);
+    if (m_scene_data.light_count == kMaxLights) {
+        SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
         return;
     }
-    auto& dst = m_scene_data.spot_lights[m_scene_data.spot_light_count++];
+    auto& dst = m_scene_data.lights[m_scene_data.light_count++];
+    dst.light_type = LightType::Spot;
     dst.position = extract_position(trans);
     dst.range = range;
     dst.direction = extract_direction(trans);
@@ -65,22 +64,24 @@ void RendererBase::addSpotLight(const float4x4& trans, float range, float spot_a
 
 void RendererBase::addPointLight(const float4x4& trans, float range)
 {
-    if (m_scene_data.point_light_count == kMaxLights) {
-        SetErrorLog("exceeded max point lights (%d)\n", kMaxLights);
+    if (m_scene_data.light_count == kMaxLights) {
+        SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
         return;
     }
-    auto& dst = m_scene_data.point_lights[m_scene_data.point_light_count++];
+    auto& dst = m_scene_data.lights[m_scene_data.light_count++];
+    dst.light_type = LightType::Point;
     dst.position = extract_position(trans);
     dst.range = range;
 }
 
 void RendererBase::addReversePointLight(const float4x4& trans, float range)
 {
-    if (m_scene_data.reverse_point_light_count == kMaxLights) {
-        SetErrorLog("exceeded max reverse point lights (%d)\n", kMaxLights);
+    if (m_scene_data.light_count == kMaxLights) {
+        SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
         return;
     }
-    auto& dst = m_scene_data.reverse_point_lights[m_scene_data.reverse_point_light_count++];
+    auto& dst = m_scene_data.lights[m_scene_data.light_count++];
+    dst.light_type = LightType::ReversePoint;
     dst.position = extract_position(trans);
     dst.range = range;
 }

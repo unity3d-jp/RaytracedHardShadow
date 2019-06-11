@@ -92,27 +92,25 @@ struct CameraData
     float pad1;
 };
 
-struct DirectionalLightData
+enum class LightType : int
 {
-    union {
-        float3 direction;
-        float4 direction4;
-    };
+    Directional = 1,
+    Spot        = 2,
+    Point       = 3,
+    ReversePoint= 4,
 };
 
-struct SpotLightData
+struct LightData
 {
-    float3 position;
-    float range;
-    float3 direction;
-    float spot_angle; // radian
+    LightType light_type{};
+    int pad[3];
+
+    float3 position{};
+    float range{};
+    float3 direction{};
+    float spot_angle{}; // radian
 };
 
-struct PointLightData
-{
-    float3 position;
-    float range;
-};
 
 #define kMaxLights 16
 
@@ -120,15 +118,11 @@ struct SceneData
 {
     CameraData camera;
 
-    int directional_light_count;
-    int spot_light_count;
-    int point_light_count;
-    int reverse_point_light_count;
+    int flags;
+    int light_count;
+    int pad1[2];
 
-    DirectionalLightData directional_lights[kMaxLights];
-    SpotLightData        spot_lights[kMaxLights];
-    PointLightData       point_lights[kMaxLights];
-    PointLightData       reverse_point_lights[kMaxLights];
+    LightData lights[kMaxLights];
 };
 
 struct TextureData

@@ -4,7 +4,10 @@
     <Filter Include="rths">
       <UniqueIdentifier>{d039ae94-4ce1-4932-b8b3-d9e219efd163}</UniqueIdentifier>
     </Filter>
-    <Filter Include="rths\Shaders">
+    <Filter Include="rths\DXR">
+      <UniqueIdentifier>{c58d7ecc-c39c-4f87-b0ed-5475cd9b1680}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="rths\DXR\Shaders">
       <UniqueIdentifier>{d212cab3-57af-4731-88ac-949a03f61c5c}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
@@ -21,23 +24,23 @@
     <ClCompile Include="rths\rthsMisc.cpp">
       <Filter>rths</Filter>
     </ClCompile>
-    <ClCompile Include="rths\rthsGfxContextDXR.cpp">
-      <Filter>rths</Filter>
-    </ClCompile>
-    <ClCompile Include="rths\rthsRendererDXR.cpp">
-      <Filter>rths</Filter>
-    </ClCompile>
-    <ClCompile Include="rths\rthsResourceTranslatorDXR.cpp">
-      <Filter>rths</Filter>
-    </ClCompile>
     <ClCompile Include="rths\rthsRenderer.cpp">
       <Filter>rths</Filter>
     </ClCompile>
     <ClCompile Include="rths\rthsTypes.cpp">
       <Filter>rths</Filter>
     </ClCompile>
-    <ClCompile Include="rths\rthsTypesDXR.cpp">
-      <Filter>rths</Filter>
+    <ClCompile Include="rths\DXR\rthsGfxContextDXR.cpp">
+      <Filter>rths\DXR</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\DXR\rthsRendererDXR.cpp">
+      <Filter>rths\DXR</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\DXR\rthsResourceTranslatorDXR.cpp">
+      <Filter>rths\DXR</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\DXR\rthsTypesDXR.cpp">
+      <Filter>rths\DXR</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -59,19 +62,22 @@
     <ClInclude Include="rths\rthsMisc.h">
       <Filter>rths</Filter>
     </ClInclude>
-    <ClInclude Include="rths\rthsGfxContextDXR.h">
-      <Filter>rths</Filter>
+    <ClInclude Include="rths\DXR\rthsGfxContextDXR.h">
+      <Filter>rths\DXR</Filter>
     </ClInclude>
-    <ClInclude Include="rths\rthsResourceTranslatorDXR.h">
-      <Filter>rths</Filter>
+    <ClInclude Include="rths\DXR\rthsResourceTranslatorDXR.h">
+      <Filter>rths\DXR</Filter>
     </ClInclude>
-    <ClInclude Include="rths\rthsTypesDXR.h">
-      <Filter>rths</Filter>
+    <ClInclude Include="rths\DXR\rthsTypesDXR.h">
+      <Filter>rths\DXR</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\DXR\Shaders\rthsCommon.h">
+      <Filter>rths\DXR\Shaders</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="rths\Shaders\rthsShaderDXR.hlsl">
-      <Filter>rths\Shaders</Filter>
+    <CustomBuild Include="rths\DXR\Shaders\rthsShaderDXR.hlsl">
+      <Filter>rths\DXR\Shaders</Filter>
     </CustomBuild>
   </ItemGroup>
 </Project>

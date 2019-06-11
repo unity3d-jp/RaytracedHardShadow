@@ -5,8 +5,8 @@
 
 #ifdef _WIN32
     #define rthsAPI extern "C" __declspec(dllexport)
-    #include "rthsGfxContextDXR.h"
-    #include "rthsResourceTranslatorDXR.h"
+    #include "DXR/rthsGfxContextDXR.h"
+    #include "DXR/rthsResourceTranslatorDXR.h"
 #else
     #define rthsAPI extern "C" 
 #endif
