@@ -24,6 +24,8 @@ namespace UTJ.RaytracedHardShadow
         [Tooltip("If this field is null, Camera.main will be used.")]
         [SerializeField] Camera m_camera;
 
+        [SerializeField] bool m_ignoreSelfShadow = false;
+
         [Tooltip("Light scope for shadow geometries.")]
         [SerializeField] ObjectScope m_lightScope;
 #if UNITY_EDITOR
@@ -53,6 +55,12 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_camera; }
             set { m_camera = value; }
+        }
+
+        public bool ignoreSelfShadow
+        {
+            get { return m_ignoreSelfShadow; }
+            set { m_ignoreSelfShadow = value; }
         }
 
         public ObjectScope lightScope
@@ -223,6 +231,14 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
+#if UNITY_EDITOR
+        void Reset()
+        {
+            m_camera = GetComponent<Camera>();
+            if (m_camera == null)
+                m_camera = Camera.main;
+        }
+#endif
 
         void OnEnable()
         {
@@ -254,7 +270,12 @@ namespace UTJ.RaytracedHardShadow
             if (!m_shadowBuffer.IsCreated())
                 m_shadowBuffer.Create();
 
+            int flags = 0;
+            if(m_ignoreSelfShadow)
+                flags |= (int)rthsRaytraceFlags.IgnoreSelfShadow;
+
             m_renderer.BeginScene();
+            m_renderer.SetRaytraceFlags(flags);
             m_renderer.SetRenderTarget(m_shadowBuffer);
             m_renderer.SetCamera(cam);
             EnumerateLights(

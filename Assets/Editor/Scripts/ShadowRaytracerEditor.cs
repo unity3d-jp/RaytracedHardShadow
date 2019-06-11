@@ -24,9 +24,8 @@ namespace UTJ.RaytracedHardShadowEditor
             var so = serializedObject;
 
             EditorGUILayout.PropertyField(so.FindProperty("m_shadowBuffer"));
-            EditorGUILayout.Space();
-
             EditorGUILayout.PropertyField(so.FindProperty("m_camera"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_ignoreSelfShadow"));
             EditorGUILayout.Space();
 
             EditorGUILayout.PropertyField(so.FindProperty("m_lightScope"));

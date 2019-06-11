@@ -112,13 +112,13 @@ struct LightData
 };
 
 
-#define kMaxLights 16
+#define kMaxLights 32
 
 struct SceneData
 {
     CameraData camera;
 
-    int flags;
+    int raytrace_flags;
     int light_count;
     int pad1[2];
 

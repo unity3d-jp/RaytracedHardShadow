@@ -14,6 +14,7 @@ public:
     virtual void render() = 0;
     virtual void finish() = 0;
 
+    virtual void setRaytraceFlags(int flags) = 0;
     virtual void setRenderTarget(void *rt) = 0;
     virtual void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) = 0;
     virtual void addDirectionalLight(const float4x4& trans) = 0;
@@ -33,7 +34,7 @@ public:
 
     void beginScene() override;
     void endScene() override;
-
+    void setRaytraceFlags(int flags) override;
     void setRenderTarget(void *rt) override;
     void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) override;
     void addDirectionalLight(const float4x4& trans) override;

@@ -70,6 +70,13 @@ rthsAPI void rthsFinish(IRenderer *self)
     self->finish();
 }
 
+rthsAPI void rthsSetRaytraceFlags(IRenderer *self, int flags)
+{
+    if (!self)
+        return;
+    self->setRaytraceFlags(flags);
+}
+
 rthsAPI void rthsSetCamera(IRenderer *self, float4x4 transform, float4x4 view, float4x4 proj, float near_plane, float far_plane, float fov)
 {
     if (!self)

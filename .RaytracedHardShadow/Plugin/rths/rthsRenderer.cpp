@@ -14,12 +14,18 @@ RendererBase::~RendererBase()
 
 void RendererBase::beginScene()
 {
+    m_scene_data.raytrace_flags = 0;
     m_scene_data.light_count = 0;
     m_mesh_data.clear();
 }
 
 void RendererBase::endScene()
 {
+}
+
+void RendererBase::setRaytraceFlags(int flags)
+{
+    m_scene_data.raytrace_flags = flags;
 }
 
 void RendererBase::setRenderTarget(void *rt)

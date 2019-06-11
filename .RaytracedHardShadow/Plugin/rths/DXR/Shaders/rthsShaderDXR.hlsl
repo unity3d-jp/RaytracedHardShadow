@@ -3,8 +3,8 @@
 struct RayPayload
 {
     float shadow;
-    int recursion;
-    int light_index;
+    uint pass;
+    uint instance_id; // instance id for first ray
 };
 
 [shader("raygeneration")]
@@ -28,8 +28,8 @@ void RayGen()
 
     RayPayload payload;
     payload.shadow = 0.0;
-    payload.recursion = 0;
-    payload.light_index = 0;
+    payload.pass = 0;
+    payload.instance_id = 0;
 
     TraceRay(gRtScene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 0, 0, ray, payload);
     gOutput[screen_idx.xy] = payload.shadow;
@@ -38,16 +38,36 @@ void RayGen()
 [shader("miss")]
 void Miss(inout RayPayload payload : SV_RayPayload)
 {
-    if (payload.recursion == 1) {
+    if (payload.pass == 1) {
         payload.shadow += (1.0f / LightCount());
     }
 }
 
-[shader("closesthit")]
-void Hit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
+[shader("anyhit")]
+void AnyHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
-    if (payload.recursion == 0) {
-        payload.recursion += 1;
+    if (payload.pass == 1) {
+        // ignore self shadow
+        if (payload.instance_id == InstanceID()) {
+            IgnoreHit();
+        }
+    }
+}
+
+[shader("closesthit")]
+void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
+{
+    if (payload.pass == 0) {
+        payload.pass += 1;
+        payload.instance_id = InstanceID();
+
+        int rt_flags = RaytraceFlags();
+        int ray_flags = 0;
+        if ((rt_flags & RTFLAG_IGNORE_SELF_SHADOW) != 0)
+            ray_flags = RAY_FLAG_FORCE_NON_OPAQUE; // calling any hit shader require non-opaque flag
+        else
+            ray_flags = RAY_FLAG_FORCE_OPAQUE & RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
+        ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
         int li;
         for (li = 0; li < LightCount(); ++li) {
@@ -60,7 +80,7 @@ void Hit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectio
                 ray.Direction = -light.direction.xyz;
                 ray.TMin = 0.0f;
                 ray.TMax = CameraFarPlane();
-                TraceRay(gRtScene, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFF, 0, 0, 0, ray, payload);
+                TraceRay(gRtScene, ray_flags, 0xFF, 0, 0, 0, ray, payload);
             }
             else if (light.light_type == LIGHT_TYPE_SPOT) {
                 // spot light
@@ -73,7 +93,7 @@ void Hit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectio
                     ray.Direction = dir;
                     ray.TMin = 0.0f;
                     ray.TMax = distance;
-                    TraceRay(gRtScene, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFF, 0, 0, 0, ray, payload);
+                    TraceRay(gRtScene, ray_flags, 0xFF, 0, 0, 0, ray, payload);
                 }
             }
             else if (light.light_type == LIGHT_TYPE_POINT) {
@@ -88,7 +108,7 @@ void Hit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectio
                     ray.Direction = dir;
                     ray.TMin = 0.0f;
                     ray.TMax = distance;
-                    TraceRay(gRtScene, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFF, 0, 0, 0, ray, payload);
+                    TraceRay(gRtScene, ray_flags, 0xFF, 0, 0, 0, ray, payload);
                 }
             }
             else if (light.light_type == LIGHT_TYPE_REVERSE_POINT) {
@@ -103,13 +123,12 @@ void Hit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectio
                     ray.Direction = -dir;
                     ray.TMin = 0.0f;
                     ray.TMax = light.range - distance;
-                    TraceRay(gRtScene, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFF, 0, 0, 0, ray, payload);
+                    TraceRay(gRtScene, ray_flags, 0xFF, 0, 0, 0, ray, payload);
                 }
             }
-            ++payload.light_index;
         }
     }
     else {
-         // nothing to do for now
+        // nothing to do for now
     }
 }

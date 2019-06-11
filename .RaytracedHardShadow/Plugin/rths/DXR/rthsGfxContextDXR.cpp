@@ -13,7 +13,8 @@ namespace rths {
 
 static const WCHAR* kRayGenShader = L"RayGen";
 static const WCHAR* kMissShader = L"Miss";
-static const WCHAR* kClosestHitShader = L"Hit";
+static const WCHAR* kAnyHitShader = L"AnyHit";
+static const WCHAR* kClosestHitShader = L"ClosestHit";
 static const WCHAR* kHitGroup = L"HitGroup";
 
 const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
@@ -317,9 +318,10 @@ bool GfxContextDXR::initializeDevice()
         D3D12_EXPORT_DESC export_descs[] = {
             { kRayGenShader,     nullptr, D3D12_EXPORT_FLAG_NONE },
             { kMissShader,       nullptr, D3D12_EXPORT_FLAG_NONE },
+            { kAnyHitShader,     nullptr, D3D12_EXPORT_FLAG_NONE },
             { kClosestHitShader, nullptr, D3D12_EXPORT_FLAG_NONE },
         };
-        LPCWSTR exports[] = { kRayGenShader, kMissShader, kHitGroup };
+        LPCWSTR exports[] = { kRayGenShader, kMissShader, kAnyHitShader, kHitGroup };
 
         D3D12_DXIL_LIBRARY_DESC dxil_desc{};
         dxil_desc.DXILLibrary.pShaderBytecode = rthsShaderDXR;
@@ -331,7 +333,7 @@ bool GfxContextDXR::initializeDevice()
         D3D12_HIT_GROUP_DESC hit_desc{};
         hit_desc.HitGroupExport = kHitGroup;
         hit_desc.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-        hit_desc.AnyHitShaderImport = nullptr;
+        hit_desc.AnyHitShaderImport = kAnyHitShader;
         hit_desc.ClosestHitShaderImport = kClosestHitShader;
         hit_desc.IntersectionShaderImport = nullptr;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc);

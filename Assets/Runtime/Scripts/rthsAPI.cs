@@ -4,6 +4,13 @@ using UnityEngine;
 
 namespace UTJ.RaytracedHardShadow
 {
+    public enum rthsRaytraceFlags
+    {
+        None = 0,
+        IgnoreSelfShadow = 1,
+    }
+
+
     public struct rthsShadowRenderer
     {
         #region internal
@@ -13,6 +20,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsDestroyRenderer(IntPtr self);
 
         [DllImport("rths")] static extern void rthsUpdate(IntPtr self);
+        [DllImport("rths")] static extern void rthsSetRaytraceFlags(IntPtr self, int flags);
         [DllImport("rths")] static extern void rthsSetRenderTarget(IntPtr self, IntPtr rt);
         [DllImport("rths")] static extern void rthsBeginScene(IntPtr self);
         [DllImport("rths")] static extern void rthsEndScene(IntPtr self);
@@ -77,6 +85,11 @@ namespace UTJ.RaytracedHardShadow
         public void Finish()
         {
             rthsFinish(self);
+        }
+
+        public void SetRaytraceFlags(int flags)
+        {
+            rthsSetRaytraceFlags(self, flags);
         }
 
         public void SetCamera(Camera cam)

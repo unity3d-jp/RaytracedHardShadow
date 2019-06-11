@@ -1,4 +1,4 @@
-#define kMaxLights 16
+#define kMaxLights 32
 #define kRayOffset 0.0001f
 
 enum LightType
@@ -11,7 +11,7 @@ enum LightType
 
 enum RaytraceFlags
 {
-    FLAG_IGNORE_SELF_SHADOW = 1,
+    RTFLAG_IGNORE_SELF_SHADOW = 1,
 };
 
 struct CameraData
@@ -40,7 +40,7 @@ struct SceneData
 {
     CameraData camera;
 
-    int flags;
+    int raytrace_flags;
     int light_count;
     int2 pad1;
 
@@ -59,6 +59,8 @@ float3 CameraForward() { return -gScene.camera.view[2].xyz; }
 float CameraFocalLength() { return abs(gScene.camera.proj[1][1]); }
 float CameraNearPlane() { return gScene.camera.near_plane; }
 float CameraFarPlane() { return gScene.camera.far_plane; }
+
+int RaytraceFlags() { return gScene.raytrace_flags; }
 
 int LightCount() { return gScene.light_count; }
 LightData GetLight(int i) { return gScene.lights[i]; }
