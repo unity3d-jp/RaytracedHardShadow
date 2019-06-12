@@ -11,6 +11,8 @@
 
 namespace rths {
 
+extern ID3D12Device *g_unity_d3d12_device;
+
 static const WCHAR* kRayGenShader = L"RayGen";
 static const WCHAR* kMissShader = L"Miss";
 static const WCHAR* kAnyHitShader = L"AnyHit";
@@ -111,71 +113,89 @@ ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAG
 
 bool GfxContextDXR::initializeDevice()
 {
-    m_resource_translator = CreateResourceTranslator();
-    if (!m_resource_translator)
-        return false;
+    // check Unity's d3d12 device
+    if (g_unity_d3d12_device) {
+        g_unity_d3d12_device->QueryInterface(&m_device);
 
-#ifdef rthsEnableD3D12DebugLayer
-    {
-        // enable d3d12 debug features
-        ID3D12DebugPtr debug0;
-        if (SUCCEEDED(::D3D12GetDebugInterface(IID_PPV_ARGS(&debug0))))
-        {
-            // enable debug layer
-            debug0->EnableDebugLayer();
-
-#ifdef rthsEnableD3D12GBV
-            ID3D12Debug1Ptr debug1;
-            if (SUCCEEDED(debug0->QueryInterface(IID_PPV_ARGS(&debug1)))) {
-                debug1->SetEnableGPUBasedValidation(true);
-                debug1->SetEnableSynchronizedCommandQueueValidation(true);
-            }
-#endif
+        D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5{};
+        auto hr = g_unity_d3d12_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
+        if (SUCCEEDED(hr) && features5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
+            m_device = g_unity_d3d12_device;
         }
     }
+
+    // try to create d3d12 device
+    if (!m_device) {
+#ifdef rthsEnableD3D12DebugLayer
+        {
+            // enable d3d12 debug features
+            ID3D12DebugPtr debug0;
+            if (SUCCEEDED(::D3D12GetDebugInterface(IID_PPV_ARGS(&debug0))))
+            {
+                // enable debug layer
+                debug0->EnableDebugLayer();
+
+#ifdef rthsEnableD3D12GBV
+                ID3D12Debug1Ptr debug1;
+                if (SUCCEEDED(debug0->QueryInterface(IID_PPV_ARGS(&debug1)))) {
+                    debug1->SetEnableGPUBasedValidation(true);
+                    debug1->SetEnableSynchronizedCommandQueueValidation(true);
+                }
+#endif
+            }
+        }
 #endif
 
 #ifdef rthsEnableD3D12DREAD
-    {
-        ID3D12DeviceRemovedExtendedDataSettingsPtr dread_settings;
-        if (SUCCEEDED(::D3D12GetDebugInterface(IID_PPV_ARGS(&dread_settings)))) {
-            dread_settings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-            dread_settings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+        {
+            ID3D12DeviceRemovedExtendedDataSettingsPtr dread_settings;
+            if (SUCCEEDED(::D3D12GetDebugInterface(IID_PPV_ARGS(&dread_settings)))) {
+                dread_settings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+                dread_settings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+            }
         }
-    }
 #endif
 
-    IDXGIFactory4Ptr dxgi_factory;
-    ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
+        IDXGIFactory4Ptr dxgi_factory;
+        ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
 
-    // Find the HW adapter
-    IDXGIAdapter1Ptr adapter;
-    for (uint32_t i = 0; dxgi_factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++) {
-        DXGI_ADAPTER_DESC1 desc;
-        adapter->GetDesc1(&desc);
+        // Find the HW adapter
+        IDXGIAdapter1Ptr adapter;
+        for (uint32_t i = 0; dxgi_factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++) {
+            DXGI_ADAPTER_DESC1 desc;
+            adapter->GetDesc1(&desc);
 
-        // Skip SW adapters
-        if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-            continue;
+            // Skip SW adapters
+            if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+                continue;
 
-        // Create the device
-        ID3D12Device5Ptr device;
-        HRESULT hr = ::D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
-        if (FAILED(hr)) {
-            continue;
-        }
+            // Create the device
+            ID3D12Device5Ptr device;
+            HRESULT hr = ::D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
+            if (FAILED(hr)) {
+                continue;
+            }
 
-        D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5{};
-        hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
-        if (SUCCEEDED(hr) && features5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
-            m_device = device;
-            break;
+            D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5{};
+            hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
+            if (SUCCEEDED(hr) && features5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
+                m_device = device;
+                break;
+            }
         }
     }
+
+    // failed to create device (DXR is not supported)
     if (!m_device) {
         SetErrorLog("DXR is not supported on this device");
         return false;
     }
+
+    // resource translator
+    m_resource_translator = CreateResourceTranslator();
+    if (!m_resource_translator)
+        return false;
+
 
     // fence
     {

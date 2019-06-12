@@ -8,7 +8,7 @@ namespace rths {
 class ResourceTranslatorBase : public IResourceTranslator
 {
 protected:
-    ID3D12ResourcePtr createTemporaryTextureImpl(int width, int height);
+    ID3D12ResourcePtr createTemporaryTextureImpl(int width, int height, bool shared);
 };
 
 
@@ -52,6 +52,7 @@ public:
     BufferDataDXR translateBuffer(void *ptr) override;
 
     void executeAndWaitCopy();
+    void executeAndWaitResourceBarrier(ID3D12Resource *resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
 
 private:
     ID3D12DevicePtr m_unity_device;
@@ -60,6 +61,12 @@ private:
     uint64_t m_fence_value = 0;
     FenceEvent m_fence_event;
 
+    // command list for resource barrier
+    ID3D12CommandAllocatorPtr m_cmd_allocator;
+    ID3D12GraphicsCommandList4Ptr m_cmd_list;
+    ID3D12CommandQueuePtr m_cmd_queue;
+
+    // command list for copy
     ID3D12CommandAllocatorPtr m_cmd_allocator_copy;
     ID3D12GraphicsCommandList4Ptr m_cmd_list_copy;
     ID3D12CommandQueuePtr m_cmd_queue_copy;
@@ -68,7 +75,7 @@ private:
 
 
 
-ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, int height)
+ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, int height, bool shared)
 {
     // note: sharing textures with d3d11 requires some flags and restrictions:
     // - MipLevels must be 1
@@ -82,14 +89,17 @@ ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, 
     desc.Height = height;
     desc.DepthOrArraySize = 1;
     desc.MipLevels = 1;
-    desc.Format = DXGI_FORMAT_R32_FLOAT;
+    desc.Format = DXGI_FORMAT_R32_FLOAT; // typeless is not acceptable when enabling unordered access
     desc.SampleDesc.Count = 1;
     desc.SampleDesc.Quality = 0;
     desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
-
-    D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_SHARED;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE;
     D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COMMON;
+    if (shared) {
+        desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
+        flags |= D3D12_HEAP_FLAG_SHARED;
+    }
 
     ID3D12ResourcePtr ret;
     auto hr = GfxContextDXR::getInstance()->getDevice()->CreateCommittedResource(&kDefaultHeapProps, flags, &desc, initial_state, nullptr, IID_PPV_ARGS(&ret));
@@ -140,7 +150,7 @@ TextureDataDXR D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
     ret.texture = ptr;
     ret.width = src_desc.Width;
     ret.height = src_desc.Height;
-    ret.resource = createTemporaryTextureImpl(src_desc.Width, src_desc.Height);
+    ret.resource = createTemporaryTextureImpl(src_desc.Width, src_desc.Height, true);
 
     auto hr = GfxContextDXR::getInstance()->getDevice()->CreateSharedHandle(ret.resource, nullptr, GENERIC_ALL, nullptr, &ret.handle);
     if (SUCCEEDED(hr)) {
@@ -208,7 +218,19 @@ D3D12ResourceTranslator::D3D12ResourceTranslator(ID3D12Device *device)
 {
     m_unity_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
 
-    // command queue for read back
+    // command queue for resource barrier
+    {
+        {
+            D3D12_COMMAND_QUEUE_DESC desc{};
+            desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+            desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+            m_unity_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue));
+        }
+        m_unity_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
+        m_unity_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
+    }
+
+    // command queue for copy
     {
         D3D12_COMMAND_QUEUE_DESC desc{};
         desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -243,31 +265,32 @@ TextureDataDXR D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
     ret.texture = ptr;
     ret.width = (int)src_desc.Width;
     ret.height = (int)src_desc.Height;
-    ret.resource = createTemporaryTextureImpl((int)src_desc.Width, (int)src_desc.Height);
 
-    auto hr = GfxContextDXR::getInstance()->getDevice()->CreateSharedHandle(ret.resource, nullptr, GENERIC_ALL, nullptr, &ret.handle);
-    if (SUCCEEDED(hr)) {
-        hr = m_unity_device->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.temporary_d3d12));
+    // if unordered access is allowed, temporary texture is not needed
+    if ((src_desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0) {
+        ret.resource = tex_unity;
+    }
+    else {
+        ret.resource = createTemporaryTextureImpl((int)src_desc.Width, (int)src_desc.Height, false);
     }
     return ret;
 }
 
 void D3D12ResourceTranslator::applyTexture(TextureDataDXR& src)
 {
-    auto desc = src.temporary_d3d12->GetDesc();
+    // if unordered access is allowed. copy is not needed
+    if (src.resource == (ID3D12Resource*)src.texture)
+        return;
+
+    executeAndWaitResourceBarrier((ID3D12Resource*)src.texture, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON);
 
     D3D12_TEXTURE_COPY_LOCATION dst_loc{};
     dst_loc.pResource = (ID3D12Resource*)src.texture;
-    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst_loc.PlacedFootprint.Offset = 0;
-    dst_loc.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
-    dst_loc.PlacedFootprint.Footprint.Width = (UINT)desc.Width;
-    dst_loc.PlacedFootprint.Footprint.Height = (UINT)desc.Height;
-    dst_loc.PlacedFootprint.Footprint.Depth = 1;
-    dst_loc.PlacedFootprint.Footprint.RowPitch = (UINT)(desc.Width * 4); // 4: size of DXGI_FORMAT_R32_FLOAT. maybe need to be more flexible
+    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    dst_loc.SubresourceIndex = 0;
 
     D3D12_TEXTURE_COPY_LOCATION src_loc{};
-    src_loc.pResource = src.temporary_d3d12;
+    src_loc.pResource = src.resource;
     src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     src_loc.SubresourceIndex = 0;
 
@@ -275,6 +298,7 @@ void D3D12ResourceTranslator::applyTexture(TextureDataDXR& src)
     m_cmd_list_copy->Close();
     executeAndWaitCopy();
 
+    executeAndWaitResourceBarrier((ID3D12Resource*)src.texture, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ);
 }
 
 BufferDataDXR D3D12ResourceTranslator::translateBuffer(void *ptr)
@@ -284,33 +308,9 @@ BufferDataDXR D3D12ResourceTranslator::translateBuffer(void *ptr)
     auto buf_unity = (ID3D12Resource*)ptr;
     D3D12_RESOURCE_DESC src_desc = buf_unity->GetDesc();
 
-    // create temporary buffer that can be shared with DXR side
-    D3D12_RESOURCE_DESC desc = src_desc;
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    desc.Alignment = 0;
-    desc.Height = 1;
-    desc.DepthOrArraySize = 1;
-    desc.MipLevels = 1;
-    desc.Format = DXGI_FORMAT_UNKNOWN;
-    desc.SampleDesc.Count = 1;
-    desc.SampleDesc.Quality = 0;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-    HRESULT hr = m_unity_device->CreateCommittedResource(&kDefaultHeapProps, D3D12_HEAP_FLAG_SHARED, &desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-        IID_PPV_ARGS(&ret.temporary_d3d12));
-
-    if (SUCCEEDED(hr)) {
-        // copy contents to temporary
-        m_cmd_list_copy->CopyBufferRegion(ret.temporary_d3d12, 0, buf_unity, 0, desc.Width);
-        m_cmd_list_copy->Close();
-        executeAndWaitCopy();
-
-        auto hr = GfxContextDXR::getInstance()->getDevice()->CreateSharedHandle(ret.temporary_d3d12, nullptr, GENERIC_ALL, nullptr, &ret.handle);
-        if (SUCCEEDED(hr)) {
-            hr = m_unity_device->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.resource));
-        }
-    }
+    // on d3d12, buffer can be directly shared with DXR side
+    ret.resource = buf_unity;
+    ret.size = (int)src_desc.Width;
     return ret;
 }
 
@@ -326,6 +326,31 @@ void D3D12ResourceTranslator::executeAndWaitCopy()
 
     m_cmd_allocator_copy->Reset();
     m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+}
+
+void D3D12ResourceTranslator::executeAndWaitResourceBarrier(ID3D12Resource *resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after)
+{
+    {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = resource;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = before;
+        barrier.Transition.StateAfter = after;
+        m_cmd_list->ResourceBarrier(1, &barrier);
+    }
+    m_cmd_list->Close();
+
+    ID3D12CommandList* cmd_list = m_cmd_list.GetInterfacePtr();
+    m_cmd_queue->ExecuteCommandLists(1, &cmd_list);
+
+    auto fence_value = inclementFenceValue();
+    m_cmd_queue->Signal(m_fence, fence_value);
+    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
+    ::WaitForSingleObject(m_fence_event, INFINITE);
+
+    m_cmd_allocator->Reset();
+    m_cmd_list->Reset(m_cmd_allocator, nullptr);
 }
 
 

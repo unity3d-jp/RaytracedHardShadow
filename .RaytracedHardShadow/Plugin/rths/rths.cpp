@@ -140,11 +140,29 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
         g_unity_d3d11_device = unityInterfaces->Get<IUnityGraphicsD3D11>()->GetDevice();
         break;
     case kUnityGfxRendererD3D12:
-        g_unity_d3d12_device = unityInterfaces->Get<IUnityGraphicsD3D12>()->GetDevice();
+        if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12v5>()) {
+            g_unity_d3d12_device = ifs->GetDevice();
+        }
+        else if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12v4>()) {
+            g_unity_d3d12_device = ifs->GetDevice();
+        }
+        else if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12v3>()) {
+            g_unity_d3d12_device = ifs->GetDevice();
+        }
+        else if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12v2>()) {
+            g_unity_d3d12_device = ifs->GetDevice();
+        }
+        else if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12>()) {
+            g_unity_d3d12_device = ifs->GetDevice();
+        }
+        else {
+            // unknown IUnityGraphicsD3D12 version
+            SetErrorLog("Unknown IUnityGraphicsD3D12v5 version\n");
+        }
         break;
     default:
         // graphics API not supported
-        SetErrorLog("Graphics API must be D3D11 or D3D12");
+        SetErrorLog("Graphics API must be D3D11 or D3D12\n");
         return;
     }
 

@@ -74,7 +74,6 @@ struct TextureDataDXR
 
     ID3D12ResourcePtr  resource;
     ID3D11Texture2DPtr temporary_d3d11;
-    ID3D12ResourcePtr  temporary_d3d12;
     HANDLE handle = nullptr;
 };
 TextureID identifier(const TextureDataDXR& data);
@@ -86,7 +85,6 @@ struct BufferDataDXR
 
     ID3D12ResourcePtr resource;
     ID3D11BufferPtr   temporary_d3d11;
-    ID3D12ResourcePtr temporary_d3d12;
     HANDLE handle = nullptr;
 };
 
