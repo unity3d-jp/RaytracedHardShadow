@@ -220,15 +220,13 @@ D3D12ResourceTranslator::D3D12ResourceTranslator(ID3D12Device *device)
 
     // command queue for resource barrier
     {
-        {
-            D3D12_COMMAND_QUEUE_DESC desc{};
-            desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-            desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-            m_unity_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue));
-        }
-        m_unity_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
-        m_unity_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
+        D3D12_COMMAND_QUEUE_DESC desc{};
+        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+        m_unity_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue));
     }
+    m_unity_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
+    m_unity_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
 
     // command queue for copy
     {
@@ -266,7 +264,7 @@ TextureDataDXR D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
     ret.width = (int)src_desc.Width;
     ret.height = (int)src_desc.Height;
 
-    // if unordered access is allowed, temporary texture is not needed
+    // if unordered access is allowed, it can be directly used as DXR's result buffer. so temporary texture is not needed
     if ((src_desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0) {
         ret.resource = tex_unity;
     }
@@ -278,27 +276,18 @@ TextureDataDXR D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
 
 void D3D12ResourceTranslator::applyTexture(TextureDataDXR& src)
 {
-    // if unordered access is allowed. copy is not needed
-    if (src.resource == (ID3D12Resource*)src.texture)
+    auto tex_unity = (ID3D12Resource*)src.texture;
+    // copy is not needed if unordered access is allowed
+    if (src.resource == tex_unity)
         return;
 
-    executeAndWaitResourceBarrier((ID3D12Resource*)src.texture, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON);
+    executeAndWaitResourceBarrier(tex_unity, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON);
 
-    D3D12_TEXTURE_COPY_LOCATION dst_loc{};
-    dst_loc.pResource = (ID3D12Resource*)src.texture;
-    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dst_loc.SubresourceIndex = 0;
-
-    D3D12_TEXTURE_COPY_LOCATION src_loc{};
-    src_loc.pResource = src.resource;
-    src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    src_loc.SubresourceIndex = 0;
-
-    m_cmd_list_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
+    m_cmd_list_copy->CopyResource(tex_unity, src.resource);
     m_cmd_list_copy->Close();
     executeAndWaitCopy();
 
-    executeAndWaitResourceBarrier((ID3D12Resource*)src.texture, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ);
+    executeAndWaitResourceBarrier(tex_unity, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ);
 }
 
 BufferDataDXR D3D12ResourceTranslator::translateBuffer(void *ptr)
