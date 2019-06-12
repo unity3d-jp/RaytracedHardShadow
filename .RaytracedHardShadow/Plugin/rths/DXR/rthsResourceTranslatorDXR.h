@@ -14,8 +14,7 @@ public:
 
     virtual TextureDataDXR createTemporaryTexture(void *ptr) = 0;
     virtual void applyTexture(TextureDataDXR& tex) = 0;
-    virtual BufferDataDXR translateVertexBuffer(void *ptr) = 0;
-    virtual BufferDataDXR translateIndexBuffer(void *ptr) = 0;
+    virtual BufferDataDXR translateBuffer(void *ptr) = 0;
 };
 using IResourceTranslatorPtr = std::shared_ptr<IResourceTranslator>;
 

@@ -39,6 +39,7 @@ DefPtr(ID3D11Buffer);
 DefPtr(ID3D11Texture2D);
 DefPtr(ID3D11Query);
 DefPtr(ID3D11Fence);
+DefPtr(ID3D12Device);
 DefPtr(ID3D12Device5);
 DefPtr(ID3D12GraphicsCommandList4);
 DefPtr(ID3D12CommandQueue);
@@ -71,8 +72,9 @@ struct TextureDataDXR
     int width = 0;
     int height = 0;
 
-    ID3D12ResourcePtr resource;
+    ID3D12ResourcePtr  resource;
     ID3D11Texture2DPtr temporary_d3d11;
+    ID3D12ResourcePtr  temporary_d3d12;
     HANDLE handle = nullptr;
 };
 TextureID identifier(const TextureDataDXR& data);
@@ -83,7 +85,8 @@ struct BufferDataDXR
     int size = 0;
 
     ID3D12ResourcePtr resource;
-    ID3D11BufferPtr temporary_d3d11;
+    ID3D11BufferPtr   temporary_d3d11;
+    ID3D12ResourcePtr temporary_d3d12;
     HANDLE handle = nullptr;
 };
 

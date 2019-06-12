@@ -182,7 +182,7 @@ bool GfxContextDXR::initializeDevice()
         m_fence = m_resource_translator->getFence(m_device);
     }
 
-    // command queue related objects
+    // command queue for raytrace
     {
         {
             D3D12_COMMAND_QUEUE_DESC desc{};
@@ -194,8 +194,7 @@ bool GfxContextDXR::initializeDevice()
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
     }
 
-#ifdef rthsDebug
-    // command queue for read back (debug)
+    // command queue for read back
     {
         {
             D3D12_COMMAND_QUEUE_DESC desc{};
@@ -206,7 +205,6 @@ bool GfxContextDXR::initializeDevice()
         m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&m_cmd_allocator_copy));
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_cmd_allocator_copy, nullptr, IID_PPV_ARGS(&m_cmd_list_copy));
     }
-#endif
 
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
@@ -426,19 +424,11 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
 {
     m_mesh_instances.clear();
 
-    auto get_vertex_buffer = [this](void *buffer) {
+    auto translate_buffer = [this](void *buffer) {
         auto& record = m_buffer_records[buffer];
         ++record.used;
         if (!record.data.resource)
-            record.data = m_resource_translator->translateVertexBuffer(buffer);
-        return record.data;
-    };
-
-    auto get_index_buffer = [this](void *buffer) {
-        auto& record = m_buffer_records[buffer];
-        ++record.used;
-        if (!record.data.resource)
-            record.data = m_resource_translator->translateIndexBuffer(buffer);
+            record.data = m_resource_translator->translateBuffer(buffer);
         return record.data;
     };
 
@@ -457,7 +447,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
             data->index_offset = src.index_offset;
         }
         if (!data->vertex_buffer.resource) {
-            data->vertex_buffer = get_vertex_buffer(src.vertex_buffer);
+            data->vertex_buffer = translate_buffer(src.vertex_buffer);
             if (!data->vertex_buffer.resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate vertex buffer\n");
                 continue;
@@ -477,7 +467,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
 #endif
         }
         if (!data->index_buffer.resource) {
-            data->index_buffer = get_index_buffer(src.index_buffer);
+            data->index_buffer = translate_buffer(src.index_buffer);
             if (!data->index_buffer.resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate index buffer\n");
                 continue;
