@@ -31,7 +31,8 @@ void RayGen()
     payload.pass = 0;
     payload.instance_id = 0;
 
-    TraceRay(gRtScene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, 0xFF, 0, 0, 0, ray, payload);
+    int ray_flags = RAY_FLAG_FORCE_OPAQUE & RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+    TraceRay(gRtScene, ray_flags, 0xFF, 0, 0, 0, ray, payload);
     gOutput[screen_idx.xy] = payload.shadow;
 }
 
@@ -46,11 +47,14 @@ void Miss(inout RayPayload payload : SV_RayPayload)
 [shader("anyhit")]
 void AnyHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
-    if (payload.pass == 1) {
+    // this function is called only when ignore self shadow flag is enabled (RTFLAG_IGNORE_SELF_SHADOW) and payload.pass==1
+
+    if (payload.instance_id == InstanceID()) {
         // ignore self shadow
-        if (payload.instance_id == InstanceID()) {
-            IgnoreHit();
-        }
+        IgnoreHit();
+    }
+    else {
+        AcceptHitAndEndSearch();
     }
 }
 
@@ -61,13 +65,14 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
         payload.pass += 1;
         payload.instance_id = InstanceID();
 
+        // shoot ray from hit position to light
+
         int rt_flags = RaytraceFlags();
-        int ray_flags = 0;
+        int ray_flags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
         if ((rt_flags & RTFLAG_IGNORE_SELF_SHADOW) != 0)
-            ray_flags = RAY_FLAG_FORCE_NON_OPAQUE; // calling any hit shader require non-opaque flag
+            ray_flags |= RAY_FLAG_FORCE_NON_OPAQUE; // calling any hit shader require non-opaque flag
         else
-            ray_flags = RAY_FLAG_FORCE_OPAQUE & RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
-        ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+            ray_flags |= RAY_FLAG_FORCE_OPAQUE & RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
 
         int li;
         for (li = 0; li < LightCount(); ++li) {
@@ -87,7 +92,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 float3 pos = HitPosition();
                 float3 dir = normalize(light.position - pos);
                 float distance = length(light.position - pos);
-                if (angle_between(-dir, light.direction) * 2.0f <= light.spot_angle && distance < light.range) {
+                if (angle_between(-dir, light.direction) * 2.0f <= light.spot_angle && distance <= light.range) {
                     RayDesc ray;
                     ray.Origin = pos;
                     ray.Direction = dir;
@@ -102,7 +107,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 float3 dir = normalize(light.position - pos);
                 float distance = length(light.position - pos);
 
-                if (distance < light.range) {
+                if (distance <= light.range) {
                     RayDesc ray;
                     ray.Origin = pos;
                     ray.Direction = dir;
@@ -117,7 +122,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 float3 dir = normalize(light.position - pos);
                 float distance = length(light.position - pos);
 
-                if (distance < light.range) {
+                if (distance <= light.range) {
                     RayDesc ray;
                     ray.Origin = pos;
                     ray.Direction = -dir;
