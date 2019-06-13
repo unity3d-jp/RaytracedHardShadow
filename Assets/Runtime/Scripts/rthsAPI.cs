@@ -22,7 +22,7 @@ namespace UTJ.RaytracedHardShadow
 
         [DllImport("rths")] static extern void rthsUpdate(IntPtr self);
         [DllImport("rths")] static extern void rthsSetRaytraceFlags(IntPtr self, int flags);
-        [DllImport("rths")] static extern void rthsSetRayOffset(IntPtr self, float v);
+        [DllImport("rths")] static extern void rthsSetShadowRayOffset(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsSetSelfShadowThreshold(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsSetRenderTarget(IntPtr self, IntPtr rt);
         [DllImport("rths")] static extern void rthsBeginScene(IntPtr self);
@@ -94,9 +94,9 @@ namespace UTJ.RaytracedHardShadow
         {
             rthsSetRaytraceFlags(self, flags);
         }
-        public void SetRayOffset(float v)
+        public void SetShadowRayOffset(float v)
         {
-            rthsSetRayOffset(self, v);
+            rthsSetShadowRayOffset(self, v);
         }
         public void SetSelfShadowThreshold(float v)
         {

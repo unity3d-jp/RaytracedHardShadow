@@ -44,7 +44,7 @@ struct SceneData
     int light_count;
     int2 pad1;
 
-    float ray_offset;
+    float shadow_ray_offset;
     float self_shadow_threshold;
     float2 pad2;
 
@@ -65,13 +65,13 @@ float CameraNearPlane() { return gScene.camera.near_plane; }
 float CameraFarPlane() { return gScene.camera.far_plane; }
 
 int RaytraceFlags() { return gScene.raytrace_flags; }
-float RayOffset() { return gScene.ray_offset; }
+float ShadowRayOffset() { return gScene.shadow_ray_offset; }
 float SelfShadowThreshold() { return gScene.self_shadow_threshold; }
 
 int LightCount() { return gScene.light_count; }
 LightData GetLight(int i) { return gScene.lights[i]; }
 
-float3 HitPosition() { return WorldRayOrigin() + WorldRayDirection() * (RayTCurrent() - RayOffset()); }
+float3 HitPosition() { return WorldRayOrigin() + WorldRayDirection() * (RayTCurrent() - ShadowRayOffset()); }
 
 // a & b must be normalized
 float angle_between(float3 a, float3 b) { return acos(clamp(dot(a, b), 0, 1)); }

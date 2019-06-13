@@ -76,11 +76,11 @@ rthsAPI void rthsSetRaytraceFlags(IRenderer *self, int v)
         return;
     self->setRaytraceFlags(v);
 }
-rthsAPI void rthsSetRayOffset(IRenderer *self, float v)
+rthsAPI void rthsSetShadowRayOffset(IRenderer *self, float v)
 {
     if (!self)
         return;
-    self->setRayOffset(v);
+    self->setShadowRayOffset(v);
 }
 rthsAPI void rthsSetSelfShadowThreshold(IRenderer *self, float v)
 {

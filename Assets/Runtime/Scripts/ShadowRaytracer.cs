@@ -26,7 +26,7 @@ namespace UTJ.RaytracedHardShadow
 
         [SerializeField] bool m_ignoreSelfShadow = false;
         [SerializeField] bool m_keepSelfDropShadow = false;
-        [SerializeField] float m_rayOffset = 0.0001f;
+        [SerializeField] float m_shadowRayOffset = 0.0001f;
         [SerializeField] float m_selfShadowThreshold = 0.001f;
 
         [Tooltip("Light scope for shadow geometries.")]
@@ -335,7 +335,7 @@ namespace UTJ.RaytracedHardShadow
 
             m_renderer.BeginScene();
             m_renderer.SetRaytraceFlags(flags);
-            m_renderer.SetRayOffset(m_rayOffset);
+            m_renderer.SetShadowRayOffset(m_shadowRayOffset);
             m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
             m_renderer.SetRenderTarget(m_shadowBuffer);
             m_renderer.SetCamera(m_camera);

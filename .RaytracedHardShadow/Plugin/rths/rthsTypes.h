@@ -128,7 +128,7 @@ struct SceneData
     int light_count;
     int pad1[2];
 
-    float ray_offset;
+    float shadow_ray_offset;
     float self_shadow_threshold;
     float pad2[2];
 

@@ -15,7 +15,7 @@ public:
     virtual void finish() = 0;
 
     virtual void setRaytraceFlags(int flags) = 0;
-    virtual void setRayOffset(float v) = 0;
+    virtual void setShadowRayOffset(float v) = 0;
     virtual void setSelfShadowThreshold(float v) = 0;
 
     virtual void setRenderTarget(void *rt) = 0;
@@ -39,7 +39,7 @@ public:
     void endScene() override;
 
     void setRaytraceFlags(int flags) override;
-    void setRayOffset(float v) override;
+    void setShadowRayOffset(float v) override;
     void setSelfShadowThreshold(float v) override;
 
     void setRenderTarget(void *rt) override;

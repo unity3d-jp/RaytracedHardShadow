@@ -28,9 +28,9 @@ void RendererBase::setRaytraceFlags(int flags)
     m_scene_data.raytrace_flags = flags;
 }
 
-void RendererBase::setRayOffset(float v)
+void RendererBase::setShadowRayOffset(float v)
 {
-    m_scene_data.ray_offset = v;
+    m_scene_data.shadow_ray_offset = v;
 }
 
 void RendererBase::setSelfShadowThreshold(float v)

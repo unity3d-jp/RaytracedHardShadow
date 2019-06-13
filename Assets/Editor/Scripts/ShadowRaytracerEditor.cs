@@ -34,10 +34,11 @@ namespace UTJ.RaytracedHardShadowEditor
             {
                 EditorGUI.indentLevel++;
                 EditorGUILayout.PropertyField(so.FindProperty("m_keepSelfDropShadow"));
-                EditorGUILayout.PropertyField(so.FindProperty("m_selfShadowThreshold"));
+                if (t.keepSelfDropShadow)
+                    EditorGUILayout.PropertyField(so.FindProperty("m_selfShadowThreshold"));
                 EditorGUI.indentLevel--;
             }
-            EditorGUILayout.PropertyField(so.FindProperty("m_rayOffset"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_shadowRayOffset"));
             EditorGUILayout.Space();
 
             EditorGUILayout.PropertyField(so.FindProperty("m_lightScope"));
