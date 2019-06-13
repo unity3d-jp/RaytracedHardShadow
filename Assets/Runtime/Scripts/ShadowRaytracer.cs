@@ -18,10 +18,10 @@ namespace UTJ.RaytracedHardShadow
         }
 
         #region fields
-        [Tooltip("Output buffer. Must be R32F format.")]
         [SerializeField] RenderTexture m_shadowBuffer;
+        [SerializeField] string m_globalTextureName = "_RaytracedHardShadow";
+        [SerializeField] bool m_generateShadowBuffer = true;
 
-        [Tooltip("If this field is null, Camera.main will be used.")]
         [SerializeField] Camera m_camera;
 
         [SerializeField] bool m_ignoreSelfShadow = false;
@@ -49,6 +49,16 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_shadowBuffer; }
             set { m_shadowBuffer = value; }
+        }
+        public string globalTextureName
+        {
+            get { return m_globalTextureName; }
+            set { m_globalTextureName = value; }
+        }
+        public bool autoGenerateShadowBuffer
+        {
+            get { return m_generateShadowBuffer; }
+            set { m_generateShadowBuffer = value; }
         }
 
         public new Camera camera
@@ -261,14 +271,56 @@ namespace UTJ.RaytracedHardShadow
 
         void LateUpdate()
         {
-            if (!m_renderer || m_shadowBuffer == null)
+            if (!m_renderer)
+            {
                 return;
-            var cam = m_camera != null ? m_camera : Camera.main;
-            if (cam == null)
-                return;
+            }
 
-            if (!m_shadowBuffer.IsCreated())
-                m_shadowBuffer.Create();
+            if (m_camera == null)
+            {
+                m_camera = Camera.main;
+                if (m_camera == null)
+                    return;
+            }
+
+#if UNITY_EDITOR
+            // ignore asset RenderTexture
+            if (m_shadowBuffer != null && UnityEditor.AssetDatabase.GetAssetPath(m_shadowBuffer).Length != 0)
+            {
+                if (m_shadowBuffer.format != RenderTextureFormat.RFloat)
+                {
+                    Debug.Log("ShadowRaytracer: ShadowBuffer's format must be RFloat");
+                    return;
+                }
+                if (!m_shadowBuffer.IsCreated())
+                    m_shadowBuffer.Create();
+            }
+            else
+#endif
+            if (m_generateShadowBuffer)
+            {
+                var resolution = new Vector2Int(m_camera.pixelWidth, m_camera.pixelHeight);
+                if (m_shadowBuffer != null && (m_shadowBuffer.width != resolution.x || m_shadowBuffer.height != resolution.y))
+                {
+                    m_shadowBuffer.Release();
+                    m_shadowBuffer = null;
+                }
+                if (m_shadowBuffer == null)
+                {
+                    m_shadowBuffer = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RFloat);
+                    m_shadowBuffer.name = "RaytracedHardShadow";
+                    m_shadowBuffer.enableRandomWrite = true; // enable unordered access
+                    m_shadowBuffer.Create();
+                    if (m_globalTextureName != null && m_globalTextureName.Length != 0)
+                        Shader.SetGlobalTexture(m_globalTextureName, m_shadowBuffer);
+                }
+            }
+
+            if (m_shadowBuffer == null)
+            {
+                Debug.Log("ShadowRaytracer: output ShadowBuffer is null");
+                return;
+            }
 
             int flags = 0;
             if(m_ignoreSelfShadow)
@@ -277,7 +329,7 @@ namespace UTJ.RaytracedHardShadow
             m_renderer.BeginScene();
             m_renderer.SetRaytraceFlags(flags);
             m_renderer.SetRenderTarget(m_shadowBuffer);
-            m_renderer.SetCamera(cam);
+            m_renderer.SetCamera(m_camera);
             EnumerateLights(
                 l => { m_renderer.AddLight(l); },
                 scl => { m_renderer.AddLight(scl); }
