@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
@@ -43,7 +44,9 @@ namespace UTJ.RaytracedHardShadow
 #endif
         [SerializeField] GameObject[] m_geometryObjects;
 
-        rthsShadowRenderer m_renderer;
+        rthsRenderer m_renderer;
+
+        static int s_instanceCount, s_updateCount;
         #endregion
 
 
@@ -260,39 +263,46 @@ namespace UTJ.RaytracedHardShadow
 
         void OnEnable()
         {
-            m_renderer = rthsShadowRenderer.Create();
-            if (!m_renderer)
+            m_renderer = rthsRenderer.Create();
+            if (m_renderer)
             {
-                Debug.Log("ShadowRenderer: " + rthsShadowRenderer.errorLog);
+                ++s_instanceCount;
+            }
+            else
+            {
+                Debug.Log("ShadowRenderer: " + rthsRenderer.errorLog);
             }
         }
 
         void OnDisable()
         {
-            m_renderer.Destroy();
+            if (m_renderer)
+            {
+                m_renderer.Destroy();
+                --s_instanceCount;
+            }
         }
 
         void Update()
         {
-            m_renderer.Update();
+            s_updateCount = 0;
         }
 
         void LateUpdate()
         {
             if (!m_renderer)
-            {
                 return;
-            }
 
             if (m_camera == null)
             {
                 m_camera = Camera.main;
                 if (m_camera == null)
-                    return;
+                {
+                    Debug.LogWarning("ShadowRaytracer: camera is null");
+                }
             }
 
 #if UNITY_EDITOR
-            // ignore asset RenderTexture
             if (m_shadowBuffer != null && UnityEditor.AssetDatabase.GetAssetPath(m_shadowBuffer).Length != 0)
             {
                 if (!m_shadowBuffer.IsCreated())
@@ -302,6 +312,8 @@ namespace UTJ.RaytracedHardShadow
 #endif
             if (m_generateShadowBuffer)
             {
+                // create output buffer if not assigned, and fit output buffer size to camera resolution
+
                 var resolution = new Vector2Int(m_camera.pixelWidth, m_camera.pixelHeight);
                 if (m_shadowBuffer != null && (m_shadowBuffer.width != resolution.x || m_shadowBuffer.height != resolution.y))
                 {
@@ -318,39 +330,44 @@ namespace UTJ.RaytracedHardShadow
                         Shader.SetGlobalTexture(m_globalTextureName, m_shadowBuffer);
                 }
             }
-
             if (m_shadowBuffer == null)
             {
-                Debug.Log("ShadowRaytracer: output ShadowBuffer is null");
-                return;
+                Debug.LogWarning("ShadowRaytracer: output ShadowBuffer is null");
             }
 
-            int flags = 0;
-            if (m_ignoreSelfShadow)
+            if (m_camera != null && m_shadowBuffer != null)
             {
-                flags |= (int)rthsRaytraceFlags.IgnoreSelfShadow;
-                if (m_keepSelfDropShadow)
-                    flags |= (int)rthsRaytraceFlags.KeepSelfDropShadow;
+                int flags = 0;
+                if (m_ignoreSelfShadow)
+                {
+                    flags |= (int)rthsRaytraceFlags.IgnoreSelfShadow;
+                    if (m_keepSelfDropShadow)
+                        flags |= (int)rthsRaytraceFlags.KeepSelfDropShadow;
+                }
+
+                m_renderer.BeginScene();
+                m_renderer.SetRaytraceFlags(flags);
+                m_renderer.SetShadowRayOffset(m_shadowRayOffset);
+                m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
+                m_renderer.SetRenderTarget(m_shadowBuffer);
+                m_renderer.SetCamera(m_camera);
+                EnumerateLights(
+                    l => { m_renderer.AddLight(l); },
+                    scl => { m_renderer.AddLight(scl); }
+                    );
+                EnumerateMeshRenderers(
+                    mr => { m_renderer.AddMesh(mr); },
+                    smr => { m_renderer.AddMesh(smr); }
+                    );
+                m_renderer.EndScene();
             }
 
-            m_renderer.BeginScene();
-            m_renderer.SetRaytraceFlags(flags);
-            m_renderer.SetShadowRayOffset(m_shadowRayOffset);
-            m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
-            m_renderer.SetRenderTarget(m_shadowBuffer);
-            m_renderer.SetCamera(m_camera);
-            EnumerateLights(
-                l => { m_renderer.AddLight(l); },
-                scl => { m_renderer.AddLight(scl); }
-                );
-            EnumerateMeshRenderers(
-                mr => { m_renderer.AddMesh(mr); },
-                smr => { m_renderer.AddMesh(smr); }
-                );
-            m_renderer.EndScene();
-
-            m_renderer.Render();
-            m_renderer.Finish();
+            if (++s_updateCount == s_instanceCount)
+            {
+                // last instance issue render event.
+                // all renderers do actual rendering tasks in render thread.
+                rthsRenderer.IssueRender();
+            }
         }
     }
 }

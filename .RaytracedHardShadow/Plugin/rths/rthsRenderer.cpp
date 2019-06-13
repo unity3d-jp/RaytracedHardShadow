@@ -4,12 +4,16 @@
 
 namespace rths {
 
+static std::vector<RendererBase*> g_renderers;
+
 RendererBase::RendererBase()
 {
+    g_renderers.push_back(this);
 }
 
 RendererBase::~RendererBase()
 {
+    g_renderers.erase(std::find(g_renderers.begin(), g_renderers.end(), this));
 }
 
 void RendererBase::beginScene()
@@ -114,6 +118,28 @@ void RendererBase::addMesh(const float4x4& trans, void *vb, void *ib, int vertex
     tmp.is_dynamic = is_dynamic;
     tmp.transform = to_float3x4(trans);
     m_mesh_data.push_back(std::move(tmp));
+}
+
+} // namespace rths
+
+
+#ifdef _WIN32
+    #include "DXR/rthsGfxContextDXR.h"
+#endif
+
+namespace rths {
+
+void RenderAll()
+{
+    for (auto renderer : g_renderers) {
+        renderer->render();
+        renderer->finish();
+    }
+
+#ifdef _WIN32
+    if(auto ctx = GfxContextDXR::getInstance())
+        ctx->releaseUnusedResources();
+#endif
 }
 
 } // namespace rths

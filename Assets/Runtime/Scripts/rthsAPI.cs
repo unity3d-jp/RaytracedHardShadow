@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace UTJ.RaytracedHardShadow
 {
@@ -12,7 +13,7 @@ namespace UTJ.RaytracedHardShadow
     }
 
 
-    public struct rthsShadowRenderer
+    public struct rthsRenderer
     {
         #region internal
         public IntPtr self;
@@ -20,15 +21,12 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsCreateRenderer();
         [DllImport("rths")] static extern void rthsDestroyRenderer(IntPtr self);
 
-        [DllImport("rths")] static extern void rthsUpdate(IntPtr self);
+        [DllImport("rths")] static extern void rthsBeginScene(IntPtr self);
+        [DllImport("rths")] static extern void rthsEndScene(IntPtr self);
         [DllImport("rths")] static extern void rthsSetRaytraceFlags(IntPtr self, int flags);
         [DllImport("rths")] static extern void rthsSetShadowRayOffset(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsSetSelfShadowThreshold(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsSetRenderTarget(IntPtr self, IntPtr rt);
-        [DllImport("rths")] static extern void rthsBeginScene(IntPtr self);
-        [DllImport("rths")] static extern void rthsEndScene(IntPtr self);
-        [DllImport("rths")] static extern void rthsRender(IntPtr self);
-        [DllImport("rths")] static extern void rthsFinish(IntPtr self);
         [DllImport("rths")] static extern void rthsSetCamera(IntPtr self, Matrix4x4 trans, Matrix4x4 view, Matrix4x4 proj, float near, float far, float fov);
         [DllImport("rths")] static extern void rthsAddDirectionalLight(IntPtr self, Matrix4x4 trans);
         [DllImport("rths")] static extern void rthsAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
@@ -36,6 +34,8 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
         [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans,
             IntPtr vb, IntPtr ib, int vertexCount, uint indexBits, uint indexCount, uint indexOffset, byte isDynamic);
+
+        [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
 
         public static string S(IntPtr cstring)
         {
@@ -47,22 +47,17 @@ namespace UTJ.RaytracedHardShadow
             get { return S(rthsGetErrorLog()); }
         }
 
-        public static implicit operator bool(rthsShadowRenderer v) { return v.self != IntPtr.Zero; }
-        public static rthsShadowRenderer Create()
+        public static implicit operator bool(rthsRenderer v) { return v.self != IntPtr.Zero; }
+        public static rthsRenderer Create()
         {
             // rthsCreateRenderer() will return null if DXR is not supported
-            return new rthsShadowRenderer { self = rthsCreateRenderer() };
+            return new rthsRenderer { self = rthsCreateRenderer() };
         }
 
         public void Destroy()
         {
             rthsDestroyRenderer(self);
             self = IntPtr.Zero;
-        }
-
-        public void Update()
-        {
-            rthsUpdate(self);
         }
 
         public void SetRenderTarget(RenderTexture rt)
@@ -78,16 +73,6 @@ namespace UTJ.RaytracedHardShadow
         public void EndScene()
         {
             rthsEndScene(self);
-        }
-
-        public void Render()
-        {
-            rthsRender(self);
-        }
-
-        public void Finish()
-        {
-            rthsFinish(self);
         }
 
         public void SetRaytraceFlags(int flags)
@@ -206,6 +191,15 @@ namespace UTJ.RaytracedHardShadow
                         mesh.vertexCount, indexBits, mesh.GetIndexCount(smi), mesh.GetIndexStart(smi), isDynamic);
                 }
             }
+        }
+
+        public static void IssueRender()
+        {
+            GL.IssuePluginEvent(rthsGetRenderAll(), 0);
+        }
+        public static void IssueRender(CommandBuffer cb)
+        {
+            cb.IssuePluginEvent(rthsGetRenderAll(), 0);
         }
     }
 }

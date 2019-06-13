@@ -28,13 +28,6 @@ rthsAPI void rthsDestroyRenderer(IRenderer *self)
     delete self;
 }
 
-rthsAPI void rthsUpdate(IRenderer *self)
-{
-    if (!self)
-        return;
-    self->update();
-}
-
 rthsAPI void rthsSetRenderTarget(IRenderer *self, void *render_target)
 {
     if (!self || !render_target)
@@ -169,7 +162,8 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
         }
         else {
             // unknown IUnityGraphicsD3D12 version
-            SetErrorLog("Unknown IUnityGraphicsD3D12v5 version\n");
+            SetErrorLog("Unknown IUnityGraphicsD3D12 version\n");
+            return;
         }
         break;
     default:
@@ -180,4 +174,25 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
 
     GfxContextDXR::initializeInstance();
 #endif // _WIN32
+}
+
+// Unity plugin unload event
+extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
+UnityPluginUnload()
+{
+    using namespace rths;
+#ifdef _WIN32
+    GfxContextDXR::finalizeInstance();
+#endif // _WIN32
+}
+
+
+static void UNITY_INTERFACE_API rthsRenderAll(int)
+{
+    rths::RenderAll();
+}
+extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
+rthsGetRenderAll()
+{
+    return rthsRenderAll;
 }
