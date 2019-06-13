@@ -28,6 +28,16 @@ void RendererBase::setRaytraceFlags(int flags)
     m_scene_data.raytrace_flags = flags;
 }
 
+void RendererBase::setRayOffset(float v)
+{
+    m_scene_data.ray_offset = v;
+}
+
+void RendererBase::setSelfShadowThreshold(float v)
+{
+    m_scene_data.self_shadow_threshold = v;
+}
+
 void RendererBase::setRenderTarget(void *rt)
 {
     m_render_target.texture = rt;

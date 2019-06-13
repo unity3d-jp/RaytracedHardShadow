@@ -52,7 +52,7 @@ void AnyHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersec
 
     if (payload.instance_id == InstanceID()) {
         int rt_flags = RaytraceFlags();
-        if ((rt_flags & RTFLAG_KEEP_SELF_DROP_SHADOW) == 0 || (payload.primitive_index == PrimitiveIndex() || RayTCurrent() < kRayOffset * 10.0f)) {
+        if ((rt_flags & RTFLAG_KEEP_SELF_DROP_SHADOW) == 0 || (payload.primitive_index == PrimitiveIndex() || RayTCurrent() < SelfShadowThreshold())) {
             // ignore self shadow
             IgnoreHit();
             return;
