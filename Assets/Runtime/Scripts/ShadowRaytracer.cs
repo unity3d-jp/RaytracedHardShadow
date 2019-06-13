@@ -293,11 +293,6 @@ namespace UTJ.RaytracedHardShadow
             // ignore asset RenderTexture
             if (m_shadowBuffer != null && UnityEditor.AssetDatabase.GetAssetPath(m_shadowBuffer).Length != 0)
             {
-                if (m_shadowBuffer.format != RenderTextureFormat.RFloat)
-                {
-                    Debug.Log("ShadowRaytracer: ShadowBuffer's format must be RFloat");
-                    return;
-                }
                 if (!m_shadowBuffer.IsCreated())
                     m_shadowBuffer.Create();
             }
@@ -313,7 +308,7 @@ namespace UTJ.RaytracedHardShadow
                 }
                 if (m_shadowBuffer == null)
                 {
-                    m_shadowBuffer = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RFloat);
+                    m_shadowBuffer = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RHalf);
                     m_shadowBuffer.name = "RaytracedHardShadow";
                     m_shadowBuffer.enableRandomWrite = true; // enable unordered access
                     m_shadowBuffer.Create();

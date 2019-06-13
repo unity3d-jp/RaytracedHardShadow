@@ -418,10 +418,9 @@ void GfxContextDXR::setRenderTarget(TextureData& rt)
 
     m_render_target = record.data;
 
-    auto desc = m_render_target.resource->GetDesc();
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    uav_desc.Format = desc.Format;
+    uav_desc.Format = GetTypedFormat(m_render_target.format); // typeless is not allowed for unordered access view
     uav_desc.Texture2D.MipSlice = 0;
     uav_desc.Texture2D.PlaneSlice = 0;
     m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
@@ -880,7 +879,8 @@ void GfxContextDXR::flush()
         }
     }
 
-    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    D3D12_RESOURCE_STATES prev_state = D3D12_RESOURCE_STATE_COMMON;
+    addResourceBarrier(m_render_target.resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // dispatch rays
     {
@@ -921,7 +921,7 @@ void GfxContextDXR::flush()
         m_cmd_list->DispatchRays(&dr_desc);
     }
 
-    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
 
     submitCommandList();
     m_flushing = true;

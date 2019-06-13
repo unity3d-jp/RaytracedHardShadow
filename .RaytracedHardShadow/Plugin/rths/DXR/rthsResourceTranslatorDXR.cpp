@@ -8,7 +8,7 @@ namespace rths {
 class ResourceTranslatorBase : public IResourceTranslator
 {
 protected:
-    ID3D12ResourcePtr createTemporaryTextureImpl(int width, int height, bool shared);
+    ID3D12ResourcePtr createTemporaryTextureImpl(int width, int height, DXGI_FORMAT format, bool shared);
 };
 
 
@@ -75,7 +75,7 @@ private:
 
 
 
-ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, int height, bool shared)
+ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, int height, DXGI_FORMAT format, bool shared)
 {
     // note: sharing textures with d3d11 requires some flags and restrictions:
     // - MipLevels must be 1
@@ -89,7 +89,7 @@ ID3D12ResourcePtr ResourceTranslatorBase::createTemporaryTextureImpl(int width, 
     desc.Height = height;
     desc.DepthOrArraySize = 1;
     desc.MipLevels = 1;
-    desc.Format = DXGI_FORMAT_R32_FLOAT; // typeless is not acceptable when enabling unordered access
+    desc.Format = format;
     desc.SampleDesc.Count = 1;
     desc.SampleDesc.Quality = 0;
     desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -150,7 +150,8 @@ TextureDataDXR D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
     ret.texture = ptr;
     ret.width = src_desc.Width;
     ret.height = src_desc.Height;
-    ret.resource = createTemporaryTextureImpl(src_desc.Width, src_desc.Height, true);
+    ret.format = src_desc.Format;
+    ret.resource = createTemporaryTextureImpl(ret.width, ret.height, ret.format, true);
 
     auto hr = GfxContextDXR::getInstance()->getDevice()->CreateSharedHandle(ret.resource, nullptr, GENERIC_ALL, nullptr, &ret.handle);
     if (SUCCEEDED(hr)) {
@@ -263,13 +264,14 @@ TextureDataDXR D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
     ret.texture = ptr;
     ret.width = (int)src_desc.Width;
     ret.height = (int)src_desc.Height;
+    ret.format = src_desc.Format;
 
     // if unordered access is allowed, it can be directly used as DXR's result buffer. so temporary texture is not needed
     if ((src_desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0) {
         ret.resource = tex_unity;
     }
     else {
-        ret.resource = createTemporaryTextureImpl((int)src_desc.Width, (int)src_desc.Height, false);
+        ret.resource = createTemporaryTextureImpl(ret.width, ret.height, ret.format, false);
     }
     return ret;
 }

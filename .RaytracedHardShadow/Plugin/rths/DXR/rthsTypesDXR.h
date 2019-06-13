@@ -72,6 +72,7 @@ struct TextureDataDXR
     int width = 0;
     int height = 0;
 
+    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
     ID3D12ResourcePtr  resource;
     ID3D11Texture2DPtr temporary_d3d11;
     HANDLE handle = nullptr;
@@ -131,6 +132,8 @@ public:
 private:
     HANDLE m_handle = nullptr;
 };
+
+DXGI_FORMAT GetTypedFormat(DXGI_FORMAT format);
 
 } // namespace rths
 #endif // _WIN32
