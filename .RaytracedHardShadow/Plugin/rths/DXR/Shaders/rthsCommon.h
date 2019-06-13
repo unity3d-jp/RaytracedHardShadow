@@ -12,6 +12,7 @@ enum LightType
 enum RaytraceFlags
 {
     RTFLAG_IGNORE_SELF_SHADOW = 1,
+    RTFLAG_KEEP_SELF_DROP_SHADOW = 2,
 };
 
 struct CameraData

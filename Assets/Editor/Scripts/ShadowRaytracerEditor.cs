@@ -30,6 +30,12 @@ namespace UTJ.RaytracedHardShadowEditor
 
             EditorGUILayout.PropertyField(so.FindProperty("m_camera"));
             EditorGUILayout.PropertyField(so.FindProperty("m_ignoreSelfShadow"));
+            if (t.ignoreSelfShadow)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(so.FindProperty("m_keepSelfDropShadow"));
+                EditorGUI.indentLevel--;
+            }
             EditorGUILayout.Space();
 
             EditorGUILayout.PropertyField(so.FindProperty("m_lightScope"));

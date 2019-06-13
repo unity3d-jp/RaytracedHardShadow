@@ -4,7 +4,8 @@ struct RayPayload
 {
     float shadow;
     uint pass;
-    uint instance_id; // instance id for first ray
+    uint instance_id;     // 
+    uint primitive_index; // instance & primitive id for first ray
 };
 
 [shader("raygeneration")]
@@ -50,12 +51,14 @@ void AnyHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersec
     // this function is called only when ignore self shadow flag is enabled (RTFLAG_IGNORE_SELF_SHADOW) and payload.pass==1
 
     if (payload.instance_id == InstanceID()) {
-        // ignore self shadow
-        IgnoreHit();
+        int rt_flags = RaytraceFlags();
+        if ((rt_flags & RTFLAG_KEEP_SELF_DROP_SHADOW) == 0 || (payload.primitive_index == PrimitiveIndex() || RayTCurrent() < kRayOffset * 10.0f)) {
+            // ignore self shadow
+            IgnoreHit();
+            return;
+        }
     }
-    else {
-        AcceptHitAndEndSearch();
-    }
+    AcceptHitAndEndSearch();
 }
 
 [shader("closesthit")]
@@ -64,6 +67,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
     if (payload.pass == 0) {
         payload.pass += 1;
         payload.instance_id = InstanceID();
+        payload.primitive_index = PrimitiveIndex();
 
         // shoot ray from hit position to light
 

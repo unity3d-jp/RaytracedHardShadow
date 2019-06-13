@@ -115,12 +115,13 @@ bool GfxContextDXR::initializeDevice()
 {
     // check Unity's d3d12 device
     if (g_unity_d3d12_device) {
-        g_unity_d3d12_device->QueryInterface(&m_device);
-
-        D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5{};
-        auto hr = g_unity_d3d12_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
-        if (SUCCEEDED(hr) && features5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
-            m_device = g_unity_d3d12_device;
+        auto hr = g_unity_d3d12_device->QueryInterface(&m_device);
+        if (SUCCEEDED(hr)) {
+            D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5{};
+            hr = g_unity_d3d12_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
+            if (SUCCEEDED(hr) && features5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
+                m_device = g_unity_d3d12_device;
+            }
         }
     }
 

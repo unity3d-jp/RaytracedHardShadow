@@ -25,6 +25,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] Camera m_camera;
 
         [SerializeField] bool m_ignoreSelfShadow = false;
+        [SerializeField] bool m_keepSelfDropShadow = false;
 
         [Tooltip("Light scope for shadow geometries.")]
         [SerializeField] ObjectScope m_lightScope;
@@ -71,6 +72,11 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_ignoreSelfShadow; }
             set { m_ignoreSelfShadow = value; }
+        }
+        public bool keepSelfDropShadow
+        {
+            get { return m_keepSelfDropShadow; }
+            set { m_keepSelfDropShadow = value; }
         }
 
         public ObjectScope lightScope
@@ -323,8 +329,12 @@ namespace UTJ.RaytracedHardShadow
             }
 
             int flags = 0;
-            if(m_ignoreSelfShadow)
+            if (m_ignoreSelfShadow)
+            {
                 flags |= (int)rthsRaytraceFlags.IgnoreSelfShadow;
+                if (m_keepSelfDropShadow)
+                    flags |= (int)rthsRaytraceFlags.KeepSelfDropShadow;
+            }
 
             m_renderer.BeginScene();
             m_renderer.SetRaytraceFlags(flags);

@@ -92,6 +92,12 @@ struct CameraData
     float pad1;
 };
 
+enum class RaytraceFlags : int
+{
+    IgnoreSelfShadow = 1,
+    KeepSelfDropShadow = 2,
+};
+
 enum class LightType : int
 {
     Directional = 1,

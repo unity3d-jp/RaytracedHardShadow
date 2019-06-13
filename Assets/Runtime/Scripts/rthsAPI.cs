@@ -8,6 +8,7 @@ namespace UTJ.RaytracedHardShadow
     {
         None = 0,
         IgnoreSelfShadow = 1,
+        KeepSelfDropShadow = 2,
     }
 
 
