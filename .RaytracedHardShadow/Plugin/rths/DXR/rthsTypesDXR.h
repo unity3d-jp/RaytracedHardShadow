@@ -30,6 +30,7 @@ DefPtr(IDXGISwapChain3);
 DefPtr(IDXGIFactory4);
 DefPtr(IDXGIAdapter1);
 DefPtr(IDXGIResource);
+DefPtr(IDXGIResource1);
 DefPtr(IDxcBlobEncoding);
 DefPtr(ID3D11Device);
 DefPtr(ID3D11Device5);

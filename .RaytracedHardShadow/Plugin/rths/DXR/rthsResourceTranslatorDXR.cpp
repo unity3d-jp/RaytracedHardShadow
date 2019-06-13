@@ -158,6 +158,35 @@ TextureDataDXR D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
         // note: ID3D11Device::OpenSharedHandle() doesn't accept handles created by d3d12. ID3D11Device1::OpenSharedHandle1() is needed.
         hr = m_unity_device->OpenSharedResource1(ret.handle, IID_PPV_ARGS(&ret.temporary_d3d11));
     }
+
+#if 0
+    {
+        // create shareable texture from d3d11
+        // (todo: creating resource and output result from DXR works but sharing content with d3d11 side seems don't work)
+        D3D11_TEXTURE2D_DESC desc{};
+        desc.Width = ret.width;
+        desc.Height = ret.height;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = ret.format;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_UNORDERED_ACCESS;
+        desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX | D3D11_RESOURCE_MISC_SHARED_NTHANDLE;
+        auto hr = m_unity_device->CreateTexture2D(&desc, nullptr, &ret.temporary_d3d11);
+        if (SUCCEEDED(hr)) {
+            IDXGIResource1Ptr ires;
+            hr = ret.temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
+            if (SUCCEEDED(hr)) {
+                hr = ires->CreateSharedHandle(nullptr, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE, nullptr, &ret.handle);
+                if (SUCCEEDED(hr)) {
+                    hr = GfxContextDXR::getInstance()->getDevice()->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.resource));
+                }
+            }
+        }
+    }
+#endif
     return ret;
 }
 
