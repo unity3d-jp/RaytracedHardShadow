@@ -133,50 +133,6 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-
-        public void AddMesh(GameObject go)
-        {
-            {
-                var mr = go.GetComponent<MeshRenderer>();
-                if (mr != null)
-                    AddMesh(mr);
-            }
-            {
-                var smr = go.GetComponent<SkinnedMeshRenderer>();
-                if (smr != null)
-                    AddMesh(smr);
-            }
-        }
-
-        public void AddMesh(MeshRenderer mr, bool forceDynamic = false)
-        {
-            var mf = mr.GetComponent<MeshFilter>();
-            var mesh = mf.sharedMesh;
-            if (mesh == null)
-                return;
-
-            AddMesh(mesh, mr.transform.localToWorldMatrix, false);
-        }
-
-        public void AddMesh(SkinnedMeshRenderer smr, bool forceDynamic = false)
-        {
-            if (smr.sharedMesh == null)
-                return;
-
-            var sharedMesh = smr.sharedMesh;
-            if (smr.rootBone != null || sharedMesh.blendShapeCount != 0 || smr.GetComponent<Cloth>() != null)
-            {
-                // mesh is skinned or has blendshapes or cloth. in this case bake is needed.
-                var mesh = new Mesh();
-                smr.BakeMesh(mesh);
-                AddMesh(mesh, smr.transform.localToWorldMatrix, true);
-            }
-            else
-            {
-                AddMesh(smr.sharedMesh, smr.transform.localToWorldMatrix, forceDynamic);
-            }
-        }
-
         public void AddMesh(Mesh mesh, Matrix4x4 trans, bool isDynamic_)
         {
             uint indexBits = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 16u : 32u;

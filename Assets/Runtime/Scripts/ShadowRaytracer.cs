@@ -1,5 +1,5 @@
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
@@ -11,12 +11,15 @@ namespace UTJ.RaytracedHardShadow
     [ExecuteInEditMode]
     public class ShadowRaytracer : MonoBehaviour
     {
+        #region types
         public enum ObjectScope
         {
             EntireScene,
             SelectedScenes,
             SelectedObjects,
         }
+        #endregion
+
 
         #region fields
         [SerializeField] RenderTexture m_shadowBuffer;
@@ -47,6 +50,7 @@ namespace UTJ.RaytracedHardShadow
         rthsRenderer m_renderer;
 
         static int s_instanceCount, s_updateCount;
+        static Dictionary<Component, Mesh> s_meshCache;
         #endregion
 
 
@@ -123,6 +127,7 @@ namespace UTJ.RaytracedHardShadow
         #endregion
 
 
+        #region impl
         public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
         {
             if (m_lightScope == ObjectScope.EntireScene)
@@ -188,6 +193,63 @@ namespace UTJ.RaytracedHardShadow
         }
 
 
+        // mesh cache serves two purposes:
+        // 1. prevent multiple SkinnedMeshRenderer.Bake() if there are multiple ShadowRaytracers
+        //    this is just for optimization.
+        // 2. prevent unexpected GC
+        //    without cache, temporary meshes created by SkinnedMeshRenderer.Bake() may be GCed and can cause error or crash in render thread.
+
+        Mesh GetCachedMesh(Component c)
+        {
+            Mesh ret = null;
+            s_meshCache.TryGetValue(c, out ret);
+            return ret;
+        }
+        void CacheMesh(Component c, Mesh mesh)
+        {
+            s_meshCache.Add(c, mesh);
+        }
+        void ClearMeshCache()
+        {
+            s_meshCache.Clear();
+        }
+
+        Mesh GetMesh(MeshRenderer mr)
+        {
+            var ret = GetCachedMesh(mr);
+            if (ret == null)
+            {
+                var mf = mr.GetComponent<MeshFilter>();
+                ret = mf.sharedMesh;
+                if (ret != null)
+                    CacheMesh(mr, ret);
+            }
+            return ret;
+        }
+
+        Mesh GetMesh(SkinnedMeshRenderer smr)
+        {
+            var ret = GetCachedMesh(smr);
+            if (ret == null)
+            {
+                var sharedMesh = smr.sharedMesh;
+                if (smr.rootBone != null || sharedMesh.blendShapeCount != 0 || smr.GetComponent<Cloth>() != null)
+                {
+                    // mesh is skinned or has blendshapes or cloth. bake is needed.
+                    ret = new Mesh();
+                    smr.BakeMesh(ret);
+                    CacheMesh(smr, ret);
+                    return ret;
+                }
+                else
+                {
+                    ret = sharedMesh;
+                    CacheMesh(smr, ret);
+                }
+            }
+            return ret;
+        }
+
         public void EnumerateMeshRenderers(Action<MeshRenderer> bodyMR, Action<SkinnedMeshRenderer> bodySMR)
         {
             if (m_geometryScope == ObjectScope.EntireScene)
@@ -251,6 +313,8 @@ namespace UTJ.RaytracedHardShadow
                 }
             }
         }
+#endregion
+
 
 #if UNITY_EDITOR
         void Reset()
@@ -267,6 +331,9 @@ namespace UTJ.RaytracedHardShadow
             if (m_renderer)
             {
                 ++s_instanceCount;
+
+                if (s_meshCache == null)
+                    s_meshCache = new Dictionary<Component, Mesh>();
             }
             else
             {
@@ -285,7 +352,12 @@ namespace UTJ.RaytracedHardShadow
 
         void Update()
         {
-            s_updateCount = 0;
+            // first instance reset count and clear cache
+            if (s_updateCount != 0)
+            {
+                s_updateCount = 0;
+                ClearMeshCache();
+            }
         }
 
         void LateUpdate()
@@ -303,7 +375,7 @@ namespace UTJ.RaytracedHardShadow
             }
 
 #if UNITY_EDITOR
-            if (m_shadowBuffer != null && UnityEditor.AssetDatabase.GetAssetPath(m_shadowBuffer).Length != 0)
+            if (m_shadowBuffer != null && AssetDatabase.Contains(m_shadowBuffer))
             {
                 if (!m_shadowBuffer.IsCreated())
                     m_shadowBuffer.Create();
@@ -312,7 +384,7 @@ namespace UTJ.RaytracedHardShadow
 #endif
             if (m_generateShadowBuffer)
             {
-                // create output buffer if not assigned, and fit output buffer size to camera resolution
+                // create output buffer if not assigned. fit its size to camera resolution if already assigned.
 
                 var resolution = new Vector2Int(m_camera.pixelWidth, m_camera.pixelHeight);
                 if (m_shadowBuffer != null && (m_shadowBuffer.width != resolution.x || m_shadowBuffer.height != resolution.y))
@@ -356,8 +428,8 @@ namespace UTJ.RaytracedHardShadow
                     scl => { m_renderer.AddLight(scl); }
                     );
                 EnumerateMeshRenderers(
-                    mr => { m_renderer.AddMesh(mr); },
-                    smr => { m_renderer.AddMesh(smr); }
+                    mr => { m_renderer.AddMesh(GetMesh(mr), mr.transform.localToWorldMatrix, false); },
+                    smr => { m_renderer.AddMesh(GetMesh(smr), smr.transform.localToWorldMatrix, true); }
                     );
                 m_renderer.EndScene();
             }
