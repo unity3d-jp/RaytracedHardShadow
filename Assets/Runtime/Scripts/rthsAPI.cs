@@ -5,6 +5,14 @@ using UnityEngine.Rendering;
 
 namespace UTJ.RaytracedHardShadow
 {
+    public static class Misc
+    {
+        public static string CString(IntPtr ptr)
+        {
+            return ptr == IntPtr.Zero ? "" : Marshal.PtrToStringAnsi(ptr);
+        }
+    }
+
     public enum rthsRaytraceFlags
     {
         None = 0,
@@ -36,15 +44,11 @@ namespace UTJ.RaytracedHardShadow
             IntPtr vb, IntPtr ib, int vertexCount, uint indexBits, uint indexCount, uint indexOffset, byte isDynamic);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
-
-        public static string S(IntPtr cstring)
-        {
-            return cstring == IntPtr.Zero ? "" : Marshal.PtrToStringAnsi(cstring);
-        }
         #endregion
+
         public static string errorLog
         {
-            get { return S(rthsGetErrorLog()); }
+            get { return Misc.CString(rthsGetErrorLog()); }
         }
 
         public static implicit operator bool(rthsRenderer v) { return v.self != IntPtr.Zero; }

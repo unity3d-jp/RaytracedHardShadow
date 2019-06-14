@@ -11,7 +11,7 @@
 
 namespace rths {
 
-extern ID3D12Device *g_unity_d3d12_device;
+extern ID3D12Device *g_host_d3d12_device;
 
 static const WCHAR* kRayGenShader = L"RayGen";
 static const WCHAR* kMissShader = L"Miss";
@@ -56,16 +56,14 @@ static inline std::string ToString(ID3DBlob *blob)
 
 
 static int g_gfx_initialize_count = 0;
-static GfxContextDXR *g_gfx_context;
+static std::unique_ptr<GfxContextDXR> g_gfx_context;
 
 bool GfxContextDXR::initializeInstance()
 {
     if (g_gfx_initialize_count++ == 0) {
-        g_gfx_context = new GfxContextDXR();
-        if (!g_gfx_context->valid()) {
-            delete g_gfx_context;
-            g_gfx_context = nullptr;
-        }
+        g_gfx_context = std::make_unique<GfxContextDXR>();
+        if (!g_gfx_context->valid())
+            g_gfx_context.reset();
     }
     return g_gfx_context != nullptr;
 }
@@ -73,15 +71,14 @@ bool GfxContextDXR::initializeInstance()
 void GfxContextDXR::finalizeInstance()
 {
     if (--g_gfx_initialize_count == 0) {
-        delete g_gfx_context;
-        g_gfx_context = nullptr;
+        g_gfx_context.reset();
     }
 }
 
 
 GfxContextDXR* GfxContextDXR::getInstance()
 {
-    return g_gfx_context;
+    return g_gfx_context.get();
 }
 
 GfxContextDXR::GfxContextDXR()
@@ -115,14 +112,14 @@ ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAG
 
 bool GfxContextDXR::initializeDevice()
 {
-    // check Unity's d3d12 device
-    if (g_unity_d3d12_device) {
-        auto hr = g_unity_d3d12_device->QueryInterface(&m_device);
+    // check host d3d12 device
+    if (g_host_d3d12_device) {
+        auto hr = g_host_d3d12_device->QueryInterface(&m_device);
         if (SUCCEEDED(hr)) {
             D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5{};
-            hr = g_unity_d3d12_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
+            hr = g_host_d3d12_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
             if (SUCCEEDED(hr) && features5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
-                m_device = g_unity_d3d12_device;
+                m_device = g_host_d3d12_device;
             }
         }
     }

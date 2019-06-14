@@ -137,7 +137,7 @@ struct SceneData
 
 struct TextureData
 {
-    void *texture = nullptr; // unity
+    void *texture = nullptr; // host
     int width = 0;
     int height = 0;
 };
@@ -156,8 +156,8 @@ using BufferID = void*;
 
 struct MeshData
 {
-    void *vertex_buffer = nullptr; // unity
-    void *index_buffer = nullptr; // unity
+    void *vertex_buffer = nullptr; // host
+    void *index_buffer = nullptr; // host
     int vertex_count = 0;
     int index_bits = 0;
     int index_count = 0;

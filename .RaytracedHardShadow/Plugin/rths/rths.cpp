@@ -123,13 +123,29 @@ rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform,
     self->addMesh(transform, vb, ib, vertex_count, index_bits, index_count, index_offset, is_dynamic);
 }
 
+rthsAPI void rthsRenderAll()
+{
+    rths::RenderAll();
+}
+
 
 #ifdef _WIN32
 namespace rths {
-    extern ID3D11Device *g_unity_d3d11_device;
-    extern ID3D12Device *g_unity_d3d12_device;
+    extern ID3D11Device *g_host_d3d11_device;
+    extern ID3D12Device *g_host_d3d12_device;
 } // namespace rths
+
+rthsAPI void rthsSetHostD3D11Device(ID3D11Device *device)
+{
+    rths::g_host_d3d11_device = device;
+}
+
+rthsAPI void rthsSetHostD3D12Device(ID3D12Device *device)
+{
+    rths::g_host_d3d12_device = device;
+}
 #endif // _WIN32
+
 
 // Unity plugin load event
 extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
@@ -140,23 +156,23 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
     auto* graphics = unityInterfaces->Get<IUnityGraphics>();
     switch (graphics->GetRenderer()) {
     case kUnityGfxRendererD3D11:
-        g_unity_d3d11_device = unityInterfaces->Get<IUnityGraphicsD3D11>()->GetDevice();
+        g_host_d3d11_device = unityInterfaces->Get<IUnityGraphicsD3D11>()->GetDevice();
         break;
     case kUnityGfxRendererD3D12:
         if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12v5>()) {
-            g_unity_d3d12_device = ifs->GetDevice();
+            g_host_d3d12_device = ifs->GetDevice();
         }
         else if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12v4>()) {
-            g_unity_d3d12_device = ifs->GetDevice();
+            g_host_d3d12_device = ifs->GetDevice();
         }
         else if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12v3>()) {
-            g_unity_d3d12_device = ifs->GetDevice();
+            g_host_d3d12_device = ifs->GetDevice();
         }
         else if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12v2>()) {
-            g_unity_d3d12_device = ifs->GetDevice();
+            g_host_d3d12_device = ifs->GetDevice();
         }
         else if (auto ifs = unityInterfaces->Get<IUnityGraphicsD3D12>()) {
-            g_unity_d3d12_device = ifs->GetDevice();
+            g_host_d3d12_device = ifs->GetDevice();
         }
         else {
             // unknown IUnityGraphicsD3D12 version
@@ -172,13 +188,13 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
 #endif // _WIN32
 }
 
-
-static void UNITY_INTERFACE_API rthsRenderAll(int)
+static void UNITY_INTERFACE_API _RenderAll(int)
 {
     rths::RenderAll();
 }
+
 extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
 rthsGetRenderAll()
 {
-    return rthsRenderAll;
+    return _RenderAll;
 }

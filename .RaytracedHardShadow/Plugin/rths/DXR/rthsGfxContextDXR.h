@@ -37,6 +37,9 @@ public:
     void executeAndWaitCopy();
 
 private:
+    friend std::unique_ptr<GfxContextDXR> std::make_unique<GfxContextDXR>();
+    friend struct std::default_delete<GfxContextDXR>;
+
     GfxContextDXR();
     ~GfxContextDXR();
 

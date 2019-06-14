@@ -69,7 +69,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
         payload.instance_id = InstanceID();
         payload.primitive_index = PrimitiveIndex();
 
-        // shoot ray from hit position to light
+        // shoot shadow ray (hit position -> light)
 
         int rt_flags = RaytraceFlags();
         int ray_flags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
@@ -96,7 +96,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 float3 pos = HitPosition();
                 float3 dir = normalize(light.position - pos);
                 float distance = length(light.position - pos);
-                if (angle_between(-dir, light.direction) * 2.0f <= light.spot_angle && distance <= light.range) {
+                if (distance <= light.range && angle_between(-dir, light.direction) * 2.0f <= light.spot_angle) {
                     RayDesc ray;
                     ray.Origin = pos;
                     ray.Direction = dir;

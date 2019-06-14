@@ -70,7 +70,7 @@ DefPtr(IDxcBlob);
 class TextureDataDXR
 {
 public:
-    void *texture = nullptr; // unity
+    void *texture = nullptr; // host
     int width = 0;
     int height = 0;
 
@@ -90,7 +90,7 @@ TextureID identifier(const TextureDataDXR& data);
 class BufferDataDXR
 {
 public:
-    void *buffer = nullptr; // unity
+    void *buffer = nullptr; // host
     int size = 0;
 
     ID3D12ResourcePtr resource;
