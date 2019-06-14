@@ -3,12 +3,6 @@
 #include "rthsLog.h"
 #include "rthsRenderer.h"
 
-#ifdef _WIN32
-    #define rthsAPI extern "C" __declspec(dllexport)
-#else
-    #define rthsAPI extern "C" 
-#endif
-
 using namespace rths;
 
 rthsAPI const char* rthsGetErrorLog()
@@ -45,20 +39,6 @@ rthsAPI void rthsEndScene(IRenderer *self)
     if (!self)
         return;
     self->endScene();
-}
-
-rthsAPI void rthsRender(IRenderer *self)
-{
-    if (!self)
-        return;
-    self->render();
-}
-
-rthsAPI void rthsFinish(IRenderer *self)
-{
-    if (!self)
-        return;
-    self->finish();
 }
 
 rthsAPI void rthsSetRaytraceFlags(IRenderer *self, int v)
@@ -121,6 +101,20 @@ rthsAPI void rthsAddMesh(IRenderer *self, float4x4 transform,
     if (!self || !vb || !ib)
         return;
     self->addMesh(transform, vb, ib, vertex_count, index_bits, index_count, index_offset, is_dynamic);
+}
+
+rthsAPI void rthsRender(IRenderer *self)
+{
+    if (!self)
+        return;
+    self->render();
+}
+
+rthsAPI void rthsFinish(IRenderer *self)
+{
+    if (!self)
+        return;
+    self->finish();
 }
 
 rthsAPI void rthsRenderAll()

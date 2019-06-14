@@ -39,3 +39,5 @@
 #include <locale>
 #include <codecvt>
 #include <chrono>
+
+#define rthsImpl

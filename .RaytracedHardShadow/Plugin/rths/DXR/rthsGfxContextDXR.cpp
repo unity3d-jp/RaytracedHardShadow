@@ -90,6 +90,16 @@ GfxContextDXR::~GfxContextDXR()
 {
 }
 
+DescriptorHandle GfxContextDXR::allocateHandle()
+{
+    DescriptorHandle ret;
+    ret.hcpu = m_srvuav_cpu_handle_base;
+    ret.hgpu = m_srvuav_gpu_handle_base;
+    m_srvuav_cpu_handle_base.ptr += m_desc_handle_stride;
+    m_srvuav_gpu_handle_base.ptr += m_desc_handle_stride;
+    return ret;
+}
+
 ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)
 {
     D3D12_RESOURCE_DESC desc{};
@@ -107,6 +117,28 @@ ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAG
 
     ID3D12ResourcePtr ret;
     m_device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, state, nullptr, IID_PPV_ARGS(&ret));
+    return ret;
+}
+
+ID3D12ResourcePtr GfxContextDXR::createTexture(int width, int height, DXGI_FORMAT format)
+{
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Alignment = 0;
+    desc.Width = width;
+    desc.Height = height;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = format;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE;
+    D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_COMMON;
+
+    ID3D12ResourcePtr ret;
+    auto hr = GfxContextDXR::getInstance()->getDevice()->CreateCommittedResource(&kDefaultHeapProps, flags, &desc, initial_state, nullptr, IID_PPV_ARGS(&ret));
     return ret;
 }
 
@@ -226,9 +258,10 @@ bool GfxContextDXR::initializeDevice()
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_cmd_allocator_copy, nullptr, IID_PPV_ARGS(&m_cmd_list_copy));
     }
 
+    // descriptor heap
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
-        desc.NumDescriptors = 64;
+        desc.NumDescriptors = 256;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvuav_heap));
@@ -236,18 +269,9 @@ bool GfxContextDXR::initializeDevice()
         m_srvuav_gpu_handle_base = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart();
         m_desc_handle_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
 
-        auto alloc_handle = [this]() {
-            DescriptorHandle ret;
-            ret.hcpu = m_srvuav_cpu_handle_base;
-            ret.hgpu = m_srvuav_gpu_handle_base;
-            m_srvuav_cpu_handle_base.ptr += m_desc_handle_stride;
-            m_srvuav_gpu_handle_base.ptr += m_desc_handle_stride;
-            return ret;
-        };
-
-        m_render_target_handle = alloc_handle();
-        m_tlas_handle = alloc_handle();
-        m_scene_buffer_handle = alloc_handle();
+        m_render_target_handle = allocateHandle();
+        m_tlas_handle = allocateHandle();
+        m_scene_buffer_handle = allocateHandle();
     }
 
     // scene constant buffer
