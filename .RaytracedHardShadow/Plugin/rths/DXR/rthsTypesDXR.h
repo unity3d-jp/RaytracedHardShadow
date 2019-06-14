@@ -67,8 +67,9 @@ DefPtr(IDxcOperationResult);
 DefPtr(IDxcBlob);
 #undef DefPtr
 
-struct TextureDataDXR
+class TextureDataDXR
 {
+public:
     void *texture = nullptr; // unity
     int width = 0;
     int height = 0;
@@ -77,35 +78,51 @@ struct TextureDataDXR
     ID3D12ResourcePtr  resource;
     ID3D11Texture2DPtr temporary_d3d11;
     HANDLE handle = nullptr;
+    bool is_nt_handle = false;
+    int use_count = 0;
+
+    TextureDataDXR();
+    ~TextureDataDXR();
 };
+using TextureDataDXRPtr = std::shared_ptr<TextureDataDXR>;
 TextureID identifier(const TextureDataDXR& data);
 
-struct BufferDataDXR
+class BufferDataDXR
 {
+public:
     void *buffer = nullptr; // unity
     int size = 0;
 
     ID3D12ResourcePtr resource;
     ID3D11BufferPtr   temporary_d3d11;
     HANDLE handle = nullptr;
-};
+    bool is_nt_handle = false;
+    int use_count = 0;
 
-struct MeshDataDXR
+    BufferDataDXR();
+    ~BufferDataDXR();
+};
+using BufferDataDXRPtr = std::shared_ptr<BufferDataDXR>;
+
+class MeshDataDXR
 {
-    BufferDataDXR vertex_buffer;
-    BufferDataDXR index_buffer;
+public:
+    BufferDataDXRPtr vertex_buffer;
+    BufferDataDXRPtr index_buffer;
     int vertex_count = 0;
     int index_bits = 0;
     int index_count = 0;
     int index_offset = 0;
+    int use_count = 0;
 
     ID3D12ResourcePtr blas; // bottom level acceleration structure
 };
-MeshID identifier(const MeshDataDXR& data);
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
+MeshID identifier(const MeshDataDXR& data);
 
-struct MeshInstanceDXR
+class MeshInstanceDXR
 {
+public:
     MeshDataDXRPtr mesh;
     float3x4 transform;
 };

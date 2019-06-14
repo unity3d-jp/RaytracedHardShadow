@@ -21,10 +21,12 @@ private:
 
 RendererDXR::RendererDXR()
 {
+    GfxContextDXR::initializeInstance();
 }
 
 RendererDXR::~RendererDXR()
 {
+    GfxContextDXR::finalizeInstance();
 }
 
 void RendererDXR::render()
@@ -47,8 +49,6 @@ void RendererDXR::finish()
 
 IRenderer* CreateRendererDXR()
 {
-    if (!GfxContextDXR::initializeInstance())
-        return nullptr;
     return new RendererDXR();
 }
 

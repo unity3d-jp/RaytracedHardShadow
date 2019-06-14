@@ -5,8 +5,6 @@
 
 #ifdef _WIN32
     #define rthsAPI extern "C" __declspec(dllexport)
-    #include "DXR/rthsGfxContextDXR.h"
-    #include "DXR/rthsResourceTranslatorDXR.h"
 #else
     #define rthsAPI extern "C" 
 #endif
@@ -171,18 +169,6 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
         SetErrorLog("Graphics API must be D3D11 or D3D12\n");
         return;
     }
-
-    GfxContextDXR::initializeInstance();
-#endif // _WIN32
-}
-
-// Unity plugin unload event
-extern "C" void UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
-UnityPluginUnload()
-{
-    using namespace rths;
-#ifdef _WIN32
-    GfxContextDXR::finalizeInstance();
 #endif // _WIN32
 }
 

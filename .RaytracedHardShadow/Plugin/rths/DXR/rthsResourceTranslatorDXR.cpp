@@ -21,9 +21,9 @@ public:
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
     uint64_t inclementFenceValue() override;
 
-    TextureDataDXR createTemporaryTexture(void *ptr) override;
+    TextureDataDXRPtr createTemporaryTexture(void *ptr) override;
     void applyTexture(TextureDataDXR& tex) override;
-    BufferDataDXR translateBuffer(void *ptr) override;
+    BufferDataDXRPtr translateBuffer(void *ptr) override;
 
     void copyResource(ID3D11Resource *dst, ID3D11Resource *src);
 
@@ -47,9 +47,9 @@ public:
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
     uint64_t inclementFenceValue() override;
 
-    TextureDataDXR createTemporaryTexture(void *ptr) override;
+    TextureDataDXRPtr createTemporaryTexture(void *ptr) override;
     void applyTexture(TextureDataDXR& tex) override;
-    BufferDataDXR translateBuffer(void *ptr) override;
+    BufferDataDXRPtr translateBuffer(void *ptr) override;
 
     void executeAndWaitCopy();
     void executeAndWaitResourceBarrier(ID3D12Resource *resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
@@ -139,24 +139,25 @@ uint64_t D3D11ResourceTranslator::inclementFenceValue()
 }
 
 
-TextureDataDXR D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
+TextureDataDXRPtr D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
 {
-    TextureDataDXR ret;
+    auto ret = std::make_shared<TextureDataDXR>();
 
     auto tex_unity = (ID3D11Texture2D*)ptr;
     D3D11_TEXTURE2D_DESC src_desc{};
     tex_unity->GetDesc(&src_desc);
 
-    ret.texture = ptr;
-    ret.width = src_desc.Width;
-    ret.height = src_desc.Height;
-    ret.format = src_desc.Format;
-    ret.resource = createTemporaryTextureImpl(ret.width, ret.height, ret.format, true);
+    ret->texture = ptr;
+    ret->width = src_desc.Width;
+    ret->height = src_desc.Height;
+    ret->format = src_desc.Format;
+    ret->resource = createTemporaryTextureImpl(ret->width, ret->height, ret->format, true);
 
-    auto hr = GfxContextDXR::getInstance()->getDevice()->CreateSharedHandle(ret.resource, nullptr, GENERIC_ALL, nullptr, &ret.handle);
+    auto hr = GfxContextDXR::getInstance()->getDevice()->CreateSharedHandle(ret->resource, nullptr, GENERIC_ALL, nullptr, &ret->handle);
     if (SUCCEEDED(hr)) {
         // note: ID3D11Device::OpenSharedHandle() doesn't accept handles created by d3d12. ID3D11Device1::OpenSharedHandle1() is needed.
-        hr = m_unity_device->OpenSharedResource1(ret.handle, IID_PPV_ARGS(&ret.temporary_d3d11));
+        hr = m_unity_device->OpenSharedResource1(ret->handle, IID_PPV_ARGS(&ret->temporary_d3d11));
+        ret->is_nt_handle = true;
     }
 
 #if 0
@@ -197,10 +198,10 @@ void D3D11ResourceTranslator::applyTexture(TextureDataDXR& src)
     }
 }
 
-BufferDataDXR D3D11ResourceTranslator::translateBuffer(void *ptr)
+BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(void *ptr)
 {
-    BufferDataDXR ret;
-    ret.buffer = ptr;
+    auto ret = std::make_shared<BufferDataDXR>();
+    ret->buffer = ptr;
 
     auto buf_unity = (ID3D11Buffer*)ptr;
     D3D11_BUFFER_DESC src_desc{};
@@ -212,18 +213,18 @@ BufferDataDXR D3D11ResourceTranslator::translateBuffer(void *ptr)
     tmp_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
     tmp_desc.CPUAccessFlags = 0;
     tmp_desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-    HRESULT hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret.temporary_d3d11);
+    HRESULT hr = m_unity_device->CreateBuffer(&tmp_desc, nullptr, &ret->temporary_d3d11);
     if (SUCCEEDED(hr)) {
         // copy contents to temporary
-        copyResource(ret.temporary_d3d11, buf_unity);
+        copyResource(ret->temporary_d3d11, buf_unity);
 
         // translate temporary as d3d12 resource
         IDXGIResourcePtr ires;
-        hr = ret.temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
+        hr = ret->temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
         if (SUCCEEDED(hr)) {
-            hr = ires->GetSharedHandle(&ret.handle);
-            hr = GfxContextDXR::getInstance()->getDevice()->OpenSharedHandle(ret.handle, IID_PPV_ARGS(&ret.resource));
-            ret.size = src_desc.ByteWidth;
+            hr = ires->GetSharedHandle(&ret->handle); // note: this handle is *NOT* NT handle
+            hr = GfxContextDXR::getInstance()->getDevice()->OpenSharedHandle(ret->handle, IID_PPV_ARGS(&ret->resource));
+            ret->size = src_desc.ByteWidth;
         }
     }
     return ret;
@@ -283,24 +284,24 @@ uint64_t D3D12ResourceTranslator::inclementFenceValue()
     return ++m_fence_value;
 }
 
-TextureDataDXR D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
+TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
 {
-    TextureDataDXR ret;
+    auto ret = std::make_shared<TextureDataDXR>();
 
     auto tex_unity = (ID3D12Resource*)ptr;
     D3D12_RESOURCE_DESC src_desc = tex_unity->GetDesc();
 
-    ret.texture = ptr;
-    ret.width = (int)src_desc.Width;
-    ret.height = (int)src_desc.Height;
-    ret.format = src_desc.Format;
+    ret->texture = ptr;
+    ret->width = (int)src_desc.Width;
+    ret->height = (int)src_desc.Height;
+    ret->format = src_desc.Format;
 
     // if unordered access is allowed, it can be directly used as DXR's result buffer. so temporary texture is not needed
     if ((src_desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0) {
-        ret.resource = tex_unity;
+        ret->resource = tex_unity;
     }
     else {
-        ret.resource = createTemporaryTextureImpl(ret.width, ret.height, ret.format, false);
+        ret->resource = createTemporaryTextureImpl(ret->width, ret->height, ret->format, false);
     }
     return ret;
 }
@@ -321,16 +322,16 @@ void D3D12ResourceTranslator::applyTexture(TextureDataDXR& src)
     executeAndWaitResourceBarrier(tex_unity, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ);
 }
 
-BufferDataDXR D3D12ResourceTranslator::translateBuffer(void *ptr)
+BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(void *ptr)
 {
-    BufferDataDXR ret;
+    auto ret = std::make_shared<BufferDataDXR>();
 
     auto buf_unity = (ID3D12Resource*)ptr;
     D3D12_RESOURCE_DESC src_desc = buf_unity->GetDesc();
 
     // on d3d12, buffer can be directly shared with DXR side
-    ret.resource = buf_unity;
-    ret.size = (int)src_desc.Width;
+    ret->resource = buf_unity;
+    ret->size = (int)src_desc.Width;
     return ret;
 }
 

@@ -4,6 +4,16 @@
 
 namespace rths {
 
+TextureDataDXR::TextureDataDXR()
+{
+}
+
+TextureDataDXR::~TextureDataDXR()
+{
+    if (handle && is_nt_handle)
+        ::CloseHandle(handle);
+}
+
 TextureID identifier(const TextureDataDXR& data)
 {
     TextureID ret;
@@ -13,11 +23,23 @@ TextureID identifier(const TextureDataDXR& data)
     return ret;
 }
 
+BufferDataDXR::BufferDataDXR()
+{
+}
+
+BufferDataDXR::~BufferDataDXR()
+{
+    if (handle && is_nt_handle)
+        ::CloseHandle(handle);
+}
+
+
+
 MeshID identifier(const MeshDataDXR& data)
 {
     MeshID ret;
-    ret.vertex_buffer = (uint64_t)data.vertex_buffer.buffer;
-    ret.index_buffer = (uint64_t)data.index_buffer.buffer;
+    ret.vertex_buffer = (uint64_t)data.vertex_buffer->buffer;
+    ret.index_buffer = (uint64_t)data.index_buffer->buffer;
     ret.vertex_count = (uint32_t)data.vertex_count;
     ret.index_count = (uint32_t)data.index_count;
     ret.index_offset = (uint32_t)data.index_offset;

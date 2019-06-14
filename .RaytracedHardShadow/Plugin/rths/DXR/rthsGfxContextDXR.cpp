@@ -55,25 +55,27 @@ static inline std::string ToString(ID3DBlob *blob)
 
 
 
-static std::once_flag g_gfx_once;
+static int g_gfx_initialize_count = 0;
 static GfxContextDXR *g_gfx_context;
 
 bool GfxContextDXR::initializeInstance()
 {
-    std::call_once(g_gfx_once, []() {
+    if (g_gfx_initialize_count++ == 0) {
         g_gfx_context = new GfxContextDXR();
         if (!g_gfx_context->valid()) {
             delete g_gfx_context;
             g_gfx_context = nullptr;
         }
-    });
+    }
     return g_gfx_context != nullptr;
 }
 
 void GfxContextDXR::finalizeInstance()
 {
-    delete g_gfx_context;
-    g_gfx_context = nullptr;
+    if (--g_gfx_initialize_count == 0) {
+        delete g_gfx_context;
+        g_gfx_context = nullptr;
+    }
 }
 
 
@@ -406,105 +408,102 @@ void GfxContextDXR::setSceneData(SceneData& data)
 
 void GfxContextDXR::setRenderTarget(TextureData& rt)
 {
-    auto& record = m_texture_records[identifier(rt)];
-    if (!record.data.resource) {
-        record.data = m_resource_translator->createTemporaryTexture(rt.texture);
-        if (!record.data.resource) {
+    auto& data = m_texture_records[identifier(rt)];
+    if (!data) {
+        data = m_resource_translator->createTemporaryTexture(rt.texture);
+        if (!data->resource) {
             DebugPrint("GfxContextDXR::setRenderTarget(): failed to translate texture\n");
             return;
         }
     }
-    ++record.used;
+    ++data->use_count;
 
-    m_render_target = record.data;
+    m_render_target = data;
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    uav_desc.Format = GetTypedFormat(m_render_target.format); // typeless is not allowed for unordered access view
+    uav_desc.Format = GetTypedFormat(m_render_target->format); // typeless is not allowed for unordered access view
     uav_desc.Texture2D.MipSlice = 0;
     uav_desc.Texture2D.PlaneSlice = 0;
-    m_device->CreateUnorderedAccessView(m_render_target.resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
+    m_device->CreateUnorderedAccessView(m_render_target->resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
 
 #ifdef rthsEnableRenderTargetValidation
     // fill texture with 0.0-1.0 gradation for debug
     {
-        int n = m_render_target.width * m_render_target.height;
+        int n = m_render_target->width * m_render_target->height;
         float r = 1.0f / (float)n;
 
         std::vector<float> data;
         data.resize(n);
         for (int i = 0; i < n; ++i)
             data[i] = r * (float)i;
-        uploadTexture(m_render_target.resource, data.data(), m_render_target.width, m_render_target.height, sizeof(float));
+        uploadTexture(m_render_target->resource, data.data(), m_render_target->width, m_render_target->height, sizeof(float));
     }
 #endif
 }
 
 void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
 {
-    m_mesh_instances.clear();
-
     auto translate_buffer = [this](void *buffer) {
-        auto& record = m_buffer_records[buffer];
-        ++record.used;
-        if (!record.data.resource)
-            record.data = m_resource_translator->translateBuffer(buffer);
-        return record.data;
+        auto& data = m_buffer_records[buffer];
+        if (!data)
+            data = m_resource_translator->translateBuffer(buffer);
+        ++data->use_count;
+        return data;
     };
 
     size_t num_meshes = meshes.size();
     for (size_t i = 0; i < num_meshes; ++i) {
         auto& src = meshes[i];
-        auto& record = m_mesh_records[identifier(src)];
-        ++record.used;
-        auto& data = record.data;
-
+        auto& data = m_mesh_records[identifier(src)];
         if (!data) {
-            data.reset(new MeshDataDXR());
+            data = std::make_shared<MeshDataDXR>();
             data->vertex_count = src.vertex_count;
             data->index_bits = src.index_bits;
             data->index_count = src.index_count;
             data->index_offset = src.index_offset;
         }
-        if (!data->vertex_buffer.resource) {
+        ++data->use_count;
+
+        if (!data->vertex_buffer) {
             data->vertex_buffer = translate_buffer(src.vertex_buffer);
-            if (!data->vertex_buffer.resource) {
+            if (!data->vertex_buffer->resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate vertex buffer\n");
                 continue;
             }
-            if ((data->vertex_buffer.size / data->vertex_count) % 4 != 0) {
+            if ((data->vertex_buffer->size / data->vertex_count) % 4 != 0) {
                 DebugPrint("GfxContextDXR::setMeshes(): unrecognizable vertex format\n");
                 continue;
             }
 
 #ifdef rthsEnableBufferValidation
-            {
+            if (data->vertex_buffer) {
                 // inspect buffer
                 std::vector<float> vertex_buffer_data;
-                vertex_buffer_data.resize(data->vertex_buffer.size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
-                readbackBuffer(vertex_buffer_data.data(), data->vertex_buffer.resource, data->vertex_buffer.size);
+                vertex_buffer_data.resize(data->vertex_buffer->size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
+                readbackBuffer(vertex_buffer_data.data(), data->vertex_buffer->resource, data->vertex_buffer->size);
             }
 #endif
         }
-        if (!data->index_buffer.resource) {
+        if (!data->index_buffer) {
             data->index_buffer = translate_buffer(src.index_buffer);
-            if (!data->index_buffer.resource) {
+            if (!data->index_buffer->resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate index buffer\n");
                 continue;
             }
 
 #ifdef rthsEnableBufferValidation
-            {
+            if (data->index_buffer) {
                 // inspect buffer
                 std::vector<uint32_t> index_buffer_data32;
                 std::vector<uint16_t> index_buffer_data16;
                 if (data->index_bits == 16) {
-                    index_buffer_data16.resize(data->index_buffer.size / sizeof(uint16_t), std::numeric_limits<uint16_t>::max());
-                    readbackBuffer(index_buffer_data16.data(), data->index_buffer.resource, data->index_buffer.size);
+                    index_buffer_data16.resize(data->index_buffer->size / sizeof(uint16_t), std::numeric_limits<uint16_t>::max());
+                    readbackBuffer(index_buffer_data16.data(), data->index_buffer->resource, data->index_buffer->size);
                 }
                 else {
-                    index_buffer_data32.resize(data->index_buffer.size / sizeof(uint32_t), std::numeric_limits<uint32_t>::max());
-                    readbackBuffer(index_buffer_data32.data(), data->index_buffer.resource, data->index_buffer.size);
+                    index_buffer_data32.resize(data->index_buffer->size / sizeof(uint32_t), std::numeric_limits<uint32_t>::max());
+                    readbackBuffer(index_buffer_data32.data(), data->index_buffer->resource, data->index_buffer->size);
                 }
             }
 #endif
@@ -515,15 +514,15 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
             D3D12_RAYTRACING_GEOMETRY_DESC geom_desc{};
             geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
             geom_desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-            if (data->vertex_buffer.resource) {
-                geom_desc.Triangles.VertexBuffer.StartAddress = data->vertex_buffer.resource->GetGPUVirtualAddress();
-                geom_desc.Triangles.VertexBuffer.StrideInBytes = data->vertex_buffer.size / data->vertex_count;
+            if (data->vertex_buffer->resource) {
+                geom_desc.Triangles.VertexBuffer.StartAddress = data->vertex_buffer->resource->GetGPUVirtualAddress();
+                geom_desc.Triangles.VertexBuffer.StrideInBytes = data->vertex_buffer->size / data->vertex_count;
                 geom_desc.Triangles.VertexCount = data->vertex_count;
                 geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
             }
-            if (data->index_buffer.resource) {
+            if (data->index_buffer->resource) {
                 int index_size = data->index_bits / 8;
-                geom_desc.Triangles.IndexBuffer = data->index_buffer.resource->GetGPUVirtualAddress() + (index_size * data->index_offset);
+                geom_desc.Triangles.IndexBuffer = data->index_buffer->resource->GetGPUVirtualAddress() + (index_size * data->index_offset);
                 geom_desc.Triangles.IndexCount = data->index_count;
                 geom_desc.Triangles.IndexFormat = data->index_bits == 16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
             }
@@ -819,7 +818,7 @@ void GfxContextDXR::sync()
 
 void GfxContextDXR::flush()
 {
-    if (!m_render_target.resource) {
+    if (!m_render_target->resource) {
         SetErrorLog("GfxContext::flush(): render target is null\n");
         return;
     }
@@ -880,13 +879,13 @@ void GfxContextDXR::flush()
     }
 
     D3D12_RESOURCE_STATES prev_state = D3D12_RESOURCE_STATE_COMMON;
-    addResourceBarrier(m_render_target.resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    addResourceBarrier(m_render_target->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // dispatch rays
     {
         D3D12_DISPATCH_RAYS_DESC dr_desc{};
-        dr_desc.Width = m_render_target.width;
-        dr_desc.Height = m_render_target.height;
+        dr_desc.Width = m_render_target->width;
+        dr_desc.Height = m_render_target->height;
         dr_desc.Depth = 1;
 
         auto addr = m_shader_table->GetGPUVirtualAddress();
@@ -921,7 +920,7 @@ void GfxContextDXR::flush()
         m_cmd_list->DispatchRays(&dr_desc);
     }
 
-    addResourceBarrier(m_render_target.resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
+    addResourceBarrier(m_render_target->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
 
     submitCommandList();
     m_flushing = true;
@@ -940,14 +939,17 @@ void GfxContextDXR::finish()
 #ifdef rthsEnableRenderTargetValidation
     {
         std::vector<float> data;
-        data.resize(m_render_target.width * m_render_target.height, std::numeric_limits<float>::quiet_NaN());
-        readbackTexture(data.data(), m_render_target.resource, m_render_target.width, m_render_target.height, sizeof(float));
+        data.resize(m_render_target->width * m_render_target->height, std::numeric_limits<float>::quiet_NaN());
+        readbackTexture(data.data(), m_render_target->resource, m_render_target->width, m_render_target->height, sizeof(float));
         // break here to inspect data
     }
 #endif
 
     // copy render target content to Unity side
-    m_resource_translator->applyTexture(m_render_target);
+    m_resource_translator->applyTexture(*m_render_target);
+
+    m_mesh_instances.clear();
+    m_render_target = nullptr;
 }
 
 void GfxContextDXR::releaseUnusedResources()
@@ -956,12 +958,12 @@ void GfxContextDXR::releaseUnusedResources()
     auto erase_unused_records = [](auto& records, const char *message) {
         int num_erased = 0;
         for (auto it = records.begin(); it != records.end(); /**/) {
-            if (it->second.used == 0) {
+            if (it->second->use_count == 0) {
                 records.erase(it++);
                 ++num_erased;
             }
             else {
-                it->second.used = 0;
+                it->second->use_count = 0;
                 ++it;
             }
         }

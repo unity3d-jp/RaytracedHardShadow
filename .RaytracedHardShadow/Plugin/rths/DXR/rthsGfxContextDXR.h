@@ -37,26 +37,6 @@ public:
     void executeAndWaitCopy();
 
 private:
-    struct TextureRecord
-    {
-        TextureDataDXR data;
-        int used = 0;
-    };
-
-    struct BufferRecord
-    {
-        BufferDataDXR data;
-        int used = 0;
-    };
-    using BufferID = void*;
-
-    struct MeshRecord
-    {
-        MeshDataDXRPtr data;
-        int used = 0;
-    };
-
-
     GfxContextDXR();
     ~GfxContextDXR();
 
@@ -90,15 +70,15 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_srvuav_cpu_handle_base;
     D3D12_GPU_DESCRIPTOR_HANDLE m_srvuav_gpu_handle_base;
 
-    std::map<TextureID, TextureRecord> m_texture_records;
-    std::map<BufferID, BufferRecord> m_buffer_records;
-    std::map<MeshID, MeshRecord> m_mesh_records;
+    std::map<TextureID, TextureDataDXRPtr> m_texture_records;
+    std::map<BufferID, BufferDataDXRPtr> m_buffer_records;
+    std::map<MeshID, MeshDataDXRPtr> m_mesh_records;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
     ID3D12ResourcePtr m_scene_buffer;
     DescriptorHandle m_scene_buffer_handle;
 
-    TextureDataDXR m_render_target;
+    TextureDataDXRPtr m_render_target;
     DescriptorHandle m_render_target_handle;
 
     std::vector<MeshInstanceDXR> m_mesh_instances;

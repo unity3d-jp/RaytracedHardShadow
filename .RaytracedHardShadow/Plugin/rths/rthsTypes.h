@@ -152,6 +152,8 @@ struct TextureID
 };
 TextureID identifier(const TextureData& data);
 
+using BufferID = void*;
+
 struct MeshData
 {
     void *vertex_buffer = nullptr; // unity
