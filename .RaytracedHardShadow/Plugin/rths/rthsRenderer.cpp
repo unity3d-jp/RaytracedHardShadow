@@ -108,17 +108,19 @@ void RendererBase::addReversePointLight(const float4x4& trans, float range)
 
 void RendererBase::addMesh(const MeshData& mesh, const float4x4& trans)
 {
-    MeshInstanceData tmp;
+    MeshInstanceData tmp{};
     tmp.mesh = mesh;
     tmp.transform = trans;
     m_mesh_instance_data.push_back(std::move(tmp));
 }
 
-void RendererBase::addSkinnedMesh(const MeshData& mesh, const SkinData& skin)
+void RendererBase::addSkinnedMesh(const MeshData& mesh, const float4x4& trans, const BonesData& bones, const BlendshapeWeightData& bs)
 {
-    MeshInstanceData tmp;
+    MeshInstanceData tmp{};
     tmp.mesh = mesh;
-    tmp.skin = skin;
+    tmp.transform = trans;
+    tmp.bones = bones;
+    tmp.blendshape_weights = bs;
     m_mesh_instance_data.push_back(std::move(tmp));
 }
 

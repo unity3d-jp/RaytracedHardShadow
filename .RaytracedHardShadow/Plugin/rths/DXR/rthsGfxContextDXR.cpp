@@ -90,9 +90,9 @@ GfxContextDXR::~GfxContextDXR()
 {
 }
 
-DescriptorHandle GfxContextDXR::allocateHandle()
+DescriptorHandleDXR GfxContextDXR::allocateHandle()
 {
-    DescriptorHandle ret;
+    DescriptorHandleDXR ret;
     ret.hcpu = m_srvuav_cpu_handle_base;
     ret.hgpu = m_srvuav_gpu_handle_base;
     m_srvuav_cpu_handle_base.ptr += m_desc_handle_stride;
@@ -443,7 +443,7 @@ void GfxContextDXR::setRenderTarget(TextureData& rt)
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    uav_desc.Format = GetTypedFormat(m_render_target->format); // typeless is not allowed for unordered access view
+    uav_desc.Format = GetTypedFormatDXR(m_render_target->format); // typeless is not allowed for unordered access view
     uav_desc.Texture2D.MipSlice = 0;
     uav_desc.Texture2D.PlaneSlice = 0;
     m_device->CreateUnorderedAccessView(m_render_target->resource, nullptr, &uav_desc, m_render_target_handle.hcpu);

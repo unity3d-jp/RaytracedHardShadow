@@ -9,6 +9,8 @@
 namespace rths {
 #ifndef rthsImpl
 using uint8_t = unsigned char;
+using GPUResourcePtr = void*;
+
 struct float4 { float x, y, z, w; };
 struct float4x4 { float4 v[4]; };
 
@@ -24,19 +26,56 @@ struct SkinWeight4
 };
 struct SkinData
 {
+    // bone_counts & weights1 and weights4 are mutually exclusive
     const uint8_t *bone_counts;
     const SkinWeight1 *weights1;
     const SkinWeight4 *weights4;
-    const float4x4 *matrices;
     int num_bone_counts;
     int num_weights1;
     int num_weights4;
-    int num_matrices;
+};
+struct BonesData
+{
+    const float4x4 *bones;
+    int num_bones;
+};
+
+struct BlendshapeDeltaData
+{
+    const float3 *points;
+    const float3 *normals;
+    const float3 *tangents;
+};
+struct BlendshapeData
+{
+    const BlendshapeDeltaData *blendshapes;
+    int num_blendshapes;
+};
+struct BlendshapeWeightData
+{
+    const float *weights;
+    int num_blendshapes;
+};
+
+struct MeshData
+{
+    GPUResourcePtr vertex_buffer; // host
+    GPUResourcePtr index_buffer; // host
+    int vertex_stride; // if 0, treated as size_of_vertex_buffer / vertex_count
+    int vertex_count;
+    int vertex_offset; // in byte
+    int index_stride;
+    int index_count;
+    int index_offset; // in byte
+
+    SkinData skin;
+    BlendshapeData blendshape;
 };
 #else // rthsImpl
 struct float4;
 struct float4x4;
-struct SkinData;
+struct BonesData;
+struct BlendshapeWeightData;
 struct MeshData;
 #endif // rthsImpl
 
@@ -59,7 +98,7 @@ rthsAPI void rthsAddSpotLight(rths::IRenderer *self, rths::float4x4 transform, f
 rthsAPI void rthsAddPointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
 rthsAPI void rthsAddReversePointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
 rthsAPI void rthsAddMesh(rths::IRenderer *self, rths::MeshData mesh, rths::float4x4 transform);
-rthsAPI void rthsAddSkinnedMesh(rths::IRenderer *self, rths::MeshData mesh, rths::SkinData skin);
+rthsAPI void rthsAddSkinnedMesh(rths::IRenderer *self, rths::MeshData mesh, rths::float4x4 transform, rths::BonesData bones, rths::BlendshapeWeightData bs);
 rthsAPI void rthsRender(rths::IRenderer *self);
 rthsAPI void rthsFinish(rths::IRenderer *self);
 rthsAPI void rthsRenderAll();

@@ -26,28 +26,28 @@ BufferDataDXR::~BufferDataDXR()
 
 
 
-DescriptorHandle::operator bool() const
+DescriptorHandleDXR::operator bool() const
 {
     return hcpu.ptr != 0 && hgpu.ptr != 0;
 }
 
 
-FenceEvent::FenceEvent()
+FenceEventDXR::FenceEventDXR()
 {
     m_handle = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
 }
 
-FenceEvent::~FenceEvent()
+FenceEventDXR::~FenceEventDXR()
 {
     ::CloseHandle(m_handle);
 }
-FenceEvent::operator HANDLE() const
+FenceEventDXR::operator HANDLE() const
 {
     return m_handle;
 }
 
 
-DXGI_FORMAT GetTypedFormat(DXGI_FORMAT format)
+DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format)
 {
     switch (format) {
     case DXGI_FORMAT_R8_TYPELESS:

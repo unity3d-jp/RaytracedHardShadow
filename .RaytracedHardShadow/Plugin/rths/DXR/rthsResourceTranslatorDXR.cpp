@@ -35,7 +35,7 @@ private:
 
     ID3D11FencePtr m_fence;
     uint64_t m_fence_value = 0;
-    FenceEvent m_fence_event;
+    FenceEventDXR m_fence_event;
 };
 
 class D3D12ResourceTranslator : public ResourceTranslatorBase
@@ -59,7 +59,7 @@ private:
 
     ID3D12FencePtr m_fence;
     uint64_t m_fence_value = 0;
-    FenceEvent m_fence_event;
+    FenceEventDXR m_fence_event;
 
     // command list for resource barrier
     ID3D12CommandAllocatorPtr m_cmd_allocator;

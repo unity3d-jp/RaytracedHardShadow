@@ -27,7 +27,7 @@ public:
     void finish();
     void releaseUnusedResources();
 
-    DescriptorHandle allocateHandle();
+    DescriptorHandleDXR allocateHandle();
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     ID3D12ResourcePtr createTexture(int width, int height, DXGI_FORMAT format);
 
@@ -60,7 +60,7 @@ private:
     ID3D12CommandQueuePtr m_cmd_queue_copy;
 
     ID3D12FencePtr m_fence;
-    FenceEvent m_fence_event;
+    FenceEventDXR m_fence_event;
 
     ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_global_rootsig;
@@ -82,14 +82,14 @@ private:
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
     ID3D12ResourcePtr m_scene_buffer;
-    DescriptorHandle m_scene_buffer_handle;
+    DescriptorHandleDXR m_scene_buffer_handle;
 
     TextureDataDXRPtr m_render_target;
-    DescriptorHandle m_render_target_handle;
+    DescriptorHandleDXR m_render_target_handle;
 
     std::vector<MeshInstanceDataDXR> m_mesh_instances;
     ID3D12ResourcePtr m_tlas;
-    DescriptorHandle m_tlas_handle;
+    DescriptorHandleDXR m_tlas_handle;
 
     bool m_flushing = false;
 };

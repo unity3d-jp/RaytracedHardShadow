@@ -135,69 +135,81 @@ struct SceneData
     LightData lights[kMaxLights];
 };
 
-using TextureData = void*;
-using BufferData = void*;
+using GPUResourcePtr = void*;
 
-struct MeshData
-{
-    void *vertex_buffer = nullptr; // host
-    void *index_buffer = nullptr; // host
-    int vertex_stride = 0; // if 0, treated as size_of_vertex_buffer / vertex_count
-    int vertex_count = 0;
-    int vertex_offset = 0; // in byte
-    int index_stride = 0;
-    int index_count = 0;
-    int index_offset = 0; // in byte
-    bool is_dynamic = false; // true if skinned, has blendshapes, etc
-
-    bool operator==(const MeshData& v) const;
-    bool operator<(const MeshData& v) const;
-};
-
+using TextureData = GPUResourcePtr;
+using BufferData = GPUResourcePtr;
 
 struct SkinWeight1
 {
     float weight;
     int index;
 };
-
 struct SkinWeight4
 {
     float weight[4];
     int index[4];
 };
-
 struct SkinData
 {
+    // bone_counts & weights1 and weights4 are mutually exclusive
     const uint8_t *bone_counts;
     const SkinWeight1 *weights1;
     const SkinWeight4 *weights4;
-    const float4x4 *matrices;
     int num_bone_counts;
     int num_weights1;
     int num_weights4;
-    int num_matrices;
 
     bool operator==(const SkinData& v) const;
     bool operator<(const SkinData& v) const;
 };
-
-struct SkinDataHolder
+struct BonesData
 {
-    std::vector<uint8_t> bone_counts;
-    std::vector<SkinWeight1> weights1;
-    std::vector<SkinWeight4> weights4;
-    std::vector<float4x4> matrices;
-
-    void assign(const SkinData& v);
+    const float4x4 *bones;
+    int num_bones;
 };
 
+struct BlendshapeDeltaData
+{
+    const float3 *points;
+    const float3 *normals;
+    const float3 *tangents;
+};
+struct BlendshapeData
+{
+    const BlendshapeDeltaData *blendshapes;
+    int num_blendshapes;
+};
+struct BlendshapeWeightData
+{
+    const float *weights;
+    int num_blendshapes;
+};
+
+struct MeshData
+{
+    GPUResourcePtr vertex_buffer; // host
+    GPUResourcePtr index_buffer; // host
+    int vertex_stride; // if 0, treated as size_of_vertex_buffer / vertex_count
+    int vertex_count;
+    int vertex_offset; // in byte
+    int index_stride;
+    int index_count;
+    int index_offset; // in byte
+
+    SkinData skin;
+    BlendshapeData blendshape;
+
+    bool operator==(const MeshData& v) const;
+    bool operator<(const MeshData& v) const;
+};
 
 struct MeshInstanceData
 {
-    MeshData mesh;
-    SkinData skin;
-    float4x4 transform;
+    MeshData mesh{};
+    float4x4 transform{};
+    BonesData bones{};
+    BlendshapeWeightData blendshape_weights{};
 };
 
 } // namespace rths

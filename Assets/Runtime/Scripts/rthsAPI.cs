@@ -53,6 +53,38 @@ namespace UTJ.RaytracedHardShadow
         KeepSelfDropShadow = 2,
     }
 
+    public struct rthsBlendshapeDeltaData
+    {
+        public IntPtr points; // Vector3[]
+        public IntPtr normals; // Vector3[]
+        public IntPtr tangents; // Vector3[]
+    }
+    public struct rthsBlendshapeData
+    {
+        public IntPtr blendshapes; // rthsBlendshapeDeltaData[]
+        public int numBlendshapes;
+    }
+    public struct rthsBlendshapeWeightData
+    {
+        public IntPtr weights; // float[]
+        public int numBlendshapes;
+    }
+
+    public struct rthsSkinData
+    {
+        public IntPtr boneCounts; // byte[]
+        public IntPtr weights1; // BoneWeight1[]
+        public IntPtr weights4; // BoneWeight[]
+        public int numBoneCounts;
+        public int numWeights1;
+        public int numWeights4;
+    }
+    public struct rthsBonesData
+    {
+        public IntPtr bones; // Matrix4x4[]
+        public int numBones;
+    };
+
     public struct rthsMeshData
     {
         public IntPtr vertexBuffer;
@@ -63,18 +95,9 @@ namespace UTJ.RaytracedHardShadow
         public int indexStride;
         public int indexCount;
         public int indexOffset; // in byte
-    }
 
-    public struct rthsSkinData
-    {
-        public IntPtr boneCounts;
-        public IntPtr weights1;
-        public IntPtr weights4;
-        public IntPtr matrices;
-        public int numBoneCounts;
-        public int numWeights1;
-        public int numWeights4;
-        public int numMatrices;
+        public rthsSkinData skin;
+        public rthsBlendshapeData blendshape;
     }
 
 
@@ -97,8 +120,8 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
         [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans, float range);
         [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
-        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, rthsMeshData mes, Matrix4x4 trans);
-        [DllImport("rths")] static extern void rthsAddSkinnedMesh(IntPtr self, rthsMeshData mes, rthsSkinData skin);
+        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, rthsMeshData mesh, Matrix4x4 trans);
+        [DllImport("rths")] static extern void rthsAddSkinnedMesh(IntPtr self, rthsMeshData mesh, Matrix4x4 trans, ref rthsBonesData bones, ref rthsBlendshapeWeightData bs);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
@@ -194,10 +217,9 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void AddMesh(Mesh mesh, Matrix4x4 trans, bool isDynamic_)
+        public void AddMesh(Mesh mesh, Matrix4x4 trans)
         {
             int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
-            byte isDynamic = (byte)(isDynamic_ ? 1 : 0);
             int numSubmeshes = mesh.subMeshCount;
             for (int smi = 0; smi < numSubmeshes; ++smi)
             {

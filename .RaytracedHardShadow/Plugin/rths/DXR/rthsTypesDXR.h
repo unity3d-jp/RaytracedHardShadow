@@ -108,18 +108,51 @@ class MeshDataDXR : public MeshData
 public:
     BufferDataDXRPtr vertex_buffer;
     BufferDataDXRPtr index_buffer;
+
+    // skinning data
+    ID3D12ResourcePtr bone_counts;
+    ID3D12ResourcePtr bone_weights;
+
+    // blendshape data
+    ID3D12ResourcePtr bs_points_delta;
+    ID3D12ResourcePtr bs_normals_delta;
+    ID3D12ResourcePtr bs_tangents_delta;
+
     ID3D12ResourcePtr blas; // bottom level acceleration structure
+
     int use_count = 0;
 };
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
+
+class BlendshapeDataDXR : public BlendshapeData
+{
+    ID3D12ResourcePtr points_delta;
+    ID3D12ResourcePtr normals_delta;
+    ID3D12ResourcePtr tangents_delta;
+    ID3D12ResourcePtr weights;
+};
+using BlendshapeDataDXRPtr = std::shared_ptr<BlendshapeDataDXR>;
+
+class SkinDataDxr : public SkinData
+{
+public:
+    ID3D12ResourcePtr bones;
+};
+using SkinDataDxrPtr = std::shared_ptr<SkinDataDxr>;
 
 class MeshInstanceDataDXR : public MeshInstanceData
 {
 public:
     MeshDataDXRPtr mesh;
+
+    ID3D12ResourcePtr blendshape_weights;
+    ID3D12ResourcePtr bones;
+    ID3D12ResourcePtr vertex_buffer_deformed;
+    ID3D12ResourcePtr blas_deformed;
 };
 
-struct DescriptorHandle
+
+struct DescriptorHandleDXR
 {
     D3D12_CPU_DESCRIPTOR_HANDLE hcpu{};
     D3D12_GPU_DESCRIPTOR_HANDLE hgpu{};
@@ -132,18 +165,18 @@ extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
 
 // thin wrapper for Windows' event
-class FenceEvent
+class FenceEventDXR
 {
 public:
-    FenceEvent();
-    ~FenceEvent();
+    FenceEventDXR();
+    ~FenceEventDXR();
     operator HANDLE() const;
 
 private:
     HANDLE m_handle = nullptr;
 };
 
-DXGI_FORMAT GetTypedFormat(DXGI_FORMAT format);
+DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
 
 } // namespace rths
 #endif // _WIN32

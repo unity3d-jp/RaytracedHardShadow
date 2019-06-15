@@ -24,7 +24,7 @@ public:
     virtual void addPointLight(const float4x4& trans, float range) = 0;
     virtual void addReversePointLight(const float4x4& trans, float range) = 0;
     virtual void addMesh(const MeshData& mesh, const float4x4& trans) = 0;
-    virtual void addSkinnedMesh(const MeshData& mesh, const SkinData& skin) = 0;
+    virtual void addSkinnedMesh(const MeshData& mesh, const float4x4& trans, const BonesData& bones, const BlendshapeWeightData& bs) = 0;
 };
 
 
@@ -48,7 +48,7 @@ public:
     void addPointLight(const float4x4& trans, float range) override;
     void addReversePointLight(const float4x4& trans, float range) override;
     void addMesh(const MeshData& mesh, const float4x4& trans) override;
-    void addSkinnedMesh(const MeshData& mesh, const SkinData& skin) override;
+    void addSkinnedMesh(const MeshData& mesh, const float4x4& trans, const BonesData& bones, const BlendshapeWeightData& bs) override;
 
 protected:
     TextureData m_render_target;

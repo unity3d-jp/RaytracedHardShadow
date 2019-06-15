@@ -428,8 +428,8 @@ namespace UTJ.RaytracedHardShadow
                     scl => { m_renderer.AddLight(scl); }
                     );
                 EnumerateMeshRenderers(
-                    mr => { m_renderer.AddMesh(GetMesh(mr), mr.transform.localToWorldMatrix, false); },
-                    smr => { m_renderer.AddMesh(GetMesh(smr), smr.transform.localToWorldMatrix, true); }
+                    mr => { m_renderer.AddMesh(GetMesh(mr), mr.transform.localToWorldMatrix); },
+                    smr => { m_renderer.AddMesh(GetMesh(smr), smr.transform.localToWorldMatrix); }
                     );
                 m_renderer.EndScene();
             }

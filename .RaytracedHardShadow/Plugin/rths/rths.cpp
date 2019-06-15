@@ -102,11 +102,11 @@ rthsAPI void rthsAddMesh(IRenderer *self, MeshData mesh, float4x4 transform)
     self->addMesh(mesh, transform);
 }
 
-rthsAPI void rthsAddSkinnedMesh(IRenderer *self, MeshData mesh, SkinData skin)
+rthsAPI void rthsAddSkinnedMesh(IRenderer *self, MeshData mesh, float4x4 transform, BonesData bones, BlendshapeWeightData bs)
 {
     if (!self)
         return;
-    self->addSkinnedMesh(mesh, skin);
+    self->addSkinnedMesh(mesh, transform, bones, bs);
 }
 
 rthsAPI void rthsRender(IRenderer *self)
