@@ -42,9 +42,7 @@ struct BonesData
 
 struct BlendshapeDeltaData
 {
-    const float3 *points;
-    const float3 *normals;
-    const float3 *tangents;
+    const float3 *point_delta;
 };
 struct BlendshapeData
 {

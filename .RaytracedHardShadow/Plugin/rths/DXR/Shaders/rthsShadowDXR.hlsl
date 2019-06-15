@@ -1,4 +1,4 @@
-#include "rthsCommon.h"
+#include "rthsCommonDXR.h"
 
 struct RayPayload
 {

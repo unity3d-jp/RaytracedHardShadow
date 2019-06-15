@@ -55,9 +55,7 @@ namespace UTJ.RaytracedHardShadow
 
     public struct rthsBlendshapeDeltaData
     {
-        public IntPtr points; // Vector3[]
-        public IntPtr normals; // Vector3[]
-        public IntPtr tangents; // Vector3[]
+        public IntPtr pointDelta; // Vector3[]
     }
     public struct rthsBlendshapeData
     {

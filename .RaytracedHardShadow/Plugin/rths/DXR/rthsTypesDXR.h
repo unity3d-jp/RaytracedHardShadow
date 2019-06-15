@@ -114,31 +114,14 @@ public:
     ID3D12ResourcePtr bone_weights;
 
     // blendshape data
-    ID3D12ResourcePtr bs_points_delta;
-    ID3D12ResourcePtr bs_normals_delta;
-    ID3D12ResourcePtr bs_tangents_delta;
+    ID3D12ResourcePtr bs_point_delta;
+    ID3D12ResourcePtr bs_point_offsets;
 
     ID3D12ResourcePtr blas; // bottom level acceleration structure
 
     int use_count = 0;
 };
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
-
-class BlendshapeDataDXR : public BlendshapeData
-{
-    ID3D12ResourcePtr points_delta;
-    ID3D12ResourcePtr normals_delta;
-    ID3D12ResourcePtr tangents_delta;
-    ID3D12ResourcePtr weights;
-};
-using BlendshapeDataDXRPtr = std::shared_ptr<BlendshapeDataDXR>;
-
-class SkinDataDxr : public SkinData
-{
-public:
-    ID3D12ResourcePtr bones;
-};
-using SkinDataDxrPtr = std::shared_ptr<SkinDataDxr>;
 
 class MeshInstanceDataDXR : public MeshInstanceData
 {

@@ -6,7 +6,7 @@
 #include "rthsResourceTranslatorDXR.h"
 
 // shader binaries
-#include "rthsShaderDXR.h"
+#include "rthsShadowDXR.h"
 
 
 namespace rths {
@@ -366,8 +366,8 @@ bool GfxContextDXR::initializeDevice()
         LPCWSTR exports[] = { kRayGenShader, kMissShader, kAnyHitShader, kHitGroup };
 
         D3D12_DXIL_LIBRARY_DESC dxil_desc{};
-        dxil_desc.DXILLibrary.pShaderBytecode = rthsShaderDXR;
-        dxil_desc.DXILLibrary.BytecodeLength = sizeof(rthsShaderDXR);
+        dxil_desc.DXILLibrary.pShaderBytecode = rthsShadowDXR;
+        dxil_desc.DXILLibrary.BytecodeLength = sizeof(rthsShadowDXR);
         dxil_desc.NumExports = _countof(export_descs);
         dxil_desc.pExports = export_descs;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &dxil_desc);
