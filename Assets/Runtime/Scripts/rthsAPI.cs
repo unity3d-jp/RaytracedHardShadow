@@ -2,6 +2,9 @@
 using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
+#if UNITY_2019_1_OR_NEWER
+using Unity.Collections;
+#endif
 
 namespace UTJ.RaytracedHardShadow
 {
@@ -11,6 +14,36 @@ namespace UTJ.RaytracedHardShadow
         {
             return ptr == IntPtr.Zero ? "" : Marshal.PtrToStringAnsi(ptr);
         }
+
+#if UNITY_2019_1_OR_NEWER
+        // explicit layout doesn't work with generics...
+
+        [StructLayout(LayoutKind.Explicit)]
+        struct NAByte
+        {
+            [FieldOffset(0)] public NativeArray<byte> nativeArray;
+            [FieldOffset(0)] public IntPtr pointer;
+        }
+        public static IntPtr ForceGetPointer(ref NativeArray<byte> na)
+        {
+            var union = new NAByte();
+            union.nativeArray = na;
+            return union.pointer;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        struct NABoneWeight1
+        {
+            [FieldOffset(0)] public NativeArray<BoneWeight1> nativeArray;
+            [FieldOffset(0)] public IntPtr pointer;
+        }
+        public static IntPtr ForceGetPointer(ref NativeArray<BoneWeight1> na)
+        {
+            var union = new NABoneWeight1();
+            union.nativeArray = na;
+            return union.pointer;
+        }
+#endif
     }
 
     public enum rthsRaytraceFlags
@@ -18,6 +51,30 @@ namespace UTJ.RaytracedHardShadow
         None = 0,
         IgnoreSelfShadow = 1,
         KeepSelfDropShadow = 2,
+    }
+
+    public struct rthsMeshData
+    {
+        public IntPtr vertexBuffer;
+        public IntPtr indexBuffer;
+        public int vertexStride; // if 0, treated as sizeOfVertexBuffer / vertexCount
+        public int vertexCount;
+        public int vertexOffset; // in byte
+        public int indexStride;
+        public int indexCount;
+        public int indexOffset; // in byte
+    }
+
+    public struct rthsSkinData
+    {
+        public IntPtr boneCounts;
+        public IntPtr weights1;
+        public IntPtr weights4;
+        public IntPtr matrices;
+        public int numBoneCounts;
+        public int numWeights1;
+        public int numWeights4;
+        public int numMatrices;
     }
 
 
@@ -40,8 +97,8 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
         [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans, float range);
         [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
-        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, Matrix4x4 trans,
-            IntPtr vb, IntPtr ib, int vertexCount, uint indexBits, uint indexCount, uint indexOffset, byte isDynamic);
+        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, rthsMeshData mes, Matrix4x4 trans);
+        [DllImport("rths")] static extern void rthsAddSkinnedMesh(IntPtr self, rthsMeshData mes, rthsSkinData skin);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
@@ -139,16 +196,21 @@ namespace UTJ.RaytracedHardShadow
 
         public void AddMesh(Mesh mesh, Matrix4x4 trans, bool isDynamic_)
         {
-            uint indexBits = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 16u : 32u;
+            int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
             byte isDynamic = (byte)(isDynamic_ ? 1 : 0);
             int numSubmeshes = mesh.subMeshCount;
             for (int smi = 0; smi < numSubmeshes; ++smi)
             {
                 if (mesh.GetTopology(smi) == MeshTopology.Triangles)
                 {
-                    rthsAddMesh(self, trans,
-                        mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
-                        mesh.vertexCount, indexBits, mesh.GetIndexCount(smi), mesh.GetIndexStart(smi), isDynamic);
+                    var data = default(rthsMeshData);
+                    data.vertexBuffer = mesh.GetNativeVertexBufferPtr(0);
+                    data.vertexCount = mesh.vertexCount;
+                    data.indexBuffer = mesh.GetNativeIndexBufferPtr();
+                    data.indexStride = indexStride;
+                    data.indexCount = (int)mesh.GetIndexCount(smi);
+                    data.indexOffset = (int)mesh.GetIndexStart(smi) * indexStride;
+                    rthsAddMesh(self, data, trans);
                 }
             }
         }

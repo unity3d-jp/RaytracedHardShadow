@@ -7,13 +7,37 @@
 #endif
 
 namespace rths {
-
 #ifndef rthsImpl
+using uint8_t = unsigned char;
 struct float4 { float x, y, z, w; };
 struct float4x4 { float4 v[4]; };
+
+struct SkinWeight1
+{
+    float weight;
+    int index;
+};
+struct SkinWeight4
+{
+    float weight[4];
+    int index[4];
+};
+struct SkinData
+{
+    const uint8_t *bone_counts;
+    const SkinWeight1 *weights1;
+    const SkinWeight4 *weights4;
+    const float4x4 *matrices;
+    int num_bone_counts;
+    int num_weights1;
+    int num_weights4;
+    int num_matrices;
+};
 #else // rthsImpl
 struct float4;
 struct float4x4;
+struct SkinData;
+struct MeshData;
 #endif // rthsImpl
 
 class IRenderer;
@@ -34,8 +58,8 @@ rthsAPI void rthsAddDirectionalLight(rths::IRenderer *self, rths::float4x4 trans
 rthsAPI void rthsAddSpotLight(rths::IRenderer *self, rths::float4x4 transform, float range, float spot_angle);
 rthsAPI void rthsAddPointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
 rthsAPI void rthsAddReversePointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
-rthsAPI void rthsAddMesh(rths::IRenderer *self, rths::float4x4 transform,
-    void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset, bool is_dynamic);
+rthsAPI void rthsAddMesh(rths::IRenderer *self, rths::MeshData mesh, rths::float4x4 transform);
+rthsAPI void rthsAddSkinnedMesh(rths::IRenderer *self, rths::MeshData mesh, rths::SkinData skin);
 rthsAPI void rthsRender(rths::IRenderer *self);
 rthsAPI void rthsFinish(rths::IRenderer *self);
 rthsAPI void rthsRenderAll();

@@ -3,44 +3,31 @@
 
 namespace rths {
 
-bool TextureID::operator==(const TextureID& v) const
+bool MeshData::operator==(const MeshData& v) const
 {
     return std::memcmp(this, &v, sizeof(*this)) == 0;
 }
 
-bool TextureID::operator<(const TextureID& v) const
+bool MeshData::operator<(const MeshData& v) const
 {
     return std::memcmp(this, &v, sizeof(*this)) < 0;
 }
 
-TextureID identifier(const TextureData& data)
-{
-    TextureID ret;
-    ret.texture = (uint64_t)data.texture;
-    ret.width = (uint32_t)data.width;
-    ret.height = (uint32_t)data.height;
-    return ret;
-}
-
-bool MeshID::operator==(const MeshID& v) const
+bool SkinData::operator==(const SkinData& v) const
 {
     return std::memcmp(this, &v, sizeof(*this)) == 0;
 }
-
-bool MeshID::operator<(const MeshID& v) const
+bool SkinData::operator<(const SkinData& v) const
 {
     return std::memcmp(this, &v, sizeof(*this)) < 0;
 }
 
-MeshID identifier(const MeshData& data)
+void SkinDataHolder::assign(const SkinData & v)
 {
-    MeshID ret;
-    ret.vertex_buffer = (uint64_t)data.vertex_buffer;
-    ret.index_buffer = (uint64_t)data.index_buffer;
-    ret.vertex_count = (uint32_t)data.vertex_count;
-    ret.index_count = (uint32_t)data.index_count;
-    ret.index_offset = (uint32_t)data.index_offset;
-    return ret;
+    bone_counts.assign(v.bone_counts, v.bone_counts + v.num_bone_counts);
+    weights1.assign(v.weights1, v.weights1 + v.num_weights1);
+    weights4.assign(v.weights4, v.weights4 + v.num_weights4);
+    matrices.assign(v.matrices, v.matrices + v.num_matrices);
 }
 
 } // namespace rths 

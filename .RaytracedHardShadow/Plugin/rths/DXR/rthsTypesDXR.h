@@ -85,7 +85,6 @@ public:
     ~TextureDataDXR();
 };
 using TextureDataDXRPtr = std::shared_ptr<TextureDataDXR>;
-TextureID identifier(const TextureDataDXR& data);
 
 class BufferDataDXR
 {
@@ -104,27 +103,20 @@ public:
 };
 using BufferDataDXRPtr = std::shared_ptr<BufferDataDXR>;
 
-class MeshDataDXR
+class MeshDataDXR : public MeshData
 {
 public:
     BufferDataDXRPtr vertex_buffer;
     BufferDataDXRPtr index_buffer;
-    int vertex_count = 0;
-    int index_bits = 0;
-    int index_count = 0;
-    int index_offset = 0;
-    int use_count = 0;
-
     ID3D12ResourcePtr blas; // bottom level acceleration structure
+    int use_count = 0;
 };
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
-MeshID identifier(const MeshDataDXR& data);
 
-class MeshInstanceDXR
+class MeshInstanceDataDXR : public MeshInstanceData
 {
 public:
     MeshDataDXRPtr mesh;
-    float3x4 transform;
 };
 
 struct DescriptorHandle

@@ -23,8 +23,8 @@ public:
     virtual void addSpotLight(const float4x4& trans, float range, float spot_angle) = 0;
     virtual void addPointLight(const float4x4& trans, float range) = 0;
     virtual void addReversePointLight(const float4x4& trans, float range) = 0;
-    virtual void addMesh(const float4x4& trans, void *vb, void *ib,
-        int vertex_count, int index_bits, int index_count, int index_offset, bool is_dynamic) = 0;
+    virtual void addMesh(const MeshData& mesh, const float4x4& trans) = 0;
+    virtual void addSkinnedMesh(const MeshData& mesh, const SkinData& skin) = 0;
 };
 
 
@@ -47,13 +47,13 @@ public:
     void addSpotLight(const float4x4& trans, float range, float spot_angle) override;
     void addPointLight(const float4x4& trans, float range) override;
     void addReversePointLight(const float4x4& trans, float range) override;
-    void addMesh(const float4x4& trans, void *vb, void *ib,
-        int vertex_count, int index_bits, int index_count, int index_offset, bool is_dynamic) override;
+    void addMesh(const MeshData& mesh, const float4x4& trans) override;
+    void addSkinnedMesh(const MeshData& mesh, const SkinData& skin) override;
 
 protected:
     TextureData m_render_target;
     SceneData m_scene_data;
-    std::vector<MeshData> m_mesh_data;
+    std::vector<MeshInstanceData> m_mesh_instance_data;
 };
 
 IRenderer* CreateRendererDXR();

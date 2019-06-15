@@ -21,7 +21,7 @@ public:
     bool initializeDevice();
     void setSceneData(SceneData& data);
     void setRenderTarget(TextureData& rt);
-    void setMeshes(std::vector<MeshData>& meshes);
+    void setMeshes(std::vector<MeshInstanceData>& instances);
     void sync();
     void flush();
     void finish();
@@ -76,9 +76,9 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_srvuav_cpu_handle_base;
     D3D12_GPU_DESCRIPTOR_HANDLE m_srvuav_gpu_handle_base;
 
-    std::map<TextureID, TextureDataDXRPtr> m_texture_records;
-    std::map<BufferID, BufferDataDXRPtr> m_buffer_records;
-    std::map<MeshID, MeshDataDXRPtr> m_mesh_records;
+    std::map<TextureData, TextureDataDXRPtr> m_texture_records;
+    std::map<BufferData, BufferDataDXRPtr> m_buffer_records;
+    std::map<MeshData, MeshDataDXRPtr> m_mesh_records;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
     ID3D12ResourcePtr m_scene_buffer;
@@ -87,7 +87,7 @@ private:
     TextureDataDXRPtr m_render_target;
     DescriptorHandle m_render_target_handle;
 
-    std::vector<MeshInstanceDXR> m_mesh_instances;
+    std::vector<MeshInstanceDataDXR> m_mesh_instances;
     ID3D12ResourcePtr m_tlas;
     DescriptorHandle m_tlas_handle;
 

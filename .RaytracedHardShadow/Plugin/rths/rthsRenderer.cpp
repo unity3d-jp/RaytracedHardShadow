@@ -20,7 +20,7 @@ void RendererBase::beginScene()
 {
     m_scene_data.raytrace_flags = 0;
     m_scene_data.light_count = 0;
-    m_mesh_data.clear();
+    m_mesh_instance_data.clear();
 }
 
 void RendererBase::endScene()
@@ -44,7 +44,7 @@ void RendererBase::setSelfShadowThreshold(float v)
 
 void RendererBase::setRenderTarget(void *rt)
 {
-    m_render_target.texture = rt;
+    m_render_target = rt;
 }
 
 void RendererBase::setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov)
@@ -106,18 +106,20 @@ void RendererBase::addReversePointLight(const float4x4& trans, float range)
     dst.range = range;
 }
 
-void RendererBase::addMesh(const float4x4& trans, void *vb, void *ib, int vertex_count, int index_bits, int index_count, int index_offset, bool is_dynamic)
+void RendererBase::addMesh(const MeshData& mesh, const float4x4& trans)
 {
-    MeshData tmp;
-    tmp.vertex_buffer = vb;
-    tmp.index_buffer = ib;
-    tmp.vertex_count = vertex_count;
-    tmp.index_bits = index_bits;
-    tmp.index_count = index_count;
-    tmp.index_offset = index_offset;
-    tmp.is_dynamic = is_dynamic;
-    tmp.transform = to_float3x4(trans);
-    m_mesh_data.push_back(std::move(tmp));
+    MeshInstanceData tmp;
+    tmp.mesh = mesh;
+    tmp.transform = trans;
+    m_mesh_instance_data.push_back(std::move(tmp));
+}
+
+void RendererBase::addSkinnedMesh(const MeshData& mesh, const SkinData& skin)
+{
+    MeshInstanceData tmp;
+    tmp.mesh = mesh;
+    tmp.skin = skin;
+    m_mesh_instance_data.push_back(std::move(tmp));
 }
 
 } // namespace rths

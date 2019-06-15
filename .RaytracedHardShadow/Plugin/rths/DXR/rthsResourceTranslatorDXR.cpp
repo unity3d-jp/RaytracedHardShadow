@@ -380,10 +380,10 @@ ID3D12Device *g_host_d3d12_device;
 
 IResourceTranslatorPtr CreateResourceTranslator()
 {
-    if (g_host_d3d11_device)
-        return std::make_shared<D3D11ResourceTranslator>(g_host_d3d11_device);
     if (g_host_d3d12_device)
         return std::make_shared<D3D12ResourceTranslator>(g_host_d3d12_device);
+    if (g_host_d3d11_device)
+        return std::make_shared<D3D11ResourceTranslator>(g_host_d3d11_device);
     return IResourceTranslatorPtr();
 }
 

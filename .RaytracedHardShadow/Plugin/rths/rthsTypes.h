@@ -135,48 +135,69 @@ struct SceneData
     LightData lights[kMaxLights];
 };
 
-struct TextureData
-{
-    void *texture = nullptr; // host
-    int width = 0;
-    int height = 0;
-};
-struct TextureID
-{
-    uint64_t texture = 0;
-    uint32_t width = 0;
-    uint32_t height = 0;
-
-    bool operator==(const TextureID& v) const;
-    bool operator<(const TextureID& v) const;
-};
-TextureID identifier(const TextureData& data);
-
-using BufferID = void*;
+using TextureData = void*;
+using BufferData = void*;
 
 struct MeshData
 {
     void *vertex_buffer = nullptr; // host
     void *index_buffer = nullptr; // host
+    int vertex_stride = 0; // if 0, treated as size_of_vertex_buffer / vertex_count
     int vertex_count = 0;
-    int index_bits = 0;
+    int vertex_offset = 0; // in byte
+    int index_stride = 0;
     int index_count = 0;
-    int index_offset = 0;
+    int index_offset = 0; // in byte
     bool is_dynamic = false; // true if skinned, has blendshapes, etc
-    float3x4 transform;
-};
-struct MeshID
-{
-    uint64_t vertex_buffer = 0;
-    uint64_t index_buffer = 0;
-    uint32_t vertex_count = 0;
-    uint32_t index_count = 0;
-    uint32_t index_offset = 0;
-    uint32_t pad = 0;
 
-    bool operator==(const MeshID& v) const;
-    bool operator<(const MeshID& v) const;
+    bool operator==(const MeshData& v) const;
+    bool operator<(const MeshData& v) const;
 };
-MeshID identifier(const MeshData& data);
+
+
+struct SkinWeight1
+{
+    float weight;
+    int index;
+};
+
+struct SkinWeight4
+{
+    float weight[4];
+    int index[4];
+};
+
+struct SkinData
+{
+    const uint8_t *bone_counts;
+    const SkinWeight1 *weights1;
+    const SkinWeight4 *weights4;
+    const float4x4 *matrices;
+    int num_bone_counts;
+    int num_weights1;
+    int num_weights4;
+    int num_matrices;
+
+    bool operator==(const SkinData& v) const;
+    bool operator<(const SkinData& v) const;
+};
+
+struct SkinDataHolder
+{
+    std::vector<uint8_t> bone_counts;
+    std::vector<SkinWeight1> weights1;
+    std::vector<SkinWeight4> weights4;
+    std::vector<float4x4> matrices;
+
+    void assign(const SkinData& v);
+};
+
+
+struct MeshInstanceData
+{
+    MeshData mesh;
+    SkinData skin;
+    float4x4 transform;
+};
 
 } // namespace rths

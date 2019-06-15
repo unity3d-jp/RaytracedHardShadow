@@ -429,9 +429,9 @@ void GfxContextDXR::setSceneData(SceneData& data)
 
 void GfxContextDXR::setRenderTarget(TextureData& rt)
 {
-    auto& data = m_texture_records[identifier(rt)];
+    auto& data = m_texture_records[rt];
     if (!data) {
-        data = m_resource_translator->createTemporaryTexture(rt.texture);
+        data = m_resource_translator->createTemporaryTexture(rt);
         if (!data->resource) {
             DebugPrint("GfxContextDXR::setRenderTarget(): failed to translate texture\n");
             return;
@@ -463,7 +463,7 @@ void GfxContextDXR::setRenderTarget(TextureData& rt)
 #endif
 }
 
-void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
+void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
 {
     auto translate_buffer = [this](void *buffer) {
         auto& data = m_buffer_records[buffer];
@@ -473,21 +473,19 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
         return data;
     };
 
-    size_t num_meshes = meshes.size();
+    size_t num_meshes = instances.size();
     for (size_t i = 0; i < num_meshes; ++i) {
-        auto& src = meshes[i];
-        auto& data = m_mesh_records[identifier(src)];
+        auto& inst = instances[i];
+        auto& mesh = inst.mesh;
+        auto& data = m_mesh_records[mesh];
         if (!data) {
             data = std::make_shared<MeshDataDXR>();
-            data->vertex_count = src.vertex_count;
-            data->index_bits = src.index_bits;
-            data->index_count = src.index_count;
-            data->index_offset = src.index_offset;
+            dynamic_cast<MeshData&>(*data) = mesh;
         }
         ++data->use_count;
 
         if (!data->vertex_buffer) {
-            data->vertex_buffer = translate_buffer(src.vertex_buffer);
+            data->vertex_buffer = translate_buffer(mesh.vertex_buffer);
             if (!data->vertex_buffer->resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate vertex buffer\n");
                 continue;
@@ -496,6 +494,9 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
                 DebugPrint("GfxContextDXR::setMeshes(): unrecognizable vertex format\n");
                 continue;
             }
+
+            if (data->vertex_stride == 0)
+                data->vertex_stride = data->vertex_buffer->size / data->vertex_count;
 
 #ifdef rthsEnableBufferValidation
             if (data->vertex_buffer) {
@@ -507,18 +508,21 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
 #endif
         }
         if (!data->index_buffer) {
-            data->index_buffer = translate_buffer(src.index_buffer);
+            data->index_buffer = translate_buffer(mesh.index_buffer);
             if (!data->index_buffer->resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate index buffer\n");
                 continue;
             }
+
+            if (data->index_stride == 0)
+                data->index_stride = data->index_buffer->size / data->index_count;
 
 #ifdef rthsEnableBufferValidation
             if (data->index_buffer) {
                 // inspect buffer
                 std::vector<uint32_t> index_buffer_data32;
                 std::vector<uint16_t> index_buffer_data16;
-                if (data->index_bits == 16) {
+                if (data->index_stride == 2) {
                     index_buffer_data16.resize(data->index_buffer->size / sizeof(uint16_t), std::numeric_limits<uint16_t>::max());
                     readbackBuffer(index_buffer_data16.data(), data->index_buffer->resource, data->index_buffer->size);
                 }
@@ -536,16 +540,15 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
             geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
             geom_desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
             if (data->vertex_buffer->resource) {
-                geom_desc.Triangles.VertexBuffer.StartAddress = data->vertex_buffer->resource->GetGPUVirtualAddress();
-                geom_desc.Triangles.VertexBuffer.StrideInBytes = data->vertex_buffer->size / data->vertex_count;
+                geom_desc.Triangles.VertexBuffer.StartAddress = data->vertex_buffer->resource->GetGPUVirtualAddress() + data->vertex_offset;
+                geom_desc.Triangles.VertexBuffer.StrideInBytes = data->vertex_stride;
                 geom_desc.Triangles.VertexCount = data->vertex_count;
                 geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
             }
             if (data->index_buffer->resource) {
-                int index_size = data->index_bits / 8;
-                geom_desc.Triangles.IndexBuffer = data->index_buffer->resource->GetGPUVirtualAddress() + (index_size * data->index_offset);
+                geom_desc.Triangles.IndexBuffer = data->index_buffer->resource->GetGPUVirtualAddress() + data->index_offset;
                 geom_desc.Triangles.IndexCount = data->index_count;
-                geom_desc.Triangles.IndexFormat = data->index_bits == 16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+                geom_desc.Triangles.IndexFormat = data->index_stride == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
             }
             // note: transform is handled by top level acceleration structure
 
@@ -574,7 +577,10 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
             m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
         }
 
-        m_mesh_instances.push_back({data, src.transform});
+        MeshInstanceDataDXR tmp;
+        dynamic_cast<MeshInstanceData&>(tmp) = inst;
+        tmp.mesh = data;
+        m_mesh_instances.push_back(std::move(tmp));
     }
 
     num_meshes = m_mesh_instances.size();
@@ -610,7 +616,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshData>& meshes)
             for (uint32_t i = 0; i < num_meshes; i++) {
                 auto& instance = m_mesh_instances[i];
 
-                (float3x4&)instance_descs[i].Transform = instance.transform;
+                (float3x4&)instance_descs[i].Transform = to_float3x4(instance.transform);
                 instance_descs[i].InstanceID = i; // This value will be exposed to the shader via InstanceID()
                 instance_descs[i].InstanceMask = 0xFF;
                 instance_descs[i].InstanceContributionToHitGroupIndex = i;
