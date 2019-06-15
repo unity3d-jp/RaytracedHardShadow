@@ -45,15 +45,6 @@ const D3D12_HEAP_PROPERTIES kReadbackHeapProps =
 };
 
 
-static inline std::string ToString(ID3DBlob *blob)
-{
-    std::string ret;
-    ret.resize(blob->GetBufferSize());
-    memcpy(&ret[0], blob->GetBufferPointer(), blob->GetBufferSize());
-    return ret;
-}
-
-
 
 static int g_gfx_initialize_count = 0;
 static std::unique_ptr<GfxContextDXR> g_gfx_context;
@@ -88,16 +79,6 @@ GfxContextDXR::GfxContextDXR()
 
 GfxContextDXR::~GfxContextDXR()
 {
-}
-
-DescriptorHandleDXR GfxContextDXR::allocateHandle()
-{
-    DescriptorHandleDXR ret;
-    ret.hcpu = m_srvuav_cpu_handle_base;
-    ret.hgpu = m_srvuav_gpu_handle_base;
-    m_srvuav_cpu_handle_base.ptr += m_desc_handle_stride;
-    m_srvuav_gpu_handle_base.ptr += m_desc_handle_stride;
-    return ret;
 }
 
 ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)
@@ -228,11 +209,11 @@ bool GfxContextDXR::initializeDevice()
     if (!m_resource_translator)
         return false;
 
-
     // fence
-    {
-        m_fence = m_resource_translator->getFence(m_device);
-    }
+    m_fence = m_resource_translator->getFence(m_device);
+
+    // deformer
+    m_deformer = std::make_shared<DeformerDXR>(m_device, m_fence);
 
     // command queue for raytrace
     {
@@ -261,17 +242,26 @@ bool GfxContextDXR::initializeDevice()
     // descriptor heap
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
-        desc.NumDescriptors = 256;
+        desc.NumDescriptors = 16;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvuav_heap));
-        m_srvuav_cpu_handle_base = m_srvuav_heap->GetCPUDescriptorHandleForHeapStart();
-        m_srvuav_gpu_handle_base = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart();
-        m_desc_handle_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
+        UINT handle_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
+        auto hcpu_base = m_srvuav_heap->GetCPUDescriptorHandleForHeapStart();
+        auto hgpu_base = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart();
 
-        m_render_target_handle = allocateHandle();
-        m_tlas_handle = allocateHandle();
-        m_scene_buffer_handle = allocateHandle();
+        auto allocate_handle = [this, &hcpu_base, &hgpu_base, handle_stride]() {
+            DescriptorHandleDXR ret;
+            ret.hcpu = hcpu_base;
+            ret.hgpu = hgpu_base;
+            hcpu_base.ptr += handle_stride;
+            hgpu_base.ptr += handle_stride;
+            return ret;
+        };
+
+        m_render_target_handle = allocate_handle();
+        m_tlas_handle = allocate_handle();
+        m_scene_buffer_handle = allocate_handle();
     }
 
     // scene constant buffer
@@ -289,15 +279,12 @@ bool GfxContextDXR::initializeDevice()
     // local root signature
     {
         D3D12_DESCRIPTOR_RANGE ranges[] = {
-            // gOutput
             { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 },
-            // gRtScene
             { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 1 },
-            // gScene
             { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 2 },
         };
 
-        D3D12_ROOT_PARAMETER params[_countof(ranges)];
+        D3D12_ROOT_PARAMETER params[_countof(ranges)]{};
         for (int i = 0; i < _countof(ranges); i++) {
             auto& param = params[i];
             param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;

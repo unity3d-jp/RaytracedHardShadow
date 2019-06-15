@@ -75,5 +75,13 @@ DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format)
     }
 }
 
+std::string ToString(ID3DBlob *blob)
+{
+    std::string ret;
+    ret.resize(blob->GetBufferSize());
+    memcpy(&ret[0], blob->GetBufferPointer(), blob->GetBufferSize());
+    return ret;
+}
+
 } // namespace rths
 #endif // _WIN32

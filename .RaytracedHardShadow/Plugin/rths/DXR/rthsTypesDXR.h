@@ -49,6 +49,7 @@ DefPtr(ID3D12CommandAllocator);
 DefPtr(ID3D12Resource);
 DefPtr(ID3D12DescriptorHeap);
 DefPtr(ID3D12StateObject);
+DefPtr(ID3D12PipelineState);
 DefPtr(ID3D12RootSignature);
 DefPtr(ID3D12StateObjectProperties);
 DefPtr(ID3D12Debug);
@@ -128,11 +129,14 @@ class MeshInstanceDataDXR : public MeshInstanceData
 public:
     MeshDataDXRPtr mesh;
 
+    ID3D12DescriptorHeapPtr srvuav_heap;
+    ID3D12ResourcePtr mesh_info;
     ID3D12ResourcePtr blendshape_weights;
     ID3D12ResourcePtr bones;
     ID3D12ResourcePtr vertex_buffer_deformed;
     ID3D12ResourcePtr blas_deformed;
 };
+using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 
 
 struct DescriptorHandleDXR
@@ -160,6 +164,7 @@ private:
 };
 
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
+std::string ToString(ID3DBlob *blob);
 
 } // namespace rths
 #endif // _WIN32

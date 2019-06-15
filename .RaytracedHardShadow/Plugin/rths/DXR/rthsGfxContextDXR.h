@@ -2,6 +2,7 @@
 #ifdef _WIN32
 #include "rthsTypesDXR.h"
 #include "rthsResourceTranslatorDXR.h"
+#include "rthsDeformerDXR.h"
 
 #define rthsMaxBounce 2
 
@@ -27,7 +28,6 @@ public:
     void finish();
     void releaseUnusedResources();
 
-    DescriptorHandleDXR allocateHandle();
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     ID3D12ResourcePtr createTexture(int width, int height, DXGI_FORMAT format);
 
@@ -47,6 +47,8 @@ private:
     ~GfxContextDXR();
 
     IResourceTranslatorPtr m_resource_translator;
+    DeformerDXRPtr m_deformer;
+
     ID3D12Device5Ptr m_device;
 
     // command list for raytrace
@@ -67,14 +69,11 @@ private:
     ID3D12RootSignaturePtr m_local_rootsig;
 
     ID3D12ResourcePtr m_shader_table;
-    int m_desc_handle_stride = 0;
     int m_shader_table_entry_count = 0;
     int m_shader_table_entry_capacity = 0;
     int m_shader_record_size = 0;
 
     ID3D12DescriptorHeapPtr m_srvuav_heap;
-    D3D12_CPU_DESCRIPTOR_HANDLE m_srvuav_cpu_handle_base;
-    D3D12_GPU_DESCRIPTOR_HANDLE m_srvuav_gpu_handle_base;
 
     std::map<TextureData, TextureDataDXRPtr> m_texture_records;
     std::map<BufferData, BufferDataDXRPtr> m_buffer_records;
