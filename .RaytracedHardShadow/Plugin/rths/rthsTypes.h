@@ -8,6 +8,30 @@ constexpr float RadToDeg = 1.0f / (PI / 180.0f);
 
 using nanosec = uint64_t;
 
+struct int2
+{
+    int x, y;
+
+    int& operator[](size_t i) { return ((int*)this)[i]; }
+    const int& operator[](size_t i) const { return ((int*)this)[i]; }
+};
+
+struct int3
+{
+    int x, y, z;
+
+    int& operator[](size_t i) { return ((int*)this)[i]; }
+    const int& operator[](size_t i) const { return ((int*)this)[i]; }
+};
+
+struct int4
+{
+    int x, y, z, w;
+
+    int& operator[](size_t i) { return ((int*)this)[i]; }
+    const int& operator[](size_t i) const { return ((int*)this)[i]; }
+};
+
 struct float2
 {
     float x,y;
@@ -57,6 +81,11 @@ inline float dot(const float3& l, const float3& r) { return l.x*r.x + l.y*r.y + 
 inline float length_sq(const float3& v) { return dot(v, v); }
 inline float length(const float3& v) { return sqrt(length_sq(v)); }
 inline float3 normalize(const float3& v) { return v / length(v); }
+
+inline float4 to_float4(const float3& xyz, float w)
+{
+    return{ xyz.x, xyz.y, xyz.z, w };
+}
 
 inline float3x4 to_float3x4(const float4x4& v)
 {
@@ -140,12 +169,12 @@ using GPUResourcePtr = void*;
 using TextureData = GPUResourcePtr;
 using BufferData = GPUResourcePtr;
 
-struct SkinWeight1
+struct BoneWeight1
 {
     float weight;
     int index;
 };
-struct SkinWeight4
+struct BoneWeight4
 {
     float weight[4];
     int index[4];
@@ -154,8 +183,8 @@ struct SkinData
 {
     // bone_counts & weights1 and weights4 are mutually exclusive
     const uint8_t *bone_counts;
-    const SkinWeight1 *weights1;
-    const SkinWeight4 *weights4;
+    const BoneWeight1 *weights1;
+    const BoneWeight4 *weights4;
     int num_bone_counts;
     int num_weights1;
     int num_weights4;

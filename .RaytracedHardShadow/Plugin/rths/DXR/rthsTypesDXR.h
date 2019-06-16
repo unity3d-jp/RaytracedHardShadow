@@ -110,6 +110,8 @@ public:
     BufferDataDXRPtr vertex_buffer;
     BufferDataDXRPtr index_buffer;
 
+    ID3D12ResourcePtr mesh_info;
+
     // skinning data
     ID3D12ResourcePtr bone_counts;
     ID3D12ResourcePtr bone_weights;
@@ -130,10 +132,9 @@ public:
     MeshDataDXRPtr mesh;
 
     ID3D12DescriptorHeapPtr srvuav_heap;
-    ID3D12ResourcePtr mesh_info;
     ID3D12ResourcePtr blendshape_weights;
     ID3D12ResourcePtr bones;
-    ID3D12ResourcePtr vertex_buffer_deformed;
+    ID3D12ResourcePtr deformed_vertices;
     ID3D12ResourcePtr blas_deformed;
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
@@ -150,6 +151,7 @@ struct DescriptorHandleDXR
 
 extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
+extern const D3D12_HEAP_PROPERTIES kReadbackHeapProps;
 
 // thin wrapper for Windows' event
 class FenceEventDXR

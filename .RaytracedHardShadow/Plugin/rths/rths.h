@@ -14,12 +14,12 @@ using GPUResourcePtr = void*;
 struct float4 { float x, y, z, w; };
 struct float4x4 { float4 v[4]; };
 
-struct SkinWeight1
+struct BoneWeight1
 {
     float weight;
     int index;
 };
-struct SkinWeight4
+struct BoneWeight4
 {
     float weight[4];
     int index[4];
@@ -28,8 +28,8 @@ struct SkinData
 {
     // bone_counts & weights1 and weights4 are mutually exclusive
     const uint8_t *bone_counts;
-    const SkinWeight1 *weights1;
-    const SkinWeight4 *weights4;
+    const BoneWeight1 *weights1;
+    const BoneWeight4 *weights4;
     int num_bone_counts;
     int num_weights1;
     int num_weights4;
