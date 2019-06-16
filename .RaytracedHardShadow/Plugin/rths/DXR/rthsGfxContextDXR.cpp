@@ -213,7 +213,7 @@ bool GfxContextDXR::initializeDevice()
     m_fence = m_resource_translator->getFence(m_device);
 
     // deformer
-    m_deformer = std::make_shared<DeformerDXR>(m_device, m_fence);
+    m_deformer = std::make_shared<DeformerDXR>(m_device);
 
     // command queue for raytrace
     {
@@ -412,6 +412,8 @@ void GfxContextDXR::setSceneData(SceneData& data)
         *dst = data;
         m_scene_buffer->Unmap(0, nullptr);
     }
+
+    m_gpu_skinning = (data.raytrace_flags & (int)RaytraceFlags::GPUSkinning) != 0;
 }
 
 void GfxContextDXR::setRenderTarget(TextureData& rt)
@@ -460,6 +462,9 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
         return data;
     };
 
+    m_deformer->prepare();
+    int num_gpu_skinning = 0;
+
     size_t num_meshes = instances.size();
     for (size_t i = 0; i < num_meshes; ++i) {
         auto& inst = instances[i];
@@ -481,9 +486,6 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
                 DebugPrint("GfxContextDXR::setMeshes(): unrecognizable vertex format\n");
                 continue;
             }
-
-            if (data->vertex_stride == 0)
-                data->vertex_stride = data->vertex_buffer->size / data->vertex_count;
 
 #ifdef rthsEnableBufferValidation
             if (data->vertex_buffer) {
@@ -521,17 +523,52 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
 #endif
         }
 
+        auto inst_dxr = std::make_shared<MeshInstanceDataDXR>();
+        dynamic_cast<MeshInstanceData&>(*inst_dxr) = inst;
+        inst_dxr->mesh = data;
+        if (m_gpu_skinning) {
+            if (m_deformer->queueDeformCommand(*inst_dxr))
+                ++num_gpu_skinning;
+        }
+
+        m_mesh_instances.push_back(std::move(inst_dxr));
+    }
+
+    if (num_gpu_skinning > 0) {
+        // execute deform
+        auto fence_value = m_resource_translator->inclementFenceValue();
+        m_deformer->executeCommand(m_fence, fence_value);
+
+        // add wait command because building acceleration structure depends on deform
+        m_cmd_queue->Wait(m_fence, fence_value);
+    }
+
+    // build bottom level acceleration structures
+    num_meshes = m_mesh_instances.size();
+    for (size_t i = 0; i < num_meshes; ++i) {
+        auto& inst = *m_mesh_instances[i];
+        auto& mesh = *inst.mesh;
+        auto& data = m_mesh_records[mesh];
+
         // build bottom level acceleration structure
-        if (!data->blas) {
+        auto& blas = m_gpu_skinning && inst.deformed_vertices ? inst.blas_deformed : data->blas;
+        if (!blas) {
             D3D12_RAYTRACING_GEOMETRY_DESC geom_desc{};
             geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
             geom_desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-            if (data->vertex_buffer->resource) {
-                geom_desc.Triangles.VertexBuffer.StartAddress = data->vertex_buffer->resource->GetGPUVirtualAddress() + data->vertex_offset;
-                geom_desc.Triangles.VertexBuffer.StrideInBytes = data->vertex_stride;
+            if (m_gpu_skinning && inst.deformed_vertices) {
+                geom_desc.Triangles.VertexBuffer.StartAddress = inst.deformed_vertices->GetGPUVirtualAddress();
+                geom_desc.Triangles.VertexBuffer.StrideInBytes = sizeof(float4);
                 geom_desc.Triangles.VertexCount = data->vertex_count;
                 geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
             }
+            else if (data->vertex_buffer->resource) {
+                geom_desc.Triangles.VertexBuffer.StartAddress = data->vertex_buffer->resource->GetGPUVirtualAddress() + data->vertex_offset;
+                geom_desc.Triangles.VertexBuffer.StrideInBytes = data->getVertexStride();
+                geom_desc.Triangles.VertexCount = data->vertex_count;
+                geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+            }
+
             if (data->index_buffer->resource) {
                 geom_desc.Triangles.IndexBuffer = data->index_buffer->resource->GetGPUVirtualAddress() + data->index_offset;
                 geom_desc.Triangles.IndexCount = data->index_count;
@@ -553,26 +590,19 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
             // Create the buffers. They need to support UAV, and since we are going to immediately use them, we create them with an unordered-access state
             auto scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
             m_temporary_buffers.push_back(scratch);
-            data->blas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+            blas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
 
             // Create the bottom-level AS
             D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
             as_desc.Inputs = inputs;
-            as_desc.DestAccelerationStructureData = data->blas->GetGPUVirtualAddress();
+            as_desc.DestAccelerationStructureData = blas->GetGPUVirtualAddress();
             as_desc.ScratchAccelerationStructureData = scratch->GetGPUVirtualAddress();
 
             m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
         }
-
-        MeshInstanceDataDXR tmp;
-        dynamic_cast<MeshInstanceData&>(tmp) = inst;
-        tmp.mesh = data;
-        m_mesh_instances.push_back(std::move(tmp));
     }
 
-    num_meshes = m_mesh_instances.size();
-
-    // build top level acceleration structures
+    // build top level acceleration structure
     {
         // First, get the size of the TLAS buffers and create them
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
@@ -601,7 +631,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
             instance_descs_buf->Map(0, nullptr, (void**)&instance_descs);
             ZeroMemory(instance_descs, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes);
             for (uint32_t i = 0; i < num_meshes; i++) {
-                auto& instance = m_mesh_instances[i];
+                auto& instance = *m_mesh_instances[i];
 
                 (float3x4&)instance_descs[i].Transform = to_float3x4(instance.transform);
                 instance_descs[i].InstanceID = i; // This value will be exposed to the shader via InstanceID()
@@ -693,8 +723,8 @@ void GfxContextDXR::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURC
 uint64_t GfxContextDXR::submitCommandList()
 {
     m_cmd_list->Close();
-    ID3D12CommandList* cmd_list = m_cmd_list.GetInterfacePtr();
-    m_cmd_queue->ExecuteCommandLists(1, &cmd_list);
+    ID3D12CommandList* cmd_list[]{ m_cmd_list.GetInterfacePtr() };
+    m_cmd_queue->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 
     auto fence_value = m_resource_translator->inclementFenceValue();
     m_cmd_queue->Signal(m_fence, fence_value);

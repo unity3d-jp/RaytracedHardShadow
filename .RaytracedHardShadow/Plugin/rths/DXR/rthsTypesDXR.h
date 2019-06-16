@@ -123,6 +123,9 @@ public:
     ID3D12ResourcePtr blas; // bottom level acceleration structure
 
     int use_count = 0;
+
+    int getVertexStride() const;
+    int getIndexStride() const;
 };
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
 

@@ -86,10 +86,11 @@ private:
     TextureDataDXRPtr m_render_target;
     DescriptorHandleDXR m_render_target_handle;
 
-    std::vector<MeshInstanceDataDXR> m_mesh_instances;
+    std::vector<MeshInstanceDataDXRPtr> m_mesh_instances;
     ID3D12ResourcePtr m_tlas;
     DescriptorHandleDXR m_tlas_handle;
 
+    bool m_gpu_skinning = false;
     bool m_flushing = false;
 };
 

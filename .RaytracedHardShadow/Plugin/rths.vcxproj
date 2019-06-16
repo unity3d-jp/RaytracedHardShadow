@@ -41,22 +41,17 @@
   <ItemGroup>
     <CustomBuild Include="rths\DXR\Shaders\rthsShadowDXR.hlsl">
       <FileType>Document</FileType>
-      <Command>dxc %(FullPath) -T lib_6_3 -Fo $(IntDir)%(Filename).bin
+      <Command>dxc %(FullPath) -T lib_6_3 -Fo "$(IntDir)%(Filename).bin" -nologo
 Externals\bin\File2Obj /in:$(IntDir)%(Filename).bin /out:$(IntDir)%(Filename).obj</Command>
       <Outputs>$(IntDir)%(Filename).obj</Outputs>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="rths\DXR\Shaders\rthsDeform.hlsl">
-      <ShaderType>Compute</ShaderType>
-      <ShaderModel>6.3</ShaderModel>
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">dxc %(FullPath) -T cs_6_3 -E "main" -Fo "$(IntDir)%(Filename).bin" /nologo
+      <Command>dxc %(FullPath) -T cs_6_3 -E "main" -Fo "$(IntDir)%(Filename).bin" -nologo
 Externals\bin\File2Obj /in:$(IntDir)%(Filename).bin /out:$(IntDir)%(Filename).obj</Command>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">dxc %(FullPath) -T cs_6_3 -E "main" -Fo "$(IntDir)%(Filename).bin" /nologo
-Externals\bin\File2Obj /in:$(IntDir)%(Filename).bin /out:$(IntDir)%(Filename).obj</Command>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(IntDir)%(Filename).obj</Outputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(IntDir)%(Filename).obj</Outputs>
+      <Outputs>$(IntDir)%(Filename).obj</Outputs>
     </CustomBuild>
   </ItemGroup>
   <PropertyGroup Label="Globals">

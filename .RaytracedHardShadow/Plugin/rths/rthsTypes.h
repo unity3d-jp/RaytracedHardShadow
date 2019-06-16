@@ -105,6 +105,9 @@ inline float3 extract_direction(const float4x4& m)
     return normalize((const float3&)m[2]);
 }
 
+float4x4 operator*(const float4x4 &a, const float4x4 &b);
+float4x4 invert(const float4x4& x);
+
 
 
 struct CameraData
@@ -125,6 +128,7 @@ enum class RaytraceFlags : int
 {
     IgnoreSelfShadow = 1,
     KeepSelfDropShadow = 2,
+    GPUSkinning = 4,
 };
 
 enum class LightType : int
@@ -182,9 +186,11 @@ struct BoneWeight4
 struct SkinData
 {
     // bone_counts & weights1 and weights4 are mutually exclusive
+    const float4x4 *bindposes;
     const uint8_t *bone_counts;
     const BoneWeight1 *weights1;
     const BoneWeight4 *weights4;
+    int num_bones;
     int num_bone_counts;
     int num_weights1;
     int num_weights4;

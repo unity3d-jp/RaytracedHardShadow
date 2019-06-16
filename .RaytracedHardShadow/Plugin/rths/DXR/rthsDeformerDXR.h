@@ -5,14 +5,15 @@ namespace rths {
 class DeformerDXR
 {
 public:
-    DeformerDXR(ID3D12Device5Ptr device, ID3D12FencePtr fence);
+    DeformerDXR(ID3D12Device5Ptr device);
     ~DeformerDXR();
 
+    bool prepare();
     bool queueDeformCommand(MeshInstanceDataDXR& inst);
+    bool executeCommand(ID3D12FencePtr fence, UINT64 fence_value);
 
 private:
     ID3D12Device5Ptr m_device;
-    ID3D12FencePtr m_fence;
 
     ID3D12CommandAllocatorPtr m_cmd_allocator;
     ID3D12GraphicsCommandList4Ptr m_cmd_list;
