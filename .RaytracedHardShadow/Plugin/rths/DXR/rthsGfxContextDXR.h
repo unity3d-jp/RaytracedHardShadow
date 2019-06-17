@@ -79,6 +79,7 @@ private:
     std::map<BufferData, BufferDataDXRPtr> m_buffer_records;
     std::map<MeshData*, MeshDataDXRPtr> m_mesh_records;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
+    MeshDataCallback m_on_mesh_delete;
 
     ID3D12ResourcePtr m_scene_buffer;
     DescriptorHandleDXR m_scene_buffer_handle;

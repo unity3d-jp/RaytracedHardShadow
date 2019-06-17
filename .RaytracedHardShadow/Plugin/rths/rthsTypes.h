@@ -210,6 +210,9 @@ struct BlendshapeData
     std::vector<BlendshapeFrameData> frames;
 };
 
+struct MeshData;
+using MeshDataCallback = std::function<void(MeshData*)>;
+
 struct MeshData
 {
     GPUResourcePtr vertex_buffer = nullptr; // host
@@ -220,9 +223,13 @@ struct MeshData
     int index_stride = 0;
     int index_count = 0;
     int index_offset = 0; // in byte
-
     SkinData skin;
     std::vector<BlendshapeData> blendshapes;
+
+    static void addOnMeshDelete(const MeshDataCallback& cb);
+    static void removeOnMeshDelete(const MeshDataCallback& cb);
+    MeshData();
+    ~MeshData();
 };
 
 struct MeshInstanceData
@@ -232,6 +239,9 @@ struct MeshInstanceData
     std::vector<float4x4> bones;
     std::vector<float> blendshape_weights;
     bool auto_release = false;
+
+    MeshInstanceData();
+    ~MeshInstanceData();
 };
 
 } // namespace rths

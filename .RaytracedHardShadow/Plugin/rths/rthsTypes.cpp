@@ -105,4 +105,37 @@ float4x4 invert(const float4x4& x)
     return s;
 }
 
+static std::vector<MeshDataCallback> g_on_mesh_delete;
+
+void MeshData::addOnMeshDelete(const MeshDataCallback& cb)
+{
+    g_on_mesh_delete.push_back(cb);
+}
+
+void MeshData::removeOnMeshDelete(const MeshDataCallback& cb)
+{
+    auto it = std::find_if(g_on_mesh_delete.begin(), g_on_mesh_delete.end(),
+        [&cb](auto& a) { return a.target<void*>() == cb.target<void*>(); });
+    if (it != g_on_mesh_delete.end())
+        g_on_mesh_delete.erase(it);
+}
+
+MeshData::MeshData()
+{
+}
+
+MeshData::~MeshData()
+{
+    for (auto& cb : g_on_mesh_delete)
+        cb(this);
+}
+
+MeshInstanceData::MeshInstanceData()
+{
+}
+
+MeshInstanceData::~MeshInstanceData()
+{
+}
+
 } // namespace rths 

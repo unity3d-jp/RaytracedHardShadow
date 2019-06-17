@@ -362,20 +362,9 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void AddMesh(rthsMeshData mesh, Matrix4x4 trans)
+        public void AddMesh(rthsMeshInstanceData mesh)
         {
-            var inst = rthsMeshInstanceData.Create(mesh);
-            inst.SetTransform(trans);
-            rthsAddMesh(self, inst);
-        }
-
-        public void AddMesh(rthsMeshData mesh, SkinnedMeshRenderer smr)
-        {
-            var inst = rthsMeshInstanceData.Create(mesh);
-            inst.SetTransform(smr.localToWorldMatrix);
-            inst.SetBones(smr);
-            inst.SetBlendshapeWeights(smr);
-            rthsAddMesh(self, inst);
+            rthsAddMesh(self, mesh);
         }
 
         public static void IssueRender()

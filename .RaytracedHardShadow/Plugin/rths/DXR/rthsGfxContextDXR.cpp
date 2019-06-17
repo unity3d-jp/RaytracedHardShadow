@@ -74,11 +74,18 @@ GfxContextDXR* GfxContextDXR::getInstance()
 
 GfxContextDXR::GfxContextDXR()
 {
-    initializeDevice();
+    if (!initializeDevice())
+        return;
+
+    m_on_mesh_delete = [this](MeshData *mesh) {
+        m_mesh_records.erase(mesh);
+    };
+    MeshData::addOnMeshDelete(m_on_mesh_delete);
 }
 
 GfxContextDXR::~GfxContextDXR()
 {
+    MeshData::removeOnMeshDelete(m_on_mesh_delete);
 }
 
 ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)

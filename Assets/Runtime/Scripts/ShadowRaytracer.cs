@@ -101,7 +101,7 @@ namespace UTJ.RaytracedHardShadow
         rthsRenderer m_renderer;
 
         static int s_instanceCount, s_updateCount;
-        static Dictionary<Component, Mesh> s_meshCache;
+        static Dictionary<Mesh, MeshRecord> s_meshDataCache, s_bakedMeshDataCache;
         #endregion
 
 
@@ -255,55 +255,86 @@ namespace UTJ.RaytracedHardShadow
         // 2. prevent unexpected GC
         //    without cache, temporary meshes created by SkinnedMeshRenderer.Bake() may be GCed and can cause error or crash in render thread.
 
-        Mesh GetCachedMesh(Component c)
+        static void ClearAllMeshRecords()
         {
-            Mesh ret = null;
-            s_meshCache.TryGetValue(c, out ret);
-            return ret;
-        }
-        void CacheMesh(Component c, Mesh mesh)
-        {
-            s_meshCache.Add(c, mesh);
-        }
-        void ClearMeshCache()
-        {
-            s_meshCache.Clear();
+            foreach (var rec in s_meshDataCache)
+                rec.Value.meshData.Release();
+            s_meshDataCache.Clear();
+
+            ClearBakedMeshRecords();
         }
 
-        Mesh GetMesh(MeshRenderer mr)
+        static void ClearBakedMeshRecords()
         {
-            var ret = GetCachedMesh(mr);
-            if (ret == null)
-            {
-                var mf = mr.GetComponent<MeshFilter>();
-                ret = mf.sharedMesh;
-                if (ret != null)
-                    CacheMesh(mr, ret);
-            }
-            return ret;
+            foreach (var rec in s_bakedMeshDataCache)
+                rec.Value.meshData.Release();
+            s_bakedMeshDataCache.Clear();
         }
 
-        Mesh GetMesh(SkinnedMeshRenderer smr)
+
+        static rthsMeshData GetBakedMeshData(Mesh mesh)
         {
-            var ret = GetCachedMesh(smr);
-            if (ret == null)
+            if (mesh == null)
+                return default(rthsMeshData);
+
+            MeshRecord rec;
+            if (!s_bakedMeshDataCache.TryGetValue(mesh, out rec))
             {
-                var sharedMesh = smr.sharedMesh;
-                if (smr.rootBone != null || sharedMesh.blendShapeCount != 0 || smr.GetComponent<Cloth>() != null)
-                {
-                    // mesh is skinned or has blendshapes or cloth. bake is needed.
-                    ret = new Mesh();
-                    smr.BakeMesh(ret);
-                    CacheMesh(smr, ret);
-                    return ret;
-                }
-                else
-                {
-                    ret = sharedMesh;
-                    CacheMesh(smr, ret);
-                }
+                rec = new MeshRecord();
+                rec.Update(mesh);
+                s_bakedMeshDataCache.Add(mesh, rec);
             }
-            return ret;
+            rec.useCount++;
+            return rec.meshData;
+        }
+
+
+        static rthsMeshData GetMeshData(Mesh mesh)
+        {
+            if (mesh == null)
+                return default(rthsMeshData);
+
+            MeshRecord rec;
+            if (!s_meshDataCache.TryGetValue(mesh, out rec))
+            {
+                rec = new MeshRecord();
+                rec.Update(mesh);
+                s_meshDataCache.Add(mesh, rec);
+            }
+            rec.useCount++;
+            return rec.meshData;
+        }
+
+        rthsMeshInstanceData GetMeshInstanceData(MeshRenderer mr)
+        {
+            var mf = mr.GetComponent<MeshFilter>();
+            var inst = rthsMeshInstanceData.Create(GetMeshData(mf.sharedMesh));
+            inst.SetTransform(mr.localToWorldMatrix);
+            return inst;
+        }
+
+        rthsMeshInstanceData GetMeshInstanceData(SkinnedMeshRenderer smr)
+        {
+            // bake is needed if there is Cloth, or skinned or has blendshapes and GPU skinning is disabled
+            var cloth = smr.GetComponent<Cloth>();
+            bool requireBake = cloth != null || (!m_GPUSkinning && (smr.rootBone != null || smr.sharedMesh.blendShapeCount != 0));
+            if (requireBake)
+            {
+                var mesh = new Mesh();
+                smr.BakeMesh(mesh);
+                var inst = rthsMeshInstanceData.Create(GetBakedMeshData(mesh));
+                inst.SetTransform(smr.localToWorldMatrix);
+                return inst;
+            }
+            else
+            {
+                var md = GetMeshData(smr.sharedMesh);
+                var inst = rthsMeshInstanceData.Create(md);
+                inst.SetTransform(smr.localToWorldMatrix);
+                inst.SetBones(smr);
+                inst.SetBlendshapeWeights(smr);
+                return inst;
+            }
         }
 
         public void EnumerateMeshRenderers(Action<MeshRenderer> bodyMR, Action<SkinnedMeshRenderer> bodySMR)
@@ -388,8 +419,11 @@ namespace UTJ.RaytracedHardShadow
             {
                 ++s_instanceCount;
 
-                if (s_meshCache == null)
-                    s_meshCache = new Dictionary<Component, Mesh>();
+                if (s_meshDataCache == null)
+                {
+                    s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
+                    s_bakedMeshDataCache = new Dictionary<Mesh, MeshRecord>();
+                }
             }
             else
             {
@@ -399,6 +433,7 @@ namespace UTJ.RaytracedHardShadow
 
         void OnDisable()
         {
+            ClearAllMeshRecords();
             if (m_renderer)
             {
                 m_renderer.Release();
@@ -412,7 +447,7 @@ namespace UTJ.RaytracedHardShadow
             if (s_updateCount != 0)
             {
                 s_updateCount = 0;
-                ClearMeshCache();
+                ClearBakedMeshRecords();
             }
         }
 
@@ -484,8 +519,8 @@ namespace UTJ.RaytracedHardShadow
                     scl => { m_renderer.AddLight(scl); }
                     );
                 EnumerateMeshRenderers(
-                    mr => { m_renderer.AddMesh(GetMesh(mr), mr.transform.localToWorldMatrix); },
-                    smr => { m_renderer.AddMesh(GetMesh(smr), smr.transform.localToWorldMatrix); }
+                    mr => { m_renderer.AddMesh(GetMeshInstanceData(mr)); },
+                    smr => { m_renderer.AddMesh(GetMeshInstanceData(smr)); }
                     );
                 m_renderer.EndScene();
             }
