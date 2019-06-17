@@ -1,3 +1,5 @@
+#define kThreadBlockSize 128
+
 enum DeformFlag
 {
     DF_APPLY_BLENDSHAPE = 1,
@@ -65,7 +67,7 @@ float3 ApplySkinning(uint vid, float3 base_)
     return result;
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(kThreadBlockSize, 1, 1)]
 void main(uint3 tid : SV_DispatchThreadID)
 {
     uint vid = tid.x;

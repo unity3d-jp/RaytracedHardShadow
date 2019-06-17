@@ -19,6 +19,7 @@ public:
     ~D3D11ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
+    void setFenceValue(uint64_t v) override;
     uint64_t inclementFenceValue() override;
 
     TextureDataDXRPtr createTemporaryTexture(void *ptr) override;
@@ -45,6 +46,7 @@ public:
     ~D3D12ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
+    void setFenceValue(uint64_t v) override;
     uint64_t inclementFenceValue() override;
 
     TextureDataDXRPtr createTemporaryTexture(void *ptr) override;
@@ -133,6 +135,10 @@ ID3D12FencePtr D3D11ResourceTranslator::getFence(ID3D12Device *dxr_device)
     return ret;
 }
 
+void D3D11ResourceTranslator::setFenceValue(uint64_t v)
+{
+    m_fence_value = v;
+}
 uint64_t D3D11ResourceTranslator::inclementFenceValue()
 {
     return ++m_fence_value;
@@ -279,6 +285,10 @@ ID3D12FencePtr D3D12ResourceTranslator::getFence(ID3D12Device * dxr_device)
     return m_fence;
 }
 
+void D3D12ResourceTranslator::setFenceValue(uint64_t v)
+{
+    m_fence_value = v;
+}
 uint64_t D3D12ResourceTranslator::inclementFenceValue()
 {
     return ++m_fence_value;

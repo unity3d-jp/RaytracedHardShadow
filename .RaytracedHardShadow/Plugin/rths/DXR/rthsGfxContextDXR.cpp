@@ -526,7 +526,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
         inst_dxr->base = inst;
         inst_dxr->mesh = mesh_dxr;
         if (m_gpu_skinning) {
-            if (m_deformer->queueDeformCommand(*inst_dxr))
+            if (m_deformer->deform(*inst_dxr))
                 ++num_gpu_skinning;
         }
 
@@ -536,10 +536,12 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
     if (num_gpu_skinning > 0) {
         // execute deform
         auto fence_value = m_resource_translator->inclementFenceValue();
-        m_deformer->executeDeform(m_fence, fence_value);
-
-        // add wait command because building acceleration structure depends on deform
-        m_cmd_queue->Wait(m_fence, fence_value);
+        fence_value = m_deformer->execute(m_fence, fence_value);
+        if (fence_value) {
+            // add wait command because building acceleration structure depends on deform
+            m_cmd_queue->Wait(m_fence, fence_value);
+            m_resource_translator->setFenceValue(fence_value);
+        }
     }
 
     // build bottom level acceleration structures
