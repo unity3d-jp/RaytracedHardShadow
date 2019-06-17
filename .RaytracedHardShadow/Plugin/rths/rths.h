@@ -41,7 +41,7 @@ class IRenderer;
 
 rthsAPI rths::MeshData* rthsMeshCreate();
 rthsAPI void rthsMeshRelease(rths::MeshData *self);
-rthsAPI void rthsMeshSetGPUResource(rths::MeshData *self, rths::GPUResourcePtr vb, rths::GPUResourcePtr ib,
+rthsAPI void rthsMeshSetGPUBuffers(rths::MeshData *self, rths::GPUResourcePtr vb, rths::GPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset);
 rthsAPI void rthsMeshSetSkinBindposes(rths::MeshData *self, const rths::float4x4 *bindposes, int num_bindposes);
 rthsAPI void rthsMeshSetSkinWeights(rths::MeshData *self, const uint8_t *c, int nc, const rths::BoneWeight *w, int nw);

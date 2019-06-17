@@ -75,7 +75,7 @@ namespace UTJ.RaytracedHardShadow
         public IntPtr self;
         [DllImport("rths")] static extern IntPtr rthsMeshCreate();
         [DllImport("rths")] static extern void rthsMeshRelease(IntPtr self);
-        [DllImport("rths")] static extern void rthsMeshSetGPUResource(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
+        [DllImport("rths")] static extern void rthsMeshSetGPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
         [DllImport("rths")] static extern void rthsMeshSetSkinBindposes(IntPtr self, Matrix4x4[] bindposes, int num_bindposes);
         [DllImport("rths")] static extern void rthsMeshSetSkinWeights(IntPtr self, IntPtr c, int nc, IntPtr w, int nw);
         [DllImport("rths")] static extern void rthsMeshSetSkinWeights4(IntPtr self, BoneWeight[] w4, int nw4);
@@ -97,9 +97,9 @@ namespace UTJ.RaytracedHardShadow
             self = IntPtr.Zero;
         }
 
-        public void SetGPUResource(IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset)
+        public void SetGPUBuffers(IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset)
         {
-            rthsMeshSetGPUResource(self, vb, ib, vertexStride, vertexCount, vertexOffset, indexStride, indexCount, indexOffset);
+            rthsMeshSetGPUBuffers(self, vb, ib, vertexStride, vertexCount, vertexOffset, indexStride, indexCount, indexOffset);
         }
 
         public void SetBindpose(Matrix4x4[] bindposes)
@@ -128,21 +128,28 @@ namespace UTJ.RaytracedHardShadow
         }
 
 
-        public void SetGPUResources(Mesh mesh)
+        public void SetGPUBuffers(Mesh mesh)
         {
             int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
+            int indexCount = 0;
+            int prevIndexEnd = 0;
+
+            // merge continuous triangle submeshes into a single one
             int numSubmeshes = mesh.subMeshCount;
             for (int smi = 0; smi < numSubmeshes; ++smi)
             {
-                if (mesh.GetTopology(smi) == MeshTopology.Triangles)
-                {
-                    SetGPUResource(
-                        mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
-                        0, mesh.vertexCount, 0, indexStride, (int)mesh.GetIndexCount(smi), (int)mesh.GetIndexStart(smi) * indexStride);
+                if (mesh.GetTopology(smi) != MeshTopology.Triangles)
                     break;
-                }
+                int start = (int)mesh.GetIndexStart(smi);
+                if (start != prevIndexEnd)
+                    break;
+                indexCount += (int)mesh.GetIndexCount(smi);
+                prevIndexEnd = start + indexCount;
             }
 
+            SetGPUBuffers(
+                mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
+                0, mesh.vertexCount, 0, indexStride, indexCount, 0);
         }
     }
 
@@ -175,14 +182,66 @@ namespace UTJ.RaytracedHardShadow
         {
             rthsMeshInstanceSetTransform(self, transform);
         }
-        public void SetTransform(Matrix4x4[] bones)
+
+        public void SetBones(Matrix4x4[] bones)
         {
-            rthsMeshInstanceSetBones(self, bones, bones.Length);
+            if (bones == null)
+                rthsMeshInstanceSetBones(self, null, 0);
+            else
+                rthsMeshInstanceSetBones(self, bones, bones.Length);
+        }
+        public void SetBones(Transform[] bones)
+        {
+            if (bones == null)
+            {
+                rthsMeshInstanceSetBones(self, null, 0);
+            }
+            else
+            {
+                int n = bones.Length;
+                var transforms = new Matrix4x4[n];
+                for (int bi = 0; bi < n; ++bi)
+                {
+                    var bone = bones[bi];
+                    transforms[bi] = bone ? bone.localToWorldMatrix : Matrix4x4.identity;
+                }
+                SetBones(transforms);
+            }
+        }
+        public void SetBones(SkinnedMeshRenderer smr)
+        {
+            if (smr.rootBone != null)
+                SetBones(smr.bones);
         }
 
-        public void SetTransform(float[] bsw)
+        public void SetBlendshapeWeights(float[] bsw)
         {
-            rthsMeshInstanceSetBlendshapeWeights(self, bsw, bsw.Length);
+            if (bsw == null)
+                rthsMeshInstanceSetBlendshapeWeights(self, null, 0);
+            else
+                rthsMeshInstanceSetBlendshapeWeights(self, bsw, bsw.Length);
+        }
+        public void SetBlendshapeWeights(SkinnedMeshRenderer smr)
+        {
+            Mesh mesh = null;
+            if (smr != null)
+                mesh = smr.sharedMesh;
+
+            if (mesh != null)
+            {
+                int nbs = mesh.blendShapeCount;
+                if (nbs > 0)
+                {
+                    var weights = new float[nbs];
+                    for (int bsi = 0; bsi < nbs; ++bsi)
+                        weights[bsi] = smr.GetBlendShapeWeight(bsi);
+                    SetBlendshapeWeights(weights);
+                }
+            }
+            else
+            {
+                rthsMeshInstanceSetBlendshapeWeights(self, null, 0);
+            }
         }
     }
 
@@ -307,6 +366,15 @@ namespace UTJ.RaytracedHardShadow
         {
             var inst = rthsMeshInstanceData.Create(mesh);
             inst.SetTransform(trans);
+            rthsAddMesh(self, inst);
+        }
+
+        public void AddMesh(rthsMeshData mesh, SkinnedMeshRenderer smr)
+        {
+            var inst = rthsMeshInstanceData.Create(mesh);
+            inst.SetTransform(smr.localToWorldMatrix);
+            inst.SetBones(smr);
+            inst.SetBlendshapeWeights(smr);
             rthsAddMesh(self, inst);
         }
 

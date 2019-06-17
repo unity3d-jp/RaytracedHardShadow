@@ -34,9 +34,7 @@ namespace UTJ.RaytracedHardShadow
                 meshData = rthsMeshData.Create();
 
                 int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
-                meshData.SetGPUResource(
-                    mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
-                    0, mesh.vertexCount, 0, indexStride, (int)mesh.GetIndexCount(0), 0);
+                meshData.SetGPUBuffers(mesh);
 
                 meshData.SetBindpose(mesh.bindposes);
 #if UNITY_2019_1_OR_NEWER
@@ -68,22 +66,6 @@ namespace UTJ.RaytracedHardShadow
             public void Release()
             {
                 meshData.Release();
-            }
-        }
-
-        public class MeshInstanceRecord
-        {
-            public MeshRecord mesh;
-            public Mesh bakedMesh;
-            public Matrix4x4 transform;
-            public PinnedList<Matrix4x4> bones;
-            public PinnedList<float> blendshapeWeights;
-            public int useCount;
-
-            public void Release()
-            {
-                Misc.SafeDispose(ref bones);
-                Misc.SafeDispose(ref blendshapeWeights);
             }
         }
         #endregion

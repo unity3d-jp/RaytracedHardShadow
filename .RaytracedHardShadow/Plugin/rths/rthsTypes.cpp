@@ -93,12 +93,7 @@ float4x4 invert(const float4x4& x)
                 }
                 else {
                     // error
-                    return{ {
-                        { 1, 0, 0, 0 },
-                        { 0, 1, 0, 0 },
-                        { 0, 0, 1, 0 },
-                        { 0, 0, 0, 1 },
-                    } };
+                    return float4x4::identity();
                 }
             }
         }
@@ -108,16 +103,6 @@ float4x4 invert(const float4x4& x)
     s[3][1] = -x[3][0] * s[0][1] - x[3][1] * s[1][1] - x[3][2] * s[2][1];
     s[3][2] = -x[3][0] * s[0][2] - x[3][1] * s[1][2] - x[3][2] * s[2][2];
     return s;
-}
-
-bool MeshData::operator==(const MeshData& v) const
-{
-    return std::memcmp(this, &v, sizeof(*this)) == 0;
-}
-
-bool MeshData::operator<(const MeshData& v) const
-{
-    return std::memcmp(this, &v, sizeof(*this)) < 0;
 }
 
 } // namespace rths 

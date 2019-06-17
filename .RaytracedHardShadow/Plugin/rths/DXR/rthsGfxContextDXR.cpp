@@ -469,6 +469,9 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
     for (size_t i = 0; i < num_meshes; ++i) {
         auto& inst = instances[i];
         auto& mesh = inst->mesh;
+        if (mesh->vertex_count == 0 || mesh->index_count == 0)
+            continue;
+
         auto& mesh_dxr = m_mesh_records[mesh];
         if (!mesh_dxr) {
             mesh_dxr = std::make_shared<MeshDataDXR>();

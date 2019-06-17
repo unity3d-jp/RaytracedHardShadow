@@ -70,6 +70,16 @@ struct float4x4
 
     float4& operator[](size_t i) { return v[i]; }
     const float4& operator[](size_t i) const { return v[i]; }
+
+    static float4x4 identity()
+    {
+        return{ {
+             { 1, 0, 0, 0 },
+             { 0, 1, 0, 0 },
+             { 0, 0, 1, 0 },
+             { 0, 0, 0, 1 },
+         } };
+    }
 };
 
 
@@ -175,13 +185,13 @@ using BufferData = GPUResourcePtr;
 
 struct BoneWeight
 {
-    float weight;
-    int index;
+    float weight = 0.0f;
+    int index = 0;
 };
 struct BoneWeight4
 {
-    float weight[4];
-    int index[4];
+    float weight[4]{};
+    int index[4]{};
 };
 struct SkinData
 {
@@ -213,15 +223,12 @@ struct MeshData
 
     SkinData skin;
     std::vector<BlendshapeData> blendshapes;
-
-    bool operator==(const MeshData& v) const;
-    bool operator<(const MeshData& v) const;
 };
 
 struct MeshInstanceData
 {
-    MeshData *mesh{};
-    float4x4 transform{};
+    MeshData *mesh = nullptr;
+    float4x4 transform = float4x4::identity();
     std::vector<float4x4> bones;
     std::vector<float> blendshape_weights;
     bool auto_release = false;

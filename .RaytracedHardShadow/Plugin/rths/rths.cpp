@@ -14,7 +14,7 @@ rthsAPI void rthsMeshRelease(MeshData *self)
 {
     delete self;
 }
-rthsAPI void rthsMeshSetGPUResource(MeshData *self, GPUResourcePtr vb, GPUResourcePtr ib,
+rthsAPI void rthsMeshSetGPUBuffers(MeshData *self, GPUResourcePtr vb, GPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
 {
     if (!self)
