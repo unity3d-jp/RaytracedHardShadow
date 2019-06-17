@@ -106,22 +106,19 @@ void RendererBase::addReversePointLight(const float4x4& trans, float range)
     dst.range = range;
 }
 
-void RendererBase::addMesh(const MeshData& mesh, const float4x4& trans)
+void RendererBase::addMesh(MeshInstanceData *mesh)
 {
-    MeshInstanceData tmp{};
-    tmp.mesh = mesh;
-    tmp.transform = trans;
-    m_mesh_instance_data.push_back(std::move(tmp));
+    m_mesh_instance_data.push_back(mesh);
 }
 
-void RendererBase::addSkinnedMesh(const MeshData& mesh, const float4x4& trans, const BonesData& bones, const BlendshapeWeightData& bs)
+void RendererBase::releaseMeshInstances()
 {
-    MeshInstanceData tmp{};
-    tmp.mesh = mesh;
-    tmp.transform = trans;
-    tmp.bones = bones;
-    tmp.blendshape_weights = bs;
-    m_mesh_instance_data.push_back(std::move(tmp));
+    for(auto& mesh : m_mesh_instance_data) {
+        if (mesh->auto_release) {
+            delete mesh;
+        }
+    }
+    m_mesh_instance_data.clear();
 }
 
 } // namespace rths

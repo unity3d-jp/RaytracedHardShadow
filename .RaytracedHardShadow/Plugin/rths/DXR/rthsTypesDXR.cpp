@@ -85,18 +85,18 @@ std::string ToString(ID3DBlob *blob)
 
 int MeshDataDXR::getVertexStride() const
 {
-    if (vertex_stride == 0 && vertex_buffer)
-        return vertex_buffer->size / vertex_count;
+    if (base->vertex_stride == 0 && vertex_buffer)
+        return vertex_buffer->size / base->vertex_count;
     else
-        return vertex_stride;
+        return base->vertex_stride;
 }
 
 int MeshDataDXR::getIndexStride() const
 {
-    if (index_stride == 0 && index_buffer)
-        return index_buffer->size / index_count;
+    if (base->index_stride == 0 && index_buffer)
+        return index_buffer->size / base->index_count;
     else
-        return index_stride;
+        return base->index_stride;
 }
 
 } // namespace rths

@@ -104,9 +104,11 @@ public:
 };
 using BufferDataDXRPtr = std::shared_ptr<BufferDataDXR>;
 
-class MeshDataDXR : public MeshData
+class MeshDataDXR
 {
 public:
+    MeshData *base = nullptr;
+
     BufferDataDXRPtr vertex_buffer;
     BufferDataDXRPtr index_buffer;
 
@@ -129,11 +131,12 @@ public:
 };
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
 
-class MeshInstanceDataDXR : public MeshInstanceData
+class MeshInstanceDataDXR
 {
 public:
-    MeshDataDXRPtr mesh;
+    MeshInstanceData *base = nullptr;
 
+    MeshDataDXRPtr mesh;
     ID3D12DescriptorHeapPtr srvuav_heap;
     ID3D12ResourcePtr blendshape_weights;
     ID3D12ResourcePtr bones;

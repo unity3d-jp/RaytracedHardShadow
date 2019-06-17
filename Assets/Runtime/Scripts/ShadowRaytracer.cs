@@ -5,6 +5,9 @@ using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
+#if UNITY_2019_1_OR_NEWER
+using Unity.Collections;
+#endif
 
 namespace UTJ.RaytracedHardShadow
 {
@@ -17,6 +20,71 @@ namespace UTJ.RaytracedHardShadow
             EntireScene,
             SelectedScenes,
             SelectedObjects,
+        }
+
+        public class MeshRecord
+        {
+            public rthsMeshData meshData;
+            public int useCount;
+
+            public void Update(Mesh mesh)
+            {
+                Release();
+
+                meshData = rthsMeshData.Create();
+
+                int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
+                meshData.SetGPUResource(
+                    mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
+                    0, mesh.vertexCount, 0, indexStride, (int)mesh.GetIndexCount(0), 0);
+
+                meshData.SetBindpose(mesh.bindposes);
+#if UNITY_2019_1_OR_NEWER
+                meshData.SetSkinWeights(mesh.GetBonesPerVertex(), mesh.GetAllBoneWeights());
+#else
+                meshData.SetSkinWeights(mesh.boneWeights);
+#endif
+
+                int numBS = mesh.blendShapeCount;
+                meshData.SetBlendshapeCount(numBS);
+                if (numBS > 0)
+                {
+                    var deltaPoints = new Vector3[mesh.vertexCount];
+                    var deltaNormals = new Vector3[mesh.vertexCount];
+                    var deltaTangents = new Vector3[mesh.vertexCount];
+                    for (int bsi = 0; bsi < numBS; ++bsi)
+                    {
+                        int numFrames = mesh.GetBlendShapeFrameCount(bsi);
+                        for (int fi = 0; fi < numFrames; ++fi)
+                        {
+                            float weight = mesh.GetBlendShapeFrameWeight(bsi, fi);
+                            mesh.GetBlendShapeFrameVertices(bsi, fi, deltaPoints, deltaNormals, deltaTangents);
+                            meshData.AddBlendshapeFrame(bsi, deltaPoints, weight);
+                        }
+                    }
+                }
+            }
+
+            public void Release()
+            {
+                meshData.Release();
+            }
+        }
+
+        public class MeshInstanceRecord
+        {
+            public MeshRecord mesh;
+            public Mesh bakedMesh;
+            public Matrix4x4 transform;
+            public PinnedList<Matrix4x4> bones;
+            public PinnedList<float> blendshapeWeights;
+            public int useCount;
+
+            public void Release()
+            {
+                Misc.SafeDispose(ref bones);
+                Misc.SafeDispose(ref blendshapeWeights);
+            }
         }
         #endregion
 
@@ -32,6 +100,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_keepSelfDropShadow = false;
         [SerializeField] float m_shadowRayOffset = 0.0001f;
         [SerializeField] float m_selfShadowThreshold = 0.001f;
+        [SerializeField] bool m_GPUSkinning = false;
 
         [Tooltip("Light scope for shadow geometries.")]
         [SerializeField] ObjectScope m_lightScope;
@@ -86,6 +155,11 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_keepSelfDropShadow; }
             set { m_keepSelfDropShadow = value; }
+        }
+        public bool GPUSkinning
+        {
+            get { return m_GPUSkinning; }
+            set { m_GPUSkinning = value; }
         }
 
         public ObjectScope lightScope
@@ -345,7 +419,7 @@ namespace UTJ.RaytracedHardShadow
         {
             if (m_renderer)
             {
-                m_renderer.Destroy();
+                m_renderer.Release();
                 --s_instanceCount;
             }
         }
@@ -411,11 +485,11 @@ namespace UTJ.RaytracedHardShadow
             {
                 int flags = 0;
                 if (m_ignoreSelfShadow)
-                {
                     flags |= (int)rthsRaytraceFlags.IgnoreSelfShadow;
-                    if (m_keepSelfDropShadow)
-                        flags |= (int)rthsRaytraceFlags.KeepSelfDropShadow;
-                }
+                if (m_keepSelfDropShadow)
+                    flags |= (int)rthsRaytraceFlags.KeepSelfDropShadow;
+                if (m_GPUSkinning)
+                    flags |= (int)rthsRaytraceFlags.GPUSkinning;
 
                 m_renderer.BeginScene();
                 m_renderer.SetRaytraceFlags(flags);

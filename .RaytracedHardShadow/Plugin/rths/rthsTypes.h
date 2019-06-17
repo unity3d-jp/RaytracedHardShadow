@@ -173,7 +173,7 @@ using GPUResourcePtr = void*;
 using TextureData = GPUResourcePtr;
 using BufferData = GPUResourcePtr;
 
-struct BoneWeight1
+struct BoneWeight
 {
     float weight;
     int index;
@@ -185,53 +185,34 @@ struct BoneWeight4
 };
 struct SkinData
 {
-    // bone_counts & weights1 and weights4 are mutually exclusive
-    const float4x4 *bindposes;
-    const uint8_t *bone_counts;
-    const BoneWeight1 *weights1;
-    const BoneWeight4 *weights4;
-    int num_bones;
-    int num_bone_counts;
-    int num_weights1;
-    int num_weights4;
-
-    bool operator==(const SkinData& v) const;
-    bool operator<(const SkinData& v) const;
-};
-struct BonesData
-{
-    const float4x4 *bones;
-    int num_bones;
+    std::vector<float4x4>    bindposes;
+    std::vector<uint8_t>     bone_counts;
+    std::vector<BoneWeight>  weights;
 };
 
-struct BlendshapeDeltaData
+struct BlendshapeFrameData
 {
-    const float3 *point_delta;
+    std::vector<float3> delta;
+    float weight = 0.0f;
 };
 struct BlendshapeData
 {
-    const BlendshapeDeltaData *blendshapes;
-    int num_blendshapes;
-};
-struct BlendshapeWeightData
-{
-    const float *weights;
-    int num_blendshapes;
+    std::vector<BlendshapeFrameData> frames;
 };
 
 struct MeshData
 {
-    GPUResourcePtr vertex_buffer; // host
-    GPUResourcePtr index_buffer; // host
-    int vertex_stride; // if 0, treated as size_of_vertex_buffer / vertex_count
-    int vertex_count;
-    int vertex_offset; // in byte
-    int index_stride;
-    int index_count;
-    int index_offset; // in byte
+    GPUResourcePtr vertex_buffer = nullptr; // host
+    GPUResourcePtr index_buffer = nullptr; // host
+    int vertex_stride = 0; // if 0, treated as size_of_vertex_buffer / vertex_count
+    int vertex_count = 0;
+    int vertex_offset = 0; // in byte
+    int index_stride = 0;
+    int index_count = 0;
+    int index_offset = 0; // in byte
 
     SkinData skin;
-    BlendshapeData blendshape;
+    std::vector<BlendshapeData> blendshapes;
 
     bool operator==(const MeshData& v) const;
     bool operator<(const MeshData& v) const;
@@ -239,10 +220,11 @@ struct MeshData
 
 struct MeshInstanceData
 {
-    MeshData mesh{};
+    MeshData *mesh{};
     float4x4 transform{};
-    BonesData bones{};
-    BlendshapeWeightData blendshape_weights{};
+    std::vector<float4x4> bones;
+    std::vector<float> blendshape_weights;
+    bool auto_release = false;
 };
 
 } // namespace rths

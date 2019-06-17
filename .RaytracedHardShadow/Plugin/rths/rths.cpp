@@ -5,6 +5,131 @@
 
 using namespace rths;
 
+
+rthsAPI MeshData* rthsMeshCreate()
+{
+    return new MeshData();
+}
+rthsAPI void rthsMeshRelease(MeshData *self)
+{
+    delete self;
+}
+rthsAPI void rthsMeshSetGPUResource(MeshData *self, GPUResourcePtr vb, GPUResourcePtr ib,
+    int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
+{
+    if (!self)
+        return;
+    self->vertex_buffer = vb;
+    self->index_buffer = ib;
+    self->vertex_stride = vertex_stride;
+    self->vertex_count = vertex_count;
+    self->vertex_offset = vertex_offset;
+    self->index_stride = index_stride;
+    self->index_count = index_count;
+    self->index_offset = index_offset;
+}
+
+rthsAPI void rthsMeshSetSkinBindposes(MeshData *self, const float4x4 *bindposes, int num_bindposes)
+{
+    if (!self)
+        return;
+    self->skin.bindposes.assign(bindposes, bindposes + num_bindposes);
+}
+rthsAPI void rthsMeshSetSkinWeights(MeshData *self, const uint8_t *c, int nc, const BoneWeight *w, int nw)
+{
+    if (!self)
+        return;
+    self->skin.bone_counts.assign(c, c + nc);
+    self->skin.weights.assign(w, w + nw);
+}
+rthsAPI void rthsMeshSetSkinWeights4(MeshData *self, const BoneWeight4 *w4, int nw4)
+{
+    if (!self)
+        return;
+
+    self->skin.bone_counts.resize(nw4);
+    self->skin.weights.resize(nw4 * 4); // reserve
+
+    int tw = 0;
+    for (int vi = 0; vi < nw4; ++vi) {
+        auto& tmp = w4[vi];
+        int c = 0;
+        for (int wi = 0; wi < 4; ++wi) {
+            if (tmp.weight[wi] > 0.0f) {
+                self->skin.weights[tw] = { tmp.weight[wi], tmp.index[wi] };
+                ++tw;
+                ++c;
+            }
+            else
+                break;
+        }
+        self->skin.bone_counts[vi] = c;
+    }
+    self->skin.weights.resize(tw); // shrink to fit
+}
+
+rthsAPI void rthsMeshSetBlendshapeCount(MeshData *self, int num_bs)
+{
+    if (!self)
+        return;
+
+    self->blendshapes.resize(num_bs);
+}
+rthsAPI void rthsMeshAddBlendshapeFrame(MeshData *self, int bs_index, const float3 *delta, float weight)
+{
+    if (!self)
+        return;
+
+    if (bs_index <= self->blendshapes.size())
+        self->blendshapes.resize(bs_index + 1);
+
+    BlendshapeFrameData frame;
+    frame.delta.assign(delta, delta + self->vertex_count);
+    frame.weight = weight;
+    self->blendshapes[bs_index].frames.push_back(std::move(frame));
+}
+
+
+rthsAPI MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh, bool auto_release)
+{
+    auto ret = new MeshInstanceData();
+    ret->mesh = mesh;
+    ret->auto_release = auto_release;
+    return ret;
+}
+rthsAPI void rthsMeshInstanceRelease(MeshInstanceData *self)
+{
+    delete self;
+}
+rthsAPI void rthsMeshInstanceSetTransform(MeshInstanceData *self, float4x4 transform)
+{
+    if (!self)
+        return;
+
+    self->transform = transform;
+}
+rthsAPI void rthsMeshInstanceSetBones(MeshInstanceData *self, const float4x4 *bones, int num_bones)
+{
+    if (!self)
+        return;
+
+    if (num_bones == 0)
+        self->bones.clear();
+    else
+        self->bones.assign(bones, bones + num_bones);
+}
+rthsAPI void rthsMeshInstanceSetBlendshapeWeights(MeshInstanceData *self, const float *bsw, int num_bsw)
+{
+    if (!self)
+        return;
+
+    if (num_bsw == 0)
+        self->blendshape_weights.clear();
+    else
+        self->blendshape_weights.assign(bsw, bsw + num_bsw);
+}
+
+
 rthsAPI const char* rthsGetErrorLog()
 {
     return GetErrorLog().c_str();
@@ -15,7 +140,7 @@ rthsAPI IRenderer* rthsCreateRenderer()
     return CreateRendererDXR();
 }
 
-rthsAPI void rthsDestroyRenderer(IRenderer *self)
+rthsAPI void rthsReleaseRenderer(IRenderer *self)
 {
     delete self;
 }
@@ -95,18 +220,11 @@ rthsAPI void rthsAddReversePointLight(IRenderer *self, float4x4 transform, float
     self->addReversePointLight(transform, range);
 }
 
-rthsAPI void rthsAddMesh(IRenderer *self, MeshData mesh, float4x4 transform)
+rthsAPI void rthsAddMesh(IRenderer *self, rths::MeshInstanceData *mesh)
 {
     if (!self)
         return;
-    self->addMesh(mesh, transform);
-}
-
-rthsAPI void rthsAddSkinnedMesh(IRenderer *self, MeshData mesh, float4x4 transform, BonesData bones, BlendshapeWeightData bs)
-{
-    if (!self)
-        return;
-    self->addSkinnedMesh(mesh, transform, bones, bs);
+    self->addMesh(mesh);
 }
 
 rthsAPI void rthsRender(IRenderer *self)

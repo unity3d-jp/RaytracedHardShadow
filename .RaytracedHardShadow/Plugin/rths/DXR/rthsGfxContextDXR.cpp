@@ -452,7 +452,7 @@ void GfxContextDXR::setRenderTarget(TextureData& rt)
 #endif
 }
 
-void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
+void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
 {
     auto translate_buffer = [this](void *buffer) {
         auto& data = m_buffer_records[buffer];
@@ -468,64 +468,64 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
     size_t num_meshes = instances.size();
     for (size_t i = 0; i < num_meshes; ++i) {
         auto& inst = instances[i];
-        auto& mesh = inst.mesh;
-        auto& data = m_mesh_records[mesh];
-        if (!data) {
-            data = std::make_shared<MeshDataDXR>();
-            dynamic_cast<MeshData&>(*data) = mesh;
+        auto& mesh = inst->mesh;
+        auto& mesh_dxr = m_mesh_records[mesh];
+        if (!mesh_dxr) {
+            mesh_dxr = std::make_shared<MeshDataDXR>();
+            mesh_dxr->base = mesh;
         }
-        ++data->use_count;
+        ++mesh_dxr->use_count;
 
-        if (!data->vertex_buffer) {
-            data->vertex_buffer = translate_buffer(mesh.vertex_buffer);
-            if (!data->vertex_buffer->resource) {
+        if (!mesh_dxr->vertex_buffer) {
+            mesh_dxr->vertex_buffer = translate_buffer(mesh->vertex_buffer);
+            if (!mesh_dxr->vertex_buffer->resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate vertex buffer\n");
                 continue;
             }
-            if ((data->vertex_buffer->size / data->vertex_count) % 4 != 0) {
+            if ((mesh_dxr->vertex_buffer->size / mesh->vertex_count) % 4 != 0) {
                 DebugPrint("GfxContextDXR::setMeshes(): unrecognizable vertex format\n");
                 continue;
             }
 
 #ifdef rthsEnableBufferValidation
-            if (data->vertex_buffer) {
+            if (mesh_dxr->vertex_buffer) {
                 // inspect buffer
                 std::vector<float> vertex_buffer_data;
-                vertex_buffer_data.resize(data->vertex_buffer->size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
-                readbackBuffer(vertex_buffer_data.data(), data->vertex_buffer->resource, data->vertex_buffer->size);
+                vertex_buffer_data.resize(mesh_dxr->vertex_buffer->size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
+                readbackBuffer(vertex_buffer_data.data(), mesh_dxr->vertex_buffer->resource, mesh_dxr->vertex_buffer->size);
             }
 #endif
         }
-        if (!data->index_buffer) {
-            data->index_buffer = translate_buffer(mesh.index_buffer);
-            if (!data->index_buffer->resource) {
+        if (!mesh_dxr->index_buffer) {
+            mesh_dxr->index_buffer = translate_buffer(mesh->index_buffer);
+            if (!mesh_dxr->index_buffer->resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate index buffer\n");
                 continue;
             }
 
-            if (data->index_stride == 0)
-                data->index_stride = data->index_buffer->size / data->index_count;
+            if (mesh->index_stride == 0)
+                mesh->index_stride = mesh_dxr->index_buffer->size / mesh->index_count;
 
 #ifdef rthsEnableBufferValidation
-            if (data->index_buffer) {
+            if (mesh_dxr->index_buffer) {
                 // inspect buffer
                 std::vector<uint32_t> index_buffer_data32;
                 std::vector<uint16_t> index_buffer_data16;
-                if (data->index_stride == 2) {
-                    index_buffer_data16.resize(data->index_buffer->size / sizeof(uint16_t), std::numeric_limits<uint16_t>::max());
-                    readbackBuffer(index_buffer_data16.data(), data->index_buffer->resource, data->index_buffer->size);
+                if (mesh_dxr->index_stride == 2) {
+                    index_buffer_data16.resize(mesh_dxr->index_buffer->size / sizeof(uint16_t), std::numeric_limits<uint16_t>::max());
+                    readbackBuffer(index_buffer_data16.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
                 }
                 else {
-                    index_buffer_data32.resize(data->index_buffer->size / sizeof(uint32_t), std::numeric_limits<uint32_t>::max());
-                    readbackBuffer(index_buffer_data32.data(), data->index_buffer->resource, data->index_buffer->size);
+                    index_buffer_data32.resize(mesh_dxr->index_buffer->size / sizeof(uint32_t), std::numeric_limits<uint32_t>::max());
+                    readbackBuffer(index_buffer_data32.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
                 }
             }
 #endif
         }
 
         auto inst_dxr = std::make_shared<MeshInstanceDataDXR>();
-        dynamic_cast<MeshInstanceData&>(*inst_dxr) = inst;
-        inst_dxr->mesh = data;
+        inst_dxr->base = inst;
+        inst_dxr->mesh = mesh_dxr;
         if (m_gpu_skinning) {
             if (m_deformer->queueDeformCommand(*inst_dxr))
                 ++num_gpu_skinning;
@@ -547,11 +547,11 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
     num_meshes = m_mesh_instances.size();
     for (size_t i = 0; i < num_meshes; ++i) {
         auto& inst = *m_mesh_instances[i];
-        auto& mesh = *inst.mesh;
-        auto& data = m_mesh_records[mesh];
+        auto& mesh_dxr = inst.mesh;
+        auto& mesh = mesh_dxr->base;
 
         // build bottom level acceleration structure
-        auto& blas = m_gpu_skinning && inst.deformed_vertices ? inst.blas_deformed : data->blas;
+        auto& blas = m_gpu_skinning && inst.deformed_vertices ? inst.blas_deformed : mesh_dxr->blas;
         if (!blas) {
             D3D12_RAYTRACING_GEOMETRY_DESC geom_desc{};
             geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -559,20 +559,20 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
             if (m_gpu_skinning && inst.deformed_vertices) {
                 geom_desc.Triangles.VertexBuffer.StartAddress = inst.deformed_vertices->GetGPUVirtualAddress();
                 geom_desc.Triangles.VertexBuffer.StrideInBytes = sizeof(float4);
-                geom_desc.Triangles.VertexCount = data->vertex_count;
+                geom_desc.Triangles.VertexCount = mesh->vertex_count;
                 geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
             }
-            else if (data->vertex_buffer->resource) {
-                geom_desc.Triangles.VertexBuffer.StartAddress = data->vertex_buffer->resource->GetGPUVirtualAddress() + data->vertex_offset;
-                geom_desc.Triangles.VertexBuffer.StrideInBytes = data->getVertexStride();
-                geom_desc.Triangles.VertexCount = data->vertex_count;
+            else if (mesh_dxr->vertex_buffer->resource) {
+                geom_desc.Triangles.VertexBuffer.StartAddress = mesh_dxr->vertex_buffer->resource->GetGPUVirtualAddress() + mesh->vertex_offset;
+                geom_desc.Triangles.VertexBuffer.StrideInBytes = mesh_dxr->getVertexStride();
+                geom_desc.Triangles.VertexCount = mesh->vertex_count;
                 geom_desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
             }
 
-            if (data->index_buffer->resource) {
-                geom_desc.Triangles.IndexBuffer = data->index_buffer->resource->GetGPUVirtualAddress() + data->index_offset;
-                geom_desc.Triangles.IndexCount = data->index_count;
-                geom_desc.Triangles.IndexFormat = data->index_stride == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+            if (mesh_dxr->index_buffer->resource) {
+                geom_desc.Triangles.IndexBuffer = mesh_dxr->index_buffer->resource->GetGPUVirtualAddress() + mesh->index_offset;
+                geom_desc.Triangles.IndexCount = mesh->index_count;
+                geom_desc.Triangles.IndexFormat = mesh->index_stride == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
             }
             // note: transform is handled by top level acceleration structure
 
@@ -631,14 +631,14 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData>& instances)
             instance_descs_buf->Map(0, nullptr, (void**)&instance_descs);
             ZeroMemory(instance_descs, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes);
             for (uint32_t i = 0; i < num_meshes; i++) {
-                auto& instance = *m_mesh_instances[i];
+                auto& instance = m_mesh_instances[i];
 
-                (float3x4&)instance_descs[i].Transform = to_float3x4(instance.transform);
+                (float3x4&)instance_descs[i].Transform = to_float3x4(instance->base->transform);
                 instance_descs[i].InstanceID = i; // This value will be exposed to the shader via InstanceID()
                 instance_descs[i].InstanceMask = 0xFF;
                 instance_descs[i].InstanceContributionToHitGroupIndex = i;
                 instance_descs[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
-                instance_descs[i].AccelerationStructure = instance.mesh->blas->GetGPUVirtualAddress();
+                instance_descs[i].AccelerationStructure = instance->mesh->blas->GetGPUVirtualAddress();
             }
             instance_descs_buf->Unmap(0, nullptr);
         }

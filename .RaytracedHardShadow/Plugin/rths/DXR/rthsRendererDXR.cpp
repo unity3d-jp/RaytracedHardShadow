@@ -14,8 +14,6 @@ public:
 
     void render() override;
     void finish() override;
-
-private:
 };
 
 
@@ -45,6 +43,7 @@ void RendererDXR::finish()
 {
     auto ctx = GfxContextDXR::getInstance();
     ctx->finish();
+    releaseMeshInstances();
 }
 
 IRenderer* CreateRendererDXR()

@@ -33,9 +33,8 @@ namespace UTJ.RaytracedHardShadowEditor
             if (t.ignoreSelfShadow)
             {
                 EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(so.FindProperty("m_selfShadowThreshold"));
                 EditorGUILayout.PropertyField(so.FindProperty("m_keepSelfDropShadow"));
-                if (t.keepSelfDropShadow)
-                    EditorGUILayout.PropertyField(so.FindProperty("m_selfShadowThreshold"));
                 EditorGUI.indentLevel--;
             }
             EditorGUILayout.PropertyField(so.FindProperty("m_shadowRayOffset"));
@@ -54,6 +53,8 @@ namespace UTJ.RaytracedHardShadowEditor
             else if (t.geometryScope == ShadowRaytracer.ObjectScope.SelectedObjects)
                 EditorGUILayout.PropertyField(so.FindProperty("m_geometryObjects"), true);
             EditorGUILayout.Space();
+
+            EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
 
             so.ApplyModifiedProperties();
         }

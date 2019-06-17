@@ -23,8 +23,7 @@ public:
     virtual void addSpotLight(const float4x4& trans, float range, float spot_angle) = 0;
     virtual void addPointLight(const float4x4& trans, float range) = 0;
     virtual void addReversePointLight(const float4x4& trans, float range) = 0;
-    virtual void addMesh(const MeshData& mesh, const float4x4& trans) = 0;
-    virtual void addSkinnedMesh(const MeshData& mesh, const float4x4& trans, const BonesData& bones, const BlendshapeWeightData& bs) = 0;
+    virtual void addMesh(MeshInstanceData *mesh) = 0;
 };
 
 
@@ -47,13 +46,14 @@ public:
     void addSpotLight(const float4x4& trans, float range, float spot_angle) override;
     void addPointLight(const float4x4& trans, float range) override;
     void addReversePointLight(const float4x4& trans, float range) override;
-    void addMesh(const MeshData& mesh, const float4x4& trans) override;
-    void addSkinnedMesh(const MeshData& mesh, const float4x4& trans, const BonesData& bones, const BlendshapeWeightData& bs) override;
+    void addMesh(MeshInstanceData *mesh) override;
 
 protected:
+    void releaseMeshInstances();
+
     TextureData m_render_target;
     SceneData m_scene_data;
-    std::vector<MeshInstanceData> m_mesh_instance_data;
+    std::vector<MeshInstanceData*> m_mesh_instance_data;
 };
 
 IRenderer* CreateRendererDXR();

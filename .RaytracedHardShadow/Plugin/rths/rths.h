@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 
 #ifdef _WIN32
     #define rthsAPI extern "C" __declspec(dllexport)
@@ -8,13 +9,12 @@
 
 namespace rths {
 #ifndef rthsImpl
-using uint8_t = unsigned char;
-using GPUResourcePtr = void*;
 
+struct float3 { float x, y, z; };
 struct float4 { float x, y, z, w; };
 struct float4x4 { float4 v[4]; };
 
-struct BoneWeight1
+struct BoneWeight
 {
     float weight;
     int index;
@@ -24,68 +24,40 @@ struct BoneWeight4
     float weight[4];
     int index[4];
 };
-struct SkinData
-{
-    // bone_counts & weights1 and weights4 are mutually exclusive
-    const float4x4 *bindposes;
-    const uint8_t *bone_counts;
-    const BoneWeight1 *weights1;
-    const BoneWeight4 *weights4;
-    int num_bones;
-    int num_bone_counts;
-    int num_weights1;
-    int num_weights4;
-};
-struct BonesData
-{
-    const float4x4 *bones;
-    int num_bones;
-};
-
-struct BlendshapeDeltaData
-{
-    const float3 *point_delta;
-};
-struct BlendshapeData
-{
-    const BlendshapeDeltaData *blendshapes;
-    int num_blendshapes;
-};
-struct BlendshapeWeightData
-{
-    const float *weights;
-    int num_blendshapes;
-};
-
-struct MeshData
-{
-    GPUResourcePtr vertex_buffer; // host
-    GPUResourcePtr index_buffer; // host
-    int vertex_stride; // if 0, treated as size_of_vertex_buffer / vertex_count
-    int vertex_count;
-    int vertex_offset; // in byte
-    int index_stride;
-    int index_count;
-    int index_offset; // in byte
-
-    SkinData skin;
-    BlendshapeData blendshape;
-};
 #else // rthsImpl
+struct float3;
 struct float4;
 struct float4x4;
-struct BonesData;
-struct BlendshapeWeightData;
-struct MeshData;
+struct BoneWeight;
+struct BoneWeight4;
 #endif // rthsImpl
 
+using GPUResourcePtr = void*;
+struct MeshData;
+struct MeshInstanceData;
 class IRenderer;
 
 } // namespace rths
 
+rthsAPI rths::MeshData* rthsMeshCreate();
+rthsAPI void rthsMeshRelease(rths::MeshData *self);
+rthsAPI void rthsMeshSetGPUResource(rths::MeshData *self, rths::GPUResourcePtr vb, rths::GPUResourcePtr ib,
+    int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset);
+rthsAPI void rthsMeshSetSkinBindposes(rths::MeshData *self, const rths::float4x4 *bindposes, int num_bindposes);
+rthsAPI void rthsMeshSetSkinWeights(rths::MeshData *self, const uint8_t *c, int nc, const rths::BoneWeight *w, int nw);
+rthsAPI void rthsMeshSetSkinWeights4(rths::MeshData *self, const rths::BoneWeight4 *w4, int nw4);
+rthsAPI void rthsMeshSetBlendshapeCount(rths::MeshData *self, int num_bs);
+rthsAPI void rthsMeshAddBlendshapeFrame(rths::MeshData *self, int bs_index, const rths::float3 *delta, float weight);
+
+rthsAPI rths::MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh, bool auto_release);
+rthsAPI void rthsMeshInstanceRelease(rths::MeshInstanceData *self);
+rthsAPI void rthsMeshInstanceSetTransform(rths::MeshInstanceData *self, rths::float4x4 transform);
+rthsAPI void rthsMeshInstanceSetBones(rths::MeshInstanceData *self, const rths::float4x4 *bones, int num_bones);
+rthsAPI void rthsMeshInstanceSetBlendshapeWeights(rths::MeshInstanceData *self, const float *bsw, int num_bsw);
+
 rthsAPI const char* rthsGetErrorLog();
 rthsAPI rths::IRenderer* rthsCreateRenderer();
-rthsAPI void rthsDestroyRenderer(rths::IRenderer *self);
+rthsAPI void rthsReleaseRenderer(rths::IRenderer *self);
 rthsAPI void rthsSetRenderTarget(rths::IRenderer *self, void *render_target);
 rthsAPI void rthsBeginScene(rths::IRenderer *self);
 rthsAPI void rthsEndScene(rths::IRenderer *self);
@@ -97,8 +69,7 @@ rthsAPI void rthsAddDirectionalLight(rths::IRenderer *self, rths::float4x4 trans
 rthsAPI void rthsAddSpotLight(rths::IRenderer *self, rths::float4x4 transform, float range, float spot_angle);
 rthsAPI void rthsAddPointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
 rthsAPI void rthsAddReversePointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
-rthsAPI void rthsAddMesh(rths::IRenderer *self, rths::MeshData mesh, rths::float4x4 transform);
-rthsAPI void rthsAddSkinnedMesh(rths::IRenderer *self, rths::MeshData mesh, rths::float4x4 transform, rths::BonesData bones, rths::BlendshapeWeightData bs);
+rthsAPI void rthsAddMesh(rths::IRenderer *self, rths::MeshInstanceData *mesh);
 rthsAPI void rthsRender(rths::IRenderer *self);
 rthsAPI void rthsFinish(rths::IRenderer *self);
 rthsAPI void rthsRenderAll();

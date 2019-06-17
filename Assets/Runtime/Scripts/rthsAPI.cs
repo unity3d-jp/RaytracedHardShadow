@@ -15,7 +15,22 @@ namespace UTJ.RaytracedHardShadow
             return ptr == IntPtr.Zero ? "" : Marshal.PtrToStringAnsi(ptr);
         }
 
+        public static void SafeDispose<T>(ref T obj) where T : class, IDisposable
+        {
+            if (obj != null)
+            {
+                obj.Dispose();
+                obj = null;
+            }
+        }
+
 #if UNITY_2019_1_OR_NEWER
+        public static void SafeDispose<T>(ref NativeArray<T> obj) where T : struct
+        {
+            if (obj.IsCreated)
+                obj.Dispose();
+        }
+
         // explicit layout doesn't work with generics...
 
         [StructLayout(LayoutKind.Explicit)]
@@ -24,7 +39,7 @@ namespace UTJ.RaytracedHardShadow
             [FieldOffset(0)] public NativeArray<byte> nativeArray;
             [FieldOffset(0)] public IntPtr pointer;
         }
-        public static IntPtr ForceGetPointer(ref NativeArray<byte> na)
+        public static IntPtr GetPointer(ref NativeArray<byte> na)
         {
             var union = new NAByte();
             union.nativeArray = na;
@@ -37,7 +52,7 @@ namespace UTJ.RaytracedHardShadow
             [FieldOffset(0)] public NativeArray<BoneWeight1> nativeArray;
             [FieldOffset(0)] public IntPtr pointer;
         }
-        public static IntPtr ForceGetPointer(ref NativeArray<BoneWeight1> na)
+        public static IntPtr GetPointer(ref NativeArray<BoneWeight1> na)
         {
             var union = new NABoneWeight1();
             union.nativeArray = na;
@@ -51,52 +66,126 @@ namespace UTJ.RaytracedHardShadow
         None = 0,
         IgnoreSelfShadow = 1,
         KeepSelfDropShadow = 2,
+        GPUSkinning = 4,
     }
-
-    public struct rthsBlendshapeDeltaData
-    {
-        public IntPtr pointDelta; // Vector3[]
-    }
-    public struct rthsBlendshapeData
-    {
-        public IntPtr blendshapes; // rthsBlendshapeDeltaData[]
-        public int numBlendshapes;
-    }
-    public struct rthsBlendshapeWeightData
-    {
-        public IntPtr weights; // float[]
-        public int numBlendshapes;
-    }
-
-    public struct rthsSkinData
-    {
-        public IntPtr boneCounts; // byte[]
-        public IntPtr weights1; // BoneWeight1[]
-        public IntPtr weights4; // BoneWeight[]
-        public int numBoneCounts;
-        public int numWeights1;
-        public int numWeights4;
-    }
-    public struct rthsBonesData
-    {
-        public IntPtr bones; // Matrix4x4[]
-        public int numBones;
-    };
 
     public struct rthsMeshData
     {
-        public IntPtr vertexBuffer;
-        public IntPtr indexBuffer;
-        public int vertexStride; // if 0, treated as sizeOfVertexBuffer / vertexCount
-        public int vertexCount;
-        public int vertexOffset; // in byte
-        public int indexStride;
-        public int indexCount;
-        public int indexOffset; // in byte
+        #region internal
+        public IntPtr self;
+        [DllImport("rths")] static extern IntPtr rthsMeshCreate();
+        [DllImport("rths")] static extern void rthsMeshRelease(IntPtr self);
+        [DllImport("rths")] static extern void rthsMeshSetGPUResource(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
+        [DllImport("rths")] static extern void rthsMeshSetSkinBindposes(IntPtr self, Matrix4x4[] bindposes, int num_bindposes);
+        [DllImport("rths")] static extern void rthsMeshSetSkinWeights(IntPtr self, IntPtr c, int nc, IntPtr w, int nw);
+        [DllImport("rths")] static extern void rthsMeshSetSkinWeights4(IntPtr self, BoneWeight[] w4, int nw4);
+        [DllImport("rths")] static extern void rthsMeshSetBlendshapeCount(IntPtr self, int num_bs);
+        [DllImport("rths")] static extern void rthsMeshAddBlendshapeFrame(IntPtr self, int bs_index, Vector3[] delta, float weight);
 
-        public rthsSkinData skin;
-        public rthsBlendshapeData blendshape;
+        #endregion
+
+        public static implicit operator bool(rthsMeshData v) { return v.self != IntPtr.Zero; }
+
+        public static rthsMeshData Create()
+        {
+            return new rthsMeshData { self = rthsMeshCreate() };
+        }
+
+        public void Release()
+        {
+            rthsMeshRelease(self);
+            self = IntPtr.Zero;
+        }
+
+        public void SetGPUResource(IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset)
+        {
+            rthsMeshSetGPUResource(self, vb, ib, vertexStride, vertexCount, vertexOffset, indexStride, indexCount, indexOffset);
+        }
+
+        public void SetBindpose(Matrix4x4[] bindposes)
+        {
+            rthsMeshSetSkinBindposes(self, bindposes, bindposes.Length);
+        }
+#if UNITY_2019_1_OR_NEWER
+        public void SetSkinWeights(NativeArray<byte> counts, NativeArray<BoneWeight1> weights)
+        {
+            rthsMeshSetSkinWeights(self, Misc.GetPointer(ref counts), counts.Length, Misc.GetPointer(ref weights), weights.Length);
+        }
+#endif
+        public void SetSkinWeights(BoneWeight[] w4)
+        {
+            rthsMeshSetSkinWeights4(self, w4, w4.Length);
+        }
+
+        public void SetBlendshapeCount(int v)
+        {
+            rthsMeshSetBlendshapeCount(self, v);
+        }
+
+        public void AddBlendshapeFrame(int index, Vector3[] delta, float weight)
+        {
+            rthsMeshAddBlendshapeFrame(self, index, delta, weight);
+        }
+
+
+        public void SetGPUResources(Mesh mesh)
+        {
+            int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
+            int numSubmeshes = mesh.subMeshCount;
+            for (int smi = 0; smi < numSubmeshes; ++smi)
+            {
+                if (mesh.GetTopology(smi) == MeshTopology.Triangles)
+                {
+                    SetGPUResource(
+                        mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
+                        0, mesh.vertexCount, 0, indexStride, (int)mesh.GetIndexCount(smi), (int)mesh.GetIndexStart(smi) * indexStride);
+                    break;
+                }
+            }
+
+        }
     }
+
+    public struct rthsMeshInstanceData
+    {
+        #region internal
+        public IntPtr self;
+        [DllImport("rths")] static extern IntPtr rthsMeshInstanceCreate(rthsMeshData mesh, byte autoRelease);
+        [DllImport("rths")] static extern void rthsMeshInstanceRelease(IntPtr self);
+        [DllImport("rths")] static extern void rthsMeshInstanceSetTransform(IntPtr self, Matrix4x4 transform);
+        [DllImport("rths")] static extern void rthsMeshInstanceSetBones(IntPtr self, Matrix4x4[] bones, int num_bones);
+        [DllImport("rths")] static extern void rthsMeshInstanceSetBlendshapeWeights(IntPtr self, float[] bsw, int num_bsw);
+
+        #endregion
+
+        public static implicit operator bool(rthsMeshInstanceData v) { return v.self != IntPtr.Zero; }
+
+        public static rthsMeshInstanceData Create(rthsMeshData mesh, bool autoRelease = true)
+        {
+            return new rthsMeshInstanceData { self = rthsMeshInstanceCreate(mesh, (byte)(autoRelease ? 1 : 0)) };
+        }
+
+        public void Release()
+        {
+            rthsMeshInstanceRelease(self);
+            self = IntPtr.Zero;
+        }
+
+        public void SetTransform(Matrix4x4 transform)
+        {
+            rthsMeshInstanceSetTransform(self, transform);
+        }
+        public void SetTransform(Matrix4x4[] bones)
+        {
+            rthsMeshInstanceSetBones(self, bones, bones.Length);
+        }
+
+        public void SetTransform(float[] bsw)
+        {
+            rthsMeshInstanceSetBlendshapeWeights(self, bsw, bsw.Length);
+        }
+    }
+
 
 
     public struct rthsRenderer
@@ -105,7 +194,7 @@ namespace UTJ.RaytracedHardShadow
         public IntPtr self;
         [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
         [DllImport("rths")] static extern IntPtr rthsCreateRenderer();
-        [DllImport("rths")] static extern void rthsDestroyRenderer(IntPtr self);
+        [DllImport("rths")] static extern void rthsReleaseRenderer(IntPtr self);
 
         [DllImport("rths")] static extern void rthsBeginScene(IntPtr self);
         [DllImport("rths")] static extern void rthsEndScene(IntPtr self);
@@ -118,8 +207,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
         [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans, float range);
         [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
-        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, rthsMeshData mesh, Matrix4x4 trans);
-        [DllImport("rths")] static extern void rthsAddSkinnedMesh(IntPtr self, rthsMeshData mesh, Matrix4x4 trans, ref rthsBonesData bones, ref rthsBlendshapeWeightData bs);
+        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, rthsMeshInstanceData mesh);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
@@ -136,9 +224,9 @@ namespace UTJ.RaytracedHardShadow
             return new rthsRenderer { self = rthsCreateRenderer() };
         }
 
-        public void Destroy()
+        public void Release()
         {
-            rthsDestroyRenderer(self);
+            rthsReleaseRenderer(self);
             self = IntPtr.Zero;
         }
 
@@ -215,24 +303,11 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void AddMesh(Mesh mesh, Matrix4x4 trans)
+        public void AddMesh(rthsMeshData mesh, Matrix4x4 trans)
         {
-            int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
-            int numSubmeshes = mesh.subMeshCount;
-            for (int smi = 0; smi < numSubmeshes; ++smi)
-            {
-                if (mesh.GetTopology(smi) == MeshTopology.Triangles)
-                {
-                    var data = default(rthsMeshData);
-                    data.vertexBuffer = mesh.GetNativeVertexBufferPtr(0);
-                    data.vertexCount = mesh.vertexCount;
-                    data.indexBuffer = mesh.GetNativeIndexBufferPtr();
-                    data.indexStride = indexStride;
-                    data.indexCount = (int)mesh.GetIndexCount(smi);
-                    data.indexOffset = (int)mesh.GetIndexStart(smi) * indexStride;
-                    rthsAddMesh(self, data, trans);
-                }
-            }
+            var inst = rthsMeshInstanceData.Create(mesh);
+            inst.SetTransform(trans);
+            rthsAddMesh(self, inst);
         }
 
         public static void IssueRender()
