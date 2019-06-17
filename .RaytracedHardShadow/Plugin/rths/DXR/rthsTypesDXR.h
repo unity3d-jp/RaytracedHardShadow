@@ -52,6 +52,7 @@ DefPtr(ID3D12StateObject);
 DefPtr(ID3D12PipelineState);
 DefPtr(ID3D12RootSignature);
 DefPtr(ID3D12StateObjectProperties);
+DefPtr(ID3D12QueryHeap);
 DefPtr(ID3D12Debug);
 #ifdef rthsEnableD3D12GBV
     DefPtr(ID3D12Debug1);
@@ -114,13 +115,14 @@ public:
 
     ID3D12ResourcePtr mesh_info;
 
+    // blendshape data
+    ID3D12ResourcePtr bs_delta;
+    ID3D12ResourcePtr bs_frames;
+    ID3D12ResourcePtr bs_counts;
+
     // skinning data
     ID3D12ResourcePtr bone_counts;
     ID3D12ResourcePtr bone_weights;
-
-    // blendshape data
-    ID3D12ResourcePtr bs_point_delta;
-    ID3D12ResourcePtr bs_point_offsets;
 
     ID3D12ResourcePtr blas; // bottom level acceleration structure
 
@@ -138,8 +140,8 @@ public:
 
     MeshDataDXRPtr mesh;
     ID3D12DescriptorHeapPtr srvuav_heap;
-    ID3D12ResourcePtr blendshape_weights;
-    ID3D12ResourcePtr bones;
+    ID3D12ResourcePtr bs_weights;
+    ID3D12ResourcePtr bone_matrices;
     ID3D12ResourcePtr deformed_vertices;
     ID3D12ResourcePtr blas_deformed;
 };

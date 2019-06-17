@@ -6,12 +6,22 @@ enum DeformFlag
     DF_APPLY_SKINNING = 2,
 };
 
+struct BlendshapeFrame
+{
+    int delta_offset;
+    float weight;
+};
+struct BlendshapeCount
+{
+    int frame_count;
+    int frame_offset;
+};
+
 struct BoneCount
 {
     int weight_count;
     int weight_offset;
 };
-
 struct BoneWeight
 {
     float weight;
@@ -30,13 +40,15 @@ RWStructuredBuffer<float4>    g_dst_vertices : register(u0);
 StructuredBuffer<float>       g_base_vertices : register(t0);
 
 // blendshape data
-StructuredBuffer<float4>      g_bs_point_delta : register(t1);
-StructuredBuffer<float>       g_bs_point_weights : register(t2);
+StructuredBuffer<float4>            g_bs_delta : register(t1);
+StructuredBuffer<BlendshapeFrame>   g_bs_frames : register(t2);
+StructuredBuffer<BlendshapeCount>   g_bs_counts : register(t3);
+StructuredBuffer<float>             g_bs_weights : register(t4);
 
 // skinning data
-StructuredBuffer<BoneCount>   g_bone_counts : register(t3);
-StructuredBuffer<BoneWeight>  g_bone_weights : register(t4);
-StructuredBuffer<float4x4>    g_bone_matrices : register(t5);
+StructuredBuffer<BoneCount>   g_bone_counts : register(t5);
+StructuredBuffer<BoneWeight>  g_bone_weights : register(t6);
+StructuredBuffer<float4x4>    g_bone_matrices : register(t7);
 
 ConstantBuffer<MeshInfo>      g_mesh_info : register(b0);
 
@@ -47,9 +59,12 @@ float3 ApplyBlendshape(uint vid, float3 base)
     int num_vertices = g_mesh_info.vertex_count;
     int num_blendshapes = g_mesh_info.num_blendshapes;
     for (int bsi = 0; bsi < num_blendshapes; ++bsi) {
-        float weight = g_bs_point_weights[bsi];
+        float weight = g_bs_weights[bsi];
         if (weight != 0.0f) {
-            result += g_bs_point_delta[num_vertices * bsi + vid].xyz * weight;
+            BlendshapeCount count = g_bs_counts[bsi];
+            BlendshapeFrame frame = g_bs_frames[count.frame_offset];
+
+            result += g_bs_delta[frame.delta_offset + vid].xyz * weight;
         }
     }
     return result;
