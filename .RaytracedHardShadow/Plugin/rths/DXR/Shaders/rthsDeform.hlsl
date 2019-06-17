@@ -1,6 +1,6 @@
 #define kThreadBlockSize 128
 
-enum DeformFlag
+enum DEFORM_FLAG
 {
     DF_APPLY_BLENDSHAPE = 1,
     DF_APPLY_SKINNING = 2,
@@ -56,15 +56,28 @@ ConstantBuffer<MeshInfo>      g_mesh_info : register(b0);
 float3 ApplyBlendshape(uint vid, float3 base)
 {
     float3 result = base;
-    int num_vertices = g_mesh_info.vertex_count;
     int num_blendshapes = g_mesh_info.num_blendshapes;
     for (int bsi = 0; bsi < num_blendshapes; ++bsi) {
         float weight = g_bs_weights[bsi];
         if (weight != 0.0f) {
-            BlendshapeCount count = g_bs_counts[bsi];
-            BlendshapeFrame frame = g_bs_frames[count.frame_offset];
+            float3 p1 = 0.0f, p2 = 0.0f;
+            float w1 = 0.0f, w2 = 0.0f;
 
-            result += g_bs_delta[frame.delta_offset + vid].xyz * weight;
+            BlendshapeCount bsc = g_bs_counts[bsi];
+            for (int fi = 0; fi < bsc.frame_count; ++fi) {
+                BlendshapeFrame frame = g_bs_frames[bsc.frame_offset + fi];
+                if (weight <= frame.weight) {
+                    p2 = g_bs_delta[frame.delta_offset + vid].xyz;
+                    w2 = frame.weight;
+                    break;
+                }
+                else {
+                    p1 = g_bs_delta[frame.delta_offset + vid].xyz;
+                    w1 = frame.weight;
+                }
+            }
+            float s = (weight - w1) / (w2 - w1);
+            result += lerp(p1, p2, s);
         }
     }
     return result;

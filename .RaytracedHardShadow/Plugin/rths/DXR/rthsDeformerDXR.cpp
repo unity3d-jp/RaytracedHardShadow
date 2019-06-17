@@ -10,10 +10,10 @@
 
 namespace rths {
 
-enum DeformFlag
+enum class DeformFlag : int
 {
-    DF_APPLY_BLENDSHAPE = 1,
-    DF_APPLY_SKINNING = 2,
+    Blendshape = 1,
+    Skinning = 2,
 };
 
 struct BlendshapeFrame
@@ -214,7 +214,7 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
                     for (auto& frame : bs.frames) {
                         BlendshapeFrame tmp{};
                         tmp.delta_offset = offset;
-                        tmp.weight = frame.weight;
+                        tmp.weight = frame.weight / 100.0f; // 0-100 -> 0.0-1.0
                         *dst++ = tmp;
 
                         offset += vertex_count;
@@ -245,9 +245,11 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
             }
             // update on every frame
             writeBuffer(inst_dxr.bs_weights, [&](void *dst_) {
-                std::copy(inst.blendshape_weights.data(), inst.blendshape_weights.data() + inst.blendshape_weights.size(),
-                    (float*)dst_);
-                });
+                auto dst = (float*)dst_;
+                for (int bsi = 0; bsi < blendshape_count; ++bsi) {
+                    *dst++ = inst.blendshape_weights[bsi] / 100.0f; // 0-100 -> 0.0-1.0
+                }
+            });
         }
 
         createSRV(hbs_delta.hcpu, mesh_dxr.bs_delta, vertex_count * frame_count, sizeof(float4));
@@ -315,9 +317,9 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
             info.vertex_stride = mesh_dxr.getVertexStride() / 4;
             info.deform_flags = 0;
             if (blendshape_count > 0)
-                info.deform_flags |= DF_APPLY_BLENDSHAPE;
+                info.deform_flags |= (int)DeformFlag::Blendshape;
             if (bone_count > 0)
-                info.deform_flags |= DF_APPLY_SKINNING;
+                info.deform_flags |= (int)DeformFlag::Skinning;
             info.blendshape_count = blendshape_count;
 
             *(MeshInfo*)dst_ = info;

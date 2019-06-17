@@ -1,17 +1,17 @@
 #define kMaxLights 32
 
-enum LightType
+enum LIGHT_TYPE
 {
-    LIGHT_TYPE_DIRECTIONAL   = 1,
-    LIGHT_TYPE_SPOT          = 2,
-    LIGHT_TYPE_POINT         = 3,
-    LIGHT_TYPE_REVERSE_POINT = 4,
+    LT_DIRECTIONAL   = 1,
+    LT_SPOT          = 2,
+    LT_POINT         = 3,
+    LT_REVERSE_POINT = 4,
 };
 
-enum RaytraceFlags
+enum RAYTRACE_FLAGS
 {
-    RTFLAG_IGNORE_SELF_SHADOW = 1,
-    RTFLAG_KEEP_SELF_DROP_SHADOW = 2,
+    RTF_IGNORE_SELF_SHADOW = 1,
+    RTF_KEEP_SELF_DROP_SHADOW = 2,
 };
 
 struct CameraData
