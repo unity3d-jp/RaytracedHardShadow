@@ -26,11 +26,6 @@ BufferDataDXR::~BufferDataDXR()
 
 
 
-DescriptorHandleDXR::operator bool() const
-{
-    return hcpu.ptr != 0 && hgpu.ptr != 0;
-}
-
 
 FenceEventDXR::FenceEventDXR()
 {
@@ -44,6 +39,46 @@ FenceEventDXR::~FenceEventDXR()
 FenceEventDXR::operator HANDLE() const
 {
     return m_handle;
+}
+
+
+int MeshDataDXR::getVertexStride() const
+{
+    if (base->vertex_stride == 0 && vertex_buffer)
+        return vertex_buffer->size / base->vertex_count;
+    else
+        return base->vertex_stride;
+}
+
+int MeshDataDXR::getIndexStride() const
+{
+    if (base->index_stride == 0 && index_buffer)
+        return index_buffer->size / base->index_count;
+    else
+        return base->index_stride;
+}
+
+
+DescriptorHandleDXR::operator bool() const
+{
+    return hcpu.ptr != 0 && hgpu.ptr != 0;
+}
+
+DescriptorHeapAllocatorDXR::DescriptorHeapAllocatorDXR(ID3D12DevicePtr device, ID3D12DescriptorHeapPtr heap)
+{
+    m_stride = device->GetDescriptorHandleIncrementSize(heap->GetDesc().Type);
+    m_hcpu = heap->GetCPUDescriptorHandleForHeapStart();
+    m_hgpu = heap->GetGPUDescriptorHandleForHeapStart();
+}
+
+DescriptorHandleDXR DescriptorHeapAllocatorDXR::allocate()
+{
+    DescriptorHandleDXR ret;
+    ret.hcpu = m_hcpu;
+    ret.hgpu = m_hgpu;
+    m_hcpu.ptr += m_stride;
+    m_hgpu.ptr += m_stride;
+    return ret;
 }
 
 
@@ -81,22 +116,6 @@ std::string ToString(ID3DBlob *blob)
     ret.resize(blob->GetBufferSize());
     memcpy(&ret[0], blob->GetBufferPointer(), blob->GetBufferSize());
     return ret;
-}
-
-int MeshDataDXR::getVertexStride() const
-{
-    if (base->vertex_stride == 0 && vertex_buffer)
-        return vertex_buffer->size / base->vertex_count;
-    else
-        return base->vertex_stride;
-}
-
-int MeshDataDXR::getIndexStride() const
-{
-    if (base->index_stride == 0 && index_buffer)
-        return index_buffer->size / base->index_count;
-    else
-        return base->index_stride;
 }
 
 } // namespace rths

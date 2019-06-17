@@ -253,22 +253,11 @@ bool GfxContextDXR::initializeDevice()
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvuav_heap));
-        UINT handle_stride = m_device->GetDescriptorHandleIncrementSize(desc.Type);
-        auto hcpu_base = m_srvuav_heap->GetCPUDescriptorHandleForHeapStart();
-        auto hgpu_base = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart();
 
-        auto allocate_handle = [this, &hcpu_base, &hgpu_base, handle_stride]() {
-            DescriptorHandleDXR ret;
-            ret.hcpu = hcpu_base;
-            ret.hgpu = hgpu_base;
-            hcpu_base.ptr += handle_stride;
-            hgpu_base.ptr += handle_stride;
-            return ret;
-        };
-
-        m_render_target_handle = allocate_handle();
-        m_tlas_handle = allocate_handle();
-        m_scene_buffer_handle = allocate_handle();
+        auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, m_srvuav_heap);
+        m_render_target_handle = handle_allocator.allocate();
+        m_tlas_handle = handle_allocator.allocate();
+        m_scene_buffer_handle = handle_allocator.allocate();
     }
 
     // scene constant buffer
@@ -547,7 +536,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
     if (num_gpu_skinning > 0) {
         // execute deform
         auto fence_value = m_resource_translator->inclementFenceValue();
-        m_deformer->executeCommand(m_fence, fence_value);
+        m_deformer->executeDeform(m_fence, fence_value);
 
         // add wait command because building acceleration structure depends on deform
         m_cmd_queue->Wait(m_fence, fence_value);
@@ -641,14 +630,15 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
             instance_descs_buf->Map(0, nullptr, (void**)&instance_descs);
             ZeroMemory(instance_descs, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes);
             for (uint32_t i = 0; i < num_meshes; i++) {
-                auto& instance = m_mesh_instances[i];
+                auto& inst = m_mesh_instances[i];
+                auto& blas = m_gpu_skinning && inst->deformed_vertices ? inst->blas_deformed : inst->mesh->blas;
 
-                (float3x4&)instance_descs[i].Transform = to_float3x4(instance->base->transform);
+                (float3x4&)instance_descs[i].Transform = to_float3x4(inst->base->transform);
                 instance_descs[i].InstanceID = i; // This value will be exposed to the shader via InstanceID()
                 instance_descs[i].InstanceMask = 0xFF;
                 instance_descs[i].InstanceContributionToHitGroupIndex = i;
                 instance_descs[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
-                instance_descs[i].AccelerationStructure = instance->mesh->blas->GetGPUVirtualAddress();
+                instance_descs[i].AccelerationStructure = blas->GetGPUVirtualAddress();
             }
             instance_descs_buf->Unmap(0, nullptr);
         }

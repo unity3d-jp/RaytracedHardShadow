@@ -154,6 +154,18 @@ struct DescriptorHandleDXR
     operator bool() const;
 };
 
+class DescriptorHeapAllocatorDXR
+{
+public:
+    DescriptorHeapAllocatorDXR(ID3D12DevicePtr device, ID3D12DescriptorHeapPtr heap);
+    DescriptorHandleDXR allocate();
+
+private:
+    UINT m_stride{};
+    D3D12_CPU_DESCRIPTOR_HANDLE m_hcpu{};
+    D3D12_GPU_DESCRIPTOR_HANDLE m_hgpu{};
+};
+
 
 extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;

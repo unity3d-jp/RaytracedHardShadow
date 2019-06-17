@@ -10,7 +10,15 @@ public:
 
     bool prepare();
     bool queueDeformCommand(MeshInstanceDataDXR& inst);
-    bool executeCommand(ID3D12FencePtr fence, UINT64 fence_value);
+    bool executeDeform(ID3D12FencePtr fence, UINT64 fence_value);
+
+private:
+    void createSRV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int num_elements, int stride);
+    void createUAV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int num_elements, int stride);
+    void createCBV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int size);
+    ID3D12ResourcePtr createBuffer(int size, const D3D12_HEAP_PROPERTIES& heap_props, bool uav = false);
+    template<class Body> bool writeBuffer(ID3D12Resource *res, const Body& body);
+
 
 private:
     ID3D12Device5Ptr m_device;

@@ -131,25 +131,26 @@ namespace UTJ.RaytracedHardShadow
         public void SetGPUBuffers(Mesh mesh)
         {
             int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
-            int indexCount = 0;
+            int indexCountMerged = 0;
             int prevIndexEnd = 0;
 
             // merge continuous triangle submeshes into a single one
-            int numSubmeshes = mesh.subMeshCount;
-            for (int smi = 0; smi < numSubmeshes; ++smi)
+            int subMeshCount = mesh.subMeshCount;
+            for (int smi = 0; smi < subMeshCount; ++smi)
             {
                 if (mesh.GetTopology(smi) != MeshTopology.Triangles)
                     break;
                 int start = (int)mesh.GetIndexStart(smi);
                 if (start != prevIndexEnd)
                     break;
-                indexCount += (int)mesh.GetIndexCount(smi);
+                int indexCount = (int)mesh.GetIndexCount(smi);
+                indexCountMerged += (int)mesh.GetIndexCount(smi);
                 prevIndexEnd = start + indexCount;
             }
 
             SetGPUBuffers(
                 mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
-                0, mesh.vertexCount, 0, indexStride, indexCount, 0);
+                0, mesh.vertexCount, 0, indexStride, indexCountMerged, 0);
         }
     }
 

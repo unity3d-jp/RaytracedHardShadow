@@ -42,6 +42,7 @@ static const D3D12_DESCRIPTOR_RANGE g_descriptor_ranges[] = {
         { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 7 },
 };
 
+
 DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
     : m_device(device)
 {
@@ -54,6 +55,7 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
         }
         m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&m_cmd_allocator));
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
+        m_cmd_list->Close();
     }
 
     {
@@ -103,12 +105,13 @@ DeformerDXR::~DeformerDXR()
 
 bool DeformerDXR::prepare()
 {
+    bool ret = false;
     if (SUCCEEDED(m_cmd_allocator->Reset())) {
-        if (SUCCEEDED(m_cmd_list->Reset(m_cmd_allocator, nullptr))) {
-            return true;
+        if (SUCCEEDED(m_cmd_list->Reset(m_cmd_allocator, m_pipeline_state))) {
+            ret = true;
         }
     }
-    return false;
+    return ret;
 }
 
 bool DeformerDXR::queueDeformCommand(MeshInstanceDataDXR& inst_dxr)
@@ -135,103 +138,33 @@ bool DeformerDXR::queueDeformCommand(MeshInstanceDataDXR& inst_dxr)
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&inst_dxr.srvuav_heap));
     }
-
-    UINT handle_stride = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    auto hcpu_base = inst_dxr.srvuav_heap->GetCPUDescriptorHandleForHeapStart();
-    auto hgpu_base = inst_dxr.srvuav_heap->GetGPUDescriptorHandleForHeapStart();
-
-    auto allocate_handle = [this, &hcpu_base, &hgpu_base, handle_stride]() {
-        DescriptorHandleDXR ret;
-        ret.hcpu = hcpu_base;
-        ret.hgpu = hgpu_base;
-        hcpu_base.ptr += handle_stride;
-        hgpu_base.ptr += handle_stride;
-        return ret;
-    };
-
-    auto hdst_vertices = allocate_handle();
-    auto hbase_vertices = allocate_handle();
-    auto hbs_point_delta = allocate_handle();
-    auto hbs_point_weights = allocate_handle();
-    auto hbone_counts = allocate_handle();
-    auto hbone_weights = allocate_handle();
-    auto hbone_matrices = allocate_handle();
-    auto hmesh_info = allocate_handle();
-
-    auto create_uav = [this](D3D12_CPU_DESCRIPTOR_HANDLE hcpu, ID3D12Resource *res, int num_elements, int stride) {
-        D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
-        desc.Format = DXGI_FORMAT_UNKNOWN;
-        desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-        desc.Buffer.FirstElement = 0;
-        desc.Buffer.NumElements = num_elements;
-        desc.Buffer.StructureByteStride = stride;
-        desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
-        m_device->CreateUnorderedAccessView(res, nullptr, &desc, hcpu);
-    };
-
-    auto create_srv = [this](D3D12_CPU_DESCRIPTOR_HANDLE hcpu, ID3D12Resource *res, int num_elements, int stride) {
-        D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
-        desc.Format = DXGI_FORMAT_UNKNOWN;
-        desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-        desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        desc.Buffer.FirstElement = 0;
-        desc.Buffer.NumElements = num_elements;
-        desc.Buffer.StructureByteStride = stride;
-        desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-        m_device->CreateShaderResourceView(res, &desc, hcpu);
-    };
-
-    auto create_buffer = [this](int size, const D3D12_HEAP_PROPERTIES& heap_props) {
-        D3D12_RESOURCE_DESC desc{};
-        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        desc.Alignment = 0;
-        desc.Width = size;
-        desc.Height = 1;
-        desc.DepthOrArraySize = 1;
-        desc.MipLevels = 1;
-        desc.Format = DXGI_FORMAT_UNKNOWN;
-        desc.SampleDesc.Count = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-        ID3D12ResourcePtr ret;
-        auto hr = m_device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&ret));
-        if (FAILED(hr)) {
-            SetErrorLog("CreateCommittedResource() failed\n");
-        }
-        return ret;
-    };
-
-    auto write_buffer = [this](ID3D12Resource *res, const auto& body) {
-        void *data;
-        auto hr = res->Map(0, nullptr, &data);
-        if (SUCCEEDED(hr)) {
-            body(data);
-            res->Unmap(0, nullptr);
-        }
-        else {
-            SetErrorLog("Map() failed\n");
-        }
-    };
+    auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, inst_dxr.srvuav_heap);
+    auto hdst_vertices = handle_allocator.allocate();
+    auto hbase_vertices = handle_allocator.allocate();
+    auto hbs_point_delta = handle_allocator.allocate();
+    auto hbs_point_weights = handle_allocator.allocate();
+    auto hbone_counts = handle_allocator.allocate();
+    auto hbone_weights = handle_allocator.allocate();
+    auto hbone_matrices = handle_allocator.allocate();
+    auto hmesh_info = handle_allocator.allocate();
 
     if (!inst_dxr.deformed_vertices) {
         // deformed vertices
-        inst_dxr.deformed_vertices = create_buffer(sizeof(float4) * vertex_count, kDefaultHeapProps);
-        create_uav(hdst_vertices.hcpu, inst_dxr.deformed_vertices, vertex_count, sizeof(float4));
+        inst_dxr.deformed_vertices = createBuffer(sizeof(float4) * vertex_count, kDefaultHeapProps, true);
+        createUAV(hdst_vertices.hcpu, inst_dxr.deformed_vertices, vertex_count, sizeof(float4));
 
         // base vertices
         // todo: handle mesh.vertex_offset
-        create_srv(hbase_vertices.hcpu, mesh_dxr.vertex_buffer->resource, vertex_count, mesh_dxr.getVertexStride());
+        createSRV(hbase_vertices.hcpu, mesh_dxr.vertex_buffer->resource, vertex_count, mesh_dxr.getVertexStride());
     }
 
     // blendshape
     if (blendshape_count > 0) {
         if (!mesh_dxr.bs_point_delta) {
             // point delta
-            mesh_dxr.bs_point_delta = create_buffer(sizeof(float4) * vertex_count * blendshape_count, kUploadHeapProps);
-            create_srv(hbs_point_delta.hcpu, mesh_dxr.bs_point_delta, vertex_count * blendshape_count, sizeof(float4));
-            write_buffer(mesh_dxr.bs_point_delta, [&](void *dst_) {
+            mesh_dxr.bs_point_delta = createBuffer(sizeof(float4) * vertex_count * blendshape_count, kUploadHeapProps);
+            createSRV(hbs_point_delta.hcpu, mesh_dxr.bs_point_delta, vertex_count * blendshape_count, sizeof(float4));
+            writeBuffer(mesh_dxr.bs_point_delta, [&](void *dst_) {
                 auto dst = (float4*)dst_;
                 for (int bsi = 0; bsi < blendshape_count; ++bsi) {
                     auto& delta = mesh.blendshapes[bsi].frames[0].delta;
@@ -244,11 +177,11 @@ bool DeformerDXR::queueDeformCommand(MeshInstanceDataDXR& inst_dxr)
         // weights
         {
             if (!inst_dxr.blendshape_weights) {
-                inst_dxr.blendshape_weights = create_buffer(sizeof(float) * blendshape_count, kUploadHeapProps);
-                create_srv(hbs_point_weights.hcpu, inst_dxr.blendshape_weights, blendshape_count, sizeof(float));
+                inst_dxr.blendshape_weights = createBuffer(sizeof(float) * blendshape_count, kUploadHeapProps);
+                createSRV(hbs_point_weights.hcpu, inst_dxr.blendshape_weights, blendshape_count, sizeof(float));
             }
             // update on every frame
-            write_buffer(inst_dxr.blendshape_weights, [&](void *dst_) {
+            writeBuffer(inst_dxr.blendshape_weights, [&](void *dst_) {
                 std::copy(inst.blendshape_weights.data(), inst.blendshape_weights.data() + inst.blendshape_weights.size(),
                     (float*)dst_);
                 });
@@ -259,11 +192,11 @@ bool DeformerDXR::queueDeformCommand(MeshInstanceDataDXR& inst_dxr)
     if (bone_count > 0) {
         // bone counts & weights
         if (!mesh_dxr.bone_counts) {
-            mesh_dxr.bone_counts = create_buffer(sizeof(BoneCount) * vertex_count, kUploadHeapProps);
-            create_srv(hbone_counts.hcpu, mesh_dxr.bone_counts, vertex_count, sizeof(BoneCount));
+            mesh_dxr.bone_counts = createBuffer(sizeof(BoneCount) * vertex_count, kUploadHeapProps);
+            createSRV(hbone_counts.hcpu, mesh_dxr.bone_counts, vertex_count, sizeof(BoneCount));
 
             int weight_count = 0;
-            write_buffer(mesh_dxr.bone_counts, [&](void *dst_) {
+            writeBuffer(mesh_dxr.bone_counts, [&](void *dst_) {
                 auto dst = (BoneCount*)dst_;
                 for (int vi = 0; vi < vertex_count; ++vi) {
                     int n = mesh.skin.bone_counts[vi];
@@ -272,9 +205,9 @@ bool DeformerDXR::queueDeformCommand(MeshInstanceDataDXR& inst_dxr)
                 }
             });
 
-            mesh_dxr.bone_weights = create_buffer(sizeof(BoneWeight) * weight_count, kUploadHeapProps);
-            create_srv(hbone_weights.hcpu, mesh_dxr.bone_weights, weight_count, sizeof(BoneWeight));
-            write_buffer(mesh_dxr.bone_weights, [&](void *dst_) {
+            mesh_dxr.bone_weights = createBuffer(sizeof(BoneWeight) * weight_count, kUploadHeapProps);
+            createSRV(hbone_weights.hcpu, mesh_dxr.bone_weights, weight_count, sizeof(BoneWeight));
+            writeBuffer(mesh_dxr.bone_weights, [&](void *dst_) {
                 auto dst = (BoneWeight*)dst_;
                 for (int wi = 0; wi < weight_count; ++wi) {
                     auto& w1 = mesh.skin.weights[wi];
@@ -286,11 +219,11 @@ bool DeformerDXR::queueDeformCommand(MeshInstanceDataDXR& inst_dxr)
         // bone matrices
         {
             if (!inst_dxr.bones) {
-                inst_dxr.bones = create_buffer(sizeof(float4x4) * bone_count, kUploadHeapProps);
-                create_srv(hbone_matrices.hcpu, inst_dxr.bones, bone_count, sizeof(float4x4));
+                inst_dxr.bones = createBuffer(sizeof(float4x4) * bone_count, kUploadHeapProps);
+                createSRV(hbone_matrices.hcpu, inst_dxr.bones, bone_count, sizeof(float4x4));
             }
             // update on every frame
-            write_buffer(inst_dxr.bones, [&](void *dst_) {
+            writeBuffer(inst_dxr.bones, [&](void *dst_) {
                 auto dst = (float4x4*)dst_;
 
                 auto iroot = invert(inst.transform);
@@ -303,9 +236,10 @@ bool DeformerDXR::queueDeformCommand(MeshInstanceDataDXR& inst_dxr)
 
     // mesh info
     if (!mesh_dxr.mesh_info) {
-        mesh_dxr.mesh_info = create_buffer(sizeof(MeshInfo), kUploadHeapProps);
-        create_srv(hmesh_info.hcpu, mesh_dxr.mesh_info, 1, sizeof(MeshInfo));
-        write_buffer(mesh_dxr.mesh_info, [&](void *dst_) {
+        int size = align_to(256, sizeof(MeshInfo));
+        mesh_dxr.mesh_info = createBuffer(size, kUploadHeapProps);
+        createCBV(hmesh_info.hcpu, mesh_dxr.mesh_info, size);
+        writeBuffer(mesh_dxr.mesh_info, [&](void *dst_) {
             MeshInfo info{};
             info.vertex_count = vertex_count;
             info.vertex_stride = mesh_dxr.getVertexStride() / 4;
@@ -340,7 +274,7 @@ bool DeformerDXR::queueDeformCommand(MeshInstanceDataDXR& inst_dxr)
     return true;
 }
 
-bool DeformerDXR::executeCommand(ID3D12FencePtr fence, UINT64 fence_value)
+bool DeformerDXR::executeDeform(ID3D12FencePtr fence, UINT64 fence_value)
 {
     if(FAILED(m_cmd_list->Close()))
         return false;
@@ -350,6 +284,81 @@ bool DeformerDXR::executeCommand(ID3D12FencePtr fence, UINT64 fence_value)
     m_cmd_queue->Signal(fence, fence_value);
     return true;
 }
+
+
+void DeformerDXR::createSRV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int num_elements, int stride)
+{
+    D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+    desc.Format = DXGI_FORMAT_UNKNOWN;
+    desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    desc.Buffer.FirstElement = 0;
+    desc.Buffer.NumElements = num_elements;
+    desc.Buffer.StructureByteStride = stride;
+    desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+    m_device->CreateShaderResourceView(res, &desc, dst);
+}
+
+void DeformerDXR::createUAV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int num_elements, int stride)
+{
+    D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
+    desc.Format = DXGI_FORMAT_UNKNOWN;
+    desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    desc.Buffer.FirstElement = 0;
+    desc.Buffer.NumElements = num_elements;
+    desc.Buffer.StructureByteStride = stride;
+    desc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+    m_device->CreateUnorderedAccessView(res, nullptr, &desc, dst);
+}
+
+void DeformerDXR::createCBV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int size)
+{
+    D3D12_CONSTANT_BUFFER_VIEW_DESC desc{};
+    desc.BufferLocation = res->GetGPUVirtualAddress();
+    desc.SizeInBytes = size;
+    m_device->CreateConstantBufferView(&desc, dst);
+}
+
+
+ID3D12ResourcePtr DeformerDXR::createBuffer(int size, const D3D12_HEAP_PROPERTIES& heap_props, bool uav)
+{
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Alignment = 0;
+    desc.Width = size;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = DXGI_FORMAT_UNKNOWN;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.Flags = uav ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
+
+    ID3D12ResourcePtr ret;
+    auto hr = m_device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&ret));
+    if (FAILED(hr)) {
+        SetErrorLog("CreateCommittedResource() failed\n");
+    }
+    return ret;
+}
+
+template<class Body>
+bool DeformerDXR::writeBuffer(ID3D12Resource *res, const Body& body)
+{
+    void *data;
+    auto hr = res->Map(0, nullptr, &data);
+    if (SUCCEEDED(hr)) {
+        body(data);
+        res->Unmap(0, nullptr);
+        return true;
+    }
+    else {
+        SetErrorLog("Map() failed\n");
+    }
+    return false;
+}
+
 
 } // namespace rths
 #endif // _WIN32
