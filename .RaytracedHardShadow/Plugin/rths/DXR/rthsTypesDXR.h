@@ -118,7 +118,7 @@ public:
     // blendshape data
     ID3D12ResourcePtr bs_delta;
     ID3D12ResourcePtr bs_frames;
-    ID3D12ResourcePtr bs_counts;
+    ID3D12ResourcePtr bs_info;
 
     // skinning data
     ID3D12ResourcePtr bone_counts;

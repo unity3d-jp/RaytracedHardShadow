@@ -91,9 +91,7 @@ private:
     ID3D12ResourcePtr m_tlas;
     DescriptorHandleDXR m_tlas_handle;
 
-    bool m_gpu_skinning = false;
-    bool m_clamp_blendshape_weights = false;
-
+    int m_render_flags = 0;
     bool m_flushing = false;
 };
 

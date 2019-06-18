@@ -8,7 +8,7 @@ public:
     DeformerDXR(ID3D12Device5Ptr device);
     ~DeformerDXR();
 
-    bool prepare(bool clamp_blendshape_weights);
+    bool prepare(int render_flags);
     bool deform(MeshInstanceDataDXR& inst);
 
     // returns 0 if failed, new fence value if succeeded

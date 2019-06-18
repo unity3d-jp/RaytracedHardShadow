@@ -409,8 +409,7 @@ void GfxContextDXR::setSceneData(SceneData& data)
         m_scene_buffer->Unmap(0, nullptr);
     }
 
-    m_gpu_skinning = (data.render_flags & (int)RenderFlag::GPUSkinning) != 0;
-    m_clamp_blendshape_weights = (data.render_flags & (int)RenderFlag::ClampBlendShapeWights) != 0;
+    m_render_flags = data.render_flags;
 }
 
 void GfxContextDXR::setRenderTarget(TextureData& rt)
@@ -459,8 +458,10 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
         return data;
     };
 
-    m_deformer->prepare(m_clamp_blendshape_weights);
+    bool gpu_skinning = (m_render_flags & (int)RenderFlag::GPUSkinning) != 0;
     int num_gpu_skinning = 0;
+    if (gpu_skinning)
+        m_deformer->prepare(m_render_flags);
 
     size_t num_meshes = instances.size();
     for (size_t i = 0; i < num_meshes; ++i) {
@@ -526,7 +527,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
         auto inst_dxr = std::make_shared<MeshInstanceDataDXR>();
         inst_dxr->base = inst;
         inst_dxr->mesh = mesh_dxr;
-        if (m_gpu_skinning) {
+        if (gpu_skinning) {
             if (m_deformer->deform(*inst_dxr))
                 ++num_gpu_skinning;
         }
@@ -553,12 +554,12 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
         auto& mesh = mesh_dxr->base;
 
         // build bottom level acceleration structure
-        auto& blas = m_gpu_skinning && inst.deformed_vertices ? inst.blas_deformed : mesh_dxr->blas;
+        auto& blas = gpu_skinning && inst.deformed_vertices ? inst.blas_deformed : mesh_dxr->blas;
         if (!blas) {
             D3D12_RAYTRACING_GEOMETRY_DESC geom_desc{};
             geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
             geom_desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-            if (m_gpu_skinning && inst.deformed_vertices) {
+            if (gpu_skinning && inst.deformed_vertices) {
                 geom_desc.Triangles.VertexBuffer.StartAddress = inst.deformed_vertices->GetGPUVirtualAddress();
                 geom_desc.Triangles.VertexBuffer.StrideInBytes = sizeof(float4);
                 geom_desc.Triangles.VertexCount = mesh->vertex_count;
@@ -634,7 +635,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
             ZeroMemory(instance_descs, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes);
             for (uint32_t i = 0; i < num_meshes; i++) {
                 auto& inst = m_mesh_instances[i];
-                auto& blas = m_gpu_skinning && inst->deformed_vertices ? inst->blas_deformed : inst->mesh->blas;
+                auto& blas = gpu_skinning && inst->deformed_vertices ? inst->blas_deformed : inst->mesh->blas;
 
                 (float3x4&)instance_descs[i].Transform = to_float3x4(inst->base->transform);
                 instance_descs[i].InstanceID = i; // This value will be exposed to the shader via InstanceID()
