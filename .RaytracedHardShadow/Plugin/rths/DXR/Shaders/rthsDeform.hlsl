@@ -77,65 +77,109 @@ uint DeformFlags()
 }
 
 
-float3 ApplyBlendshape(uint vid, float3 base)
+float GetBlendshapeWeight(uint bsi)
+{
+    return g_bs_weights[bsi];
+}
+
+uint GetBlendshapeFrameCount(uint bsi)
+{
+    return g_bs_info[bsi].frame_count;
+}
+
+float GetBlendshapeFrameWeight(uint bsi, uint fi)
+{
+    uint offset = g_bs_info[bsi].frame_offset;
+    return g_bs_frames[offset + fi].weight;
+}
+
+float3 GetBlendshapeDelta(uint bsi, uint fi, uint vi)
+{
+    BlendshapeFrame frame = g_bs_frames[g_bs_info[bsi].frame_offset + fi];
+    return g_bs_delta[frame.delta_offset + vi].xyz;
+}
+
+
+uint GetVertexBoneCount(uint vi)
+{
+    return g_bone_counts[vi].weight_count;
+}
+
+float GetVertexBoneWeight(uint vi, uint bi)
+{
+    return g_bone_weights[g_bone_counts[vi].weight_offset + bi].weight;
+}
+
+float4x4 GetVertexBoneMatrix(uint vi, uint bi)
+{
+    uint i = g_bone_weights[g_bone_counts[vi].weight_offset + bi].bone_index;
+    return g_bone_matrices[i];
+}
+
+
+float3 ApplyBlendshape(uint vi, float3 base)
 {
     float3 result = base;
-    uint num_blendshapes = BlendshapeCount();
-    for (uint bsi = 0; bsi < num_blendshapes; ++bsi) {
-        float weight = g_bs_weights[bsi];
-        if (weight != 0.0f) {
-            BlendshapeInfo info = g_bs_info[bsi];
-            BlendshapeFrame last_frame = g_bs_frames[info.frame_offset + info.frame_count - 1];
-            if (weight < 0.0f) {
-                BlendshapeFrame first_frame = g_bs_frames[info.frame_offset];
-                float3 delta = g_bs_delta[first_frame.delta_offset + vid].xyz;
-                float s = weight / first_frame.weight;
-                result += delta * s;
-            }
-            else if (weight > last_frame.weight) {
-                float3 delta = g_bs_delta[last_frame.delta_offset + vid].xyz;
-                float s = 0.0f;
-                if (info.frame_count >= 2) {
-                    BlendshapeFrame prev_frame = g_bs_frames[info.frame_offset + info.frame_count - 2];
-                    s = (weight - prev_frame.weight) / (last_frame.weight - prev_frame.weight);
-                }
-                else {
-                    s = weight / last_frame.weight;
-                }
-                result += delta * s;
+
+    uint blendshape_count = BlendshapeCount();
+    for (uint bsi = 0; bsi < blendshape_count; ++bsi) {
+        float weight = GetBlendshapeWeight(bsi);
+        if (weight == 0.0f)
+            continue;
+
+        uint frame_count = GetBlendshapeFrameCount(bsi);
+        float last_weight = GetBlendshapeFrameWeight(bsi, frame_count - 1);
+
+        if (weight < 0.0f) {
+            float3 delta = GetBlendshapeDelta(bsi, 0, vi);
+            float s = weight / GetBlendshapeFrameWeight(bsi, 0);
+            result += delta * s;
+        }
+        else if (weight > last_weight) {
+            float3 delta = GetBlendshapeDelta(bsi, frame_count - 1, vi);
+            float s = 0.0f;
+            if (frame_count >= 2) {
+                float prev_weight = GetBlendshapeFrameWeight(bsi, frame_count - 2);
+                s = (weight - prev_weight) / (last_weight - prev_weight);
             }
             else {
-                float3 p1 = 0.0f, p2 = 0.0f;
-                float w1 = 0.0f, w2 = 0.0f;
-
-                for (uint fi = 0; fi < info.frame_count; ++fi) {
-                    BlendshapeFrame frame = g_bs_frames[info.frame_offset + fi];
-                    if (weight <= frame.weight) {
-                        p2 = g_bs_delta[frame.delta_offset + vid].xyz;
-                        w2 = frame.weight;
-                        break;
-                    }
-                    else {
-                        p1 = g_bs_delta[frame.delta_offset + vid].xyz;
-                        w1 = frame.weight;
-                    }
-                }
-                float s = (weight - w1) / (w2 - w1);
-                result += lerp(p1, p2, s);
+                s = weight / last_weight;
             }
+            result += delta * s;
+        }
+        else {
+            float3 p1 = 0.0f, p2 = 0.0f;
+            float w1 = 0.0f, w2 = 0.0f;
+
+            for (uint fi = 0; fi < frame_count; ++fi) {
+                float frame_weight = GetBlendshapeFrameWeight(bsi, fi);
+                if (weight <= frame_weight) {
+                    p2 = GetBlendshapeDelta(bsi, fi, vi);
+                    w2 = frame_weight;
+                    break;
+                }
+                else {
+                    p1 = GetBlendshapeDelta(bsi, fi, vi);
+                    w1 = frame_weight;
+                }
+            }
+            float s = (weight - w1) / (w2 - w1);
+            result += lerp(p1, p2, s);
         }
     }
     return result;
 }
 
-float3 ApplySkinning(uint vid, float3 base_)
+float3 ApplySkinning(uint vi, float3 base_)
 {
     float4 base = float4(base_, 1.0f);
     float3 result = float3(0.0f, 0.0f, 0.0f);
-    BoneCount wc = g_bone_counts[vid];
-    for (uint bi = 0; bi < wc.weight_count; ++bi) {
-        BoneWeight w = g_bone_weights[wc.weight_offset + bi];
-        result += mul(g_bone_matrices[w.bone_index], base).xyz * w.weight;
+
+    uint bone_count = GetVertexBoneCount(vi);
+    for (uint bi = 0; bi < bone_count; ++bi) {
+        float w = GetVertexBoneWeight(vi, bi);
+        float4x4 m = GetVertexBoneMatrix(vi, bi);
+        result += mul(m, base).xyz * w;
     }
     return result;
 }
@@ -143,19 +187,19 @@ float3 ApplySkinning(uint vid, float3 base_)
 [numthreads(kThreadBlockSize, 1, 1)]
 void main(uint3 tid : SV_DispatchThreadID)
 {
-    uint vid = tid.x;
+    uint vi = tid.x;
 
     uint vertex_stride = VertexStrideInElement();
     float3 result = float3(
-        g_base_vertices[vertex_stride * vid + 0],
-        g_base_vertices[vertex_stride * vid + 1],
-        g_base_vertices[vertex_stride * vid + 2]);
+        g_base_vertices[vertex_stride * vi + 0],
+        g_base_vertices[vertex_stride * vi + 1],
+        g_base_vertices[vertex_stride * vi + 2]);
 
     uint deform_flags = DeformFlags();
     if ((deform_flags & DF_APPLY_BLENDSHAPE) != 0)
-        result = ApplyBlendshape(vid, result);
+        result = ApplyBlendshape(vi, result);
     if ((deform_flags & DF_APPLY_SKINNING) != 0)
-        result = ApplySkinning(vid, result);
+        result = ApplySkinning(vi, result);
 
-    g_dst_vertices[vid] = float4(result, 1.0f);
+    g_dst_vertices[vi] = float4(result, 1.0f);
 }
