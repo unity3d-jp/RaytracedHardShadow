@@ -15,6 +15,8 @@
     // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
     #define rthsEnableD3D12DREAD
 
+    #define rthsEnableTimestamp
+
     //// VB & IB validation
     //#define rthsEnableBufferValidation
 
@@ -167,6 +169,43 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_hcpu{};
     D3D12_GPU_DESCRIPTOR_HANDLE m_hgpu{};
 };
+
+
+class TimestampDXR
+{
+public:
+    TimestampDXR(ID3D12DevicePtr device, int max_sample = 64);
+
+    bool valid() const;
+    void reset();
+    bool query(ID3D12GraphicsCommandList4Ptr cl, const char *message);
+    bool resolve(ID3D12GraphicsCommandList4Ptr cl);
+
+    std::vector<std::tuple<uint64_t, const char*>> getSamples();
+    void printElapsed(ID3D12CommandQueuePtr cq);
+
+private:
+    ID3D12QueryHeapPtr m_query_heap;
+    ID3D12ResourcePtr m_timestamp_buffer;
+    int m_max_sample = 0;
+    int m_sample_index=0;
+    std::vector<std::string> m_messages;
+};
+using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
+
+#ifdef rthsEnableTimestamp
+    #define TimestampInitialize(q, d) q = std::make_shared<TimestampDXR>(d)
+    #define TimestampReset(q) q->reset()
+    #define TimestampQuery(q, cl, m) q->query(cl, m)
+    #define TimestampResolve(q, cl) q->resolve(cl)
+    #define TimestampPrint(q, cq) q->printElapsed(cq)
+#else rthsEnableTimestamp
+    #define TimestampInitialize(...)
+    #define TimestampReset(...)
+    #define TimestampQuery(...)
+    #define TimestampResolve(...)
+    #define TimestampPrint(...)
+#endif rthsEnableTimestamp
 
 
 extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;

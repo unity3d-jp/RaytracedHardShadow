@@ -93,6 +93,10 @@ private:
 
     int m_render_flags = 0;
     bool m_flushing = false;
+
+#ifdef rthsEnableTimestamp
+    TimestampDXRPtr m_timestamp;
+#endif // rthsEnableTimestamp
 };
 
 } // namespace rths

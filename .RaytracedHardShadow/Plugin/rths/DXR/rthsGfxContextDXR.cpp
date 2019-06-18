@@ -394,6 +394,9 @@ bool GfxContextDXR::initializeDevice()
             SetErrorLog("CreateStateObject() failed\n");
         }
     }
+
+    TimestampInitialize(m_timestamp, m_device);
+
     return true;
 }
 
@@ -462,6 +465,9 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
     int num_gpu_skinning = 0;
     if (gpu_skinning)
         m_deformer->prepare(m_render_flags);
+
+    TimestampReset(m_timestamp);
+    TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: building acceleration structure begin");
 
     size_t num_meshes = instances.size();
     for (size_t i = 0; i < num_meshes; ++i) {
@@ -671,6 +677,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
         srv_desc.RaytracingAccelerationStructure.Location = m_tlas->GetGPUVirtualAddress();
         m_device->CreateShaderResourceView(nullptr, &srv_desc, m_tlas_handle.hcpu);
     }
+    TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: building acceleration structure end");
 }
 
 
@@ -875,6 +882,8 @@ void GfxContextDXR::flush()
         return;
     }
 
+    TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: raytrace begin");
+
     int num_meshes = (int)m_mesh_instances.size();
 
     // setup shader table
@@ -969,6 +978,8 @@ void GfxContextDXR::flush()
     }
 
     addResourceBarrier(m_render_target->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
+    TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: raytrace end");
+    TimestampResolve(m_timestamp, m_cmd_list);
 
     submitCommandList();
     m_flushing = true;
@@ -981,6 +992,7 @@ void GfxContextDXR::finish()
         m_flushing = false;
     }
 
+    m_deformer->onFinish();
     m_cmd_allocator->Reset();
     m_cmd_list->Reset(m_cmd_allocator, nullptr);
 
@@ -998,6 +1010,9 @@ void GfxContextDXR::finish()
 
     m_mesh_instances.clear();
     m_render_target = nullptr;
+
+    m_deformer->debugPrint();
+    TimestampPrint(m_timestamp, m_cmd_queue);
 }
 
 void GfxContextDXR::releaseUnusedResources()

@@ -14,6 +14,9 @@ public:
     // returns 0 if failed, new fence value if succeeded
     uint64_t execute(ID3D12FencePtr fence, uint64_t fence_value);
 
+    void onFinish();
+    void debugPrint();
+
 private:
     void addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
     void createSRV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int num_elements, int stride);
@@ -39,6 +42,10 @@ private:
 
     bool m_clamp_blendshape_weights = false;
     bool m_needs_execute_and_reset = true;
+
+#ifdef rthsEnableTimestamp
+    TimestampDXRPtr m_timestamp;
+#endif // rthsEnableTimestamp
 };
 using DeformerDXRPtr = std::shared_ptr<DeformerDXR>;
 

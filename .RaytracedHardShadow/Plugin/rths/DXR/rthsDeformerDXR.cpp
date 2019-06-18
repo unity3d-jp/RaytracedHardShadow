@@ -35,7 +35,7 @@ struct BoneCount
 struct MeshInfo
 {
     int deform_flags;
-    int vertex_stride; // in element (e.g. 6 if position + normals)
+    int vertex_stride; // in element (e.g. 6 if position + normal)
     int2 pad1;
 };
 
@@ -111,6 +111,8 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
             SetErrorLog("CreateComputePipelineState() failed\n");
         }
     }
+
+    TimestampInitialize(m_timestamp, m_device);
 }
 
 DeformerDXR::~DeformerDXR()
@@ -136,6 +138,8 @@ bool DeformerDXR::prepare(int render_flags)
             ret = false;
     }
 
+    TimestampReset(m_timestamp);
+    TimestampQuery(m_timestamp, m_cmd_list_compute, "DeformerDXR: begin");
     return ret;
 }
 
@@ -347,6 +351,8 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
 
 uint64_t DeformerDXR::execute(ID3D12FencePtr fence, uint64_t fence_value)
 {
+    TimestampQuery(m_timestamp, m_cmd_list_compute, "DeformerDXR: end");
+    TimestampResolve(m_timestamp, m_cmd_list_compute);
     if (!m_needs_execute_and_reset || FAILED(m_cmd_list->Close()) || FAILED(m_cmd_list_compute->Close()))
         return 0;
     {
@@ -362,6 +368,15 @@ uint64_t DeformerDXR::execute(ID3D12FencePtr fence, uint64_t fence_value)
         m_cmd_queue_compute->Signal(fence, fence_value);
     }
     return fence_value;
+}
+
+void DeformerDXR::onFinish()
+{
+}
+
+void DeformerDXR::debugPrint()
+{
+    TimestampPrint(m_timestamp, m_cmd_queue_compute);
 }
 
 

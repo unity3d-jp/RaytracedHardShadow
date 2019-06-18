@@ -31,7 +31,7 @@ struct BoneWeight
 struct MeshInfo
 {
     uint deform_flags; // combination of DEFORM_FLAG
-    uint vertex_stride; // in element (e.g. 6 if position + normals)
+    uint vertex_stride; // in element (e.g. 6 if position + normal)
     uint2 pad;
 };
 
@@ -95,8 +95,8 @@ float GetBlendshapeFrameWeight(uint bsi, uint fi)
 
 float3 GetBlendshapeDelta(uint bsi, uint fi, uint vi)
 {
-    BlendshapeFrame frame = g_bs_frames[g_bs_info[bsi].frame_offset + fi];
-    return g_bs_delta[frame.delta_offset + vi].xyz;
+    uint offset = g_bs_frames[g_bs_info[bsi].frame_offset + fi].delta_offset;
+    return g_bs_delta[offset + vi].xyz;
 }
 
 
