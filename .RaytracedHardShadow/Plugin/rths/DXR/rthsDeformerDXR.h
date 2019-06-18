@@ -8,7 +8,7 @@ public:
     DeformerDXR(ID3D12Device5Ptr device);
     ~DeformerDXR();
 
-    bool prepare();
+    bool prepare(bool clamp_blendshape_weights);
     bool deform(MeshInstanceDataDXR& inst);
 
     // returns 0 if failed, new fence value if succeeded
@@ -37,6 +37,7 @@ private:
     ID3D12RootSignaturePtr m_rootsig_deform;
     ID3D12PipelineStatePtr m_pipeline_state;
 
+    bool m_clamp_blendshape_weights = false;
     bool m_needs_execute_and_reset = true;
 };
 using DeformerDXRPtr = std::shared_ptr<DeformerDXR>;

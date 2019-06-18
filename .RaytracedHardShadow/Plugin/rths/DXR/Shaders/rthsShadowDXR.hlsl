@@ -51,8 +51,8 @@ void AnyHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersec
     // this function is called only when ignore self shadow flag is enabled (RTFLAG_IGNORE_SELF_SHADOW) and payload.pass==1
 
     if (payload.instance_id == InstanceID()) {
-        int rt_flags = RaytraceFlags();
-        if ((rt_flags & RTFLAG_KEEP_SELF_DROP_SHADOW) == 0 || (payload.primitive_index == PrimitiveIndex() || RayTCurrent() < SelfShadowThreshold())) {
+        int render_flags = RenderFlags();
+        if ((render_flags & RF_KEEP_SELF_DROP_SHADOW) == 0 || (payload.primitive_index == PrimitiveIndex() || RayTCurrent() < SelfShadowThreshold())) {
             // ignore self shadow
             IgnoreHit();
             return;
@@ -71,9 +71,9 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
 
         // shoot shadow ray (hit position -> light)
 
-        int rt_flags = RaytraceFlags();
+        int render_flags = RenderFlags();
         int ray_flags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
-        if ((rt_flags & RTFLAG_IGNORE_SELF_SHADOW) != 0)
+        if ((render_flags & RF_IGNORE_SELF_SHADOW) != 0)
             ray_flags |= RAY_FLAG_FORCE_NON_OPAQUE; // calling any hit shader require non-opaque flag
         else
             ray_flags |= RAY_FLAG_FORCE_OPAQUE & RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;
@@ -82,7 +82,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
         for (li = 0; li < LightCount(); ++li) {
             LightData light = GetLight(li);
 
-            if (light.light_type == LIGHT_TYPE_DIRECTIONAL) {
+            if (light.light_type == LT_DIRECTIONAL) {
                 // directional light
                 RayDesc ray;
                 ray.Origin = HitPosition();
@@ -91,7 +91,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.TMax = CameraFarPlane();
                 TraceRay(gRtScene, ray_flags, 0xFF, 0, 0, 0, ray, payload);
             }
-            else if (light.light_type == LIGHT_TYPE_SPOT) {
+            else if (light.light_type == LT_SPOT) {
                 // spot light
                 float3 pos = HitPosition();
                 float3 dir = normalize(light.position - pos);
@@ -105,7 +105,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                     TraceRay(gRtScene, ray_flags, 0xFF, 0, 0, 0, ray, payload);
                 }
             }
-            else if (light.light_type == LIGHT_TYPE_POINT) {
+            else if (light.light_type == LT_POINT) {
                 // point light
                 float3 pos = HitPosition();
                 float3 dir = normalize(light.position - pos);
@@ -120,7 +120,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                     TraceRay(gRtScene, ray_flags, 0xFF, 0, 0, 0, ray, payload);
                 }
             }
-            else if (light.light_type == LIGHT_TYPE_REVERSE_POINT) {
+            else if (light.light_type == LT_REVERSE_POINT) {
                 // reverse point light
                 float3 pos = HitPosition();
                 float3 dir = normalize(light.position - pos);

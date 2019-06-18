@@ -409,7 +409,8 @@ void GfxContextDXR::setSceneData(SceneData& data)
         m_scene_buffer->Unmap(0, nullptr);
     }
 
-    m_gpu_skinning = (data.raytrace_flags & (int)RaytraceFlags::GPUSkinning) != 0;
+    m_gpu_skinning = (data.render_flags & (int)RenderFlag::GPUSkinning) != 0;
+    m_clamp_blendshape_weights = (data.render_flags & (int)RenderFlag::ClampBlendShapeWights) != 0;
 }
 
 void GfxContextDXR::setRenderTarget(TextureData& rt)
@@ -458,7 +459,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
         return data;
     };
 
-    m_deformer->prepare();
+    m_deformer->prepare(m_clamp_blendshape_weights);
     int num_gpu_skinning = 0;
 
     size_t num_meshes = instances.size();

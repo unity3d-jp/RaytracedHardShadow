@@ -61,12 +61,13 @@ namespace UTJ.RaytracedHardShadow
 #endif
     }
 
-    public enum rthsRaytraceFlags
+    public enum rthsRenderFlag
     {
         None = 0,
         IgnoreSelfShadow = 1,
         KeepSelfDropShadow = 2,
         GPUSkinning = 4,
+        ClampBlendShapeWights = 8,
     }
 
     public struct rthsMeshData
@@ -258,7 +259,7 @@ namespace UTJ.RaytracedHardShadow
 
         [DllImport("rths")] static extern void rthsBeginScene(IntPtr self);
         [DllImport("rths")] static extern void rthsEndScene(IntPtr self);
-        [DllImport("rths")] static extern void rthsSetRaytraceFlags(IntPtr self, int flags);
+        [DllImport("rths")] static extern void rthsSetRenderFlags(IntPtr self, int flags);
         [DllImport("rths")] static extern void rthsSetShadowRayOffset(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsSetSelfShadowThreshold(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsSetRenderTarget(IntPtr self, IntPtr rt);
@@ -307,7 +308,7 @@ namespace UTJ.RaytracedHardShadow
 
         public void SetRaytraceFlags(int flags)
         {
-            rthsSetRaytraceFlags(self, flags);
+            rthsSetRenderFlags(self, flags);
         }
         public void SetShadowRayOffset(float v)
         {

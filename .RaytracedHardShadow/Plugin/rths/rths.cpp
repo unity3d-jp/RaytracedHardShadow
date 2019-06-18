@@ -166,7 +166,7 @@ rthsAPI void rthsEndScene(IRenderer *self)
     self->endScene();
 }
 
-rthsAPI void rthsSetRaytraceFlags(IRenderer *self, int v)
+rthsAPI void rthsSetRenderFlags(IRenderer *self, int v)
 {
     if (!self)
         return;

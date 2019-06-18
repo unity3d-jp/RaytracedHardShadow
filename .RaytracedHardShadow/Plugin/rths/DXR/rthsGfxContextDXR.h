@@ -92,6 +92,8 @@ private:
     DescriptorHandleDXR m_tlas_handle;
 
     bool m_gpu_skinning = false;
+    bool m_clamp_blendshape_weights = false;
+
     bool m_flushing = false;
 };
 

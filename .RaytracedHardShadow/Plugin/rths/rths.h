@@ -14,6 +14,14 @@ struct float3 { float x, y, z; };
 struct float4 { float x, y, z, w; };
 struct float4x4 { float4 v[4]; };
 
+enum class RenderFlag : int
+{
+    IgnoreSelfShadow = 1,
+    KeepSelfDropShadow = 2,
+    GPUSkinning = 4,
+    ClampBlendShapeWights = 8,
+};
+
 struct BoneWeight
 {
     float weight;
@@ -61,7 +69,7 @@ rthsAPI void rthsReleaseRenderer(rths::IRenderer *self);
 rthsAPI void rthsSetRenderTarget(rths::IRenderer *self, void *render_target);
 rthsAPI void rthsBeginScene(rths::IRenderer *self);
 rthsAPI void rthsEndScene(rths::IRenderer *self);
-rthsAPI void rthsSetRaytraceFlags(rths::IRenderer *self, int v);
+rthsAPI void rthsSetRenderFlags(rths::IRenderer *self, int v);
 rthsAPI void rthsSetShadowRayOffset(rths::IRenderer *self, float v);
 rthsAPI void rthsSetSelfShadowThreshold(rths::IRenderer *self, float v);
 rthsAPI void rthsSetCamera(rths::IRenderer *self, rths::float4x4 transform, rths::float4x4 view, rths::float4x4 proj, float near_plane, float far_plane, float fov);

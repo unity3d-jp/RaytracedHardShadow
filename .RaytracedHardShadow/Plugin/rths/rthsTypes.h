@@ -87,6 +87,7 @@ inline float3 operator-(const float3& l) { return{ -l.x, -l.y, -l.z }; }
 inline float3 operator*(const float3& l, float r) { return{ l.x * r, l.y * r, l.z * r }; }
 inline float3 operator/(const float3& l, float r) { return{ l.x / r, l.y / r, l.z / r }; }
 
+inline float clamp(float v, float vmin, float vmax) { return std::min<float>(std::max<float>(v, vmin), vmax); }
 inline float dot(const float3& l, const float3& r) { return l.x*r.x + l.y*r.y + l.z*r.z; }
 inline float length_sq(const float3& v) { return dot(v, v); }
 inline float length(const float3& v) { return sqrt(length_sq(v)); }
@@ -134,11 +135,12 @@ struct CameraData
     float pad1;
 };
 
-enum class RaytraceFlags : int
+enum class RenderFlag : int
 {
     IgnoreSelfShadow = 1,
     KeepSelfDropShadow = 2,
     GPUSkinning = 4,
+    ClampBlendShapeWights = 8,
 };
 
 enum class LightType : int
@@ -167,7 +169,7 @@ struct SceneData
 {
     CameraData camera;
 
-    int raytrace_flags;
+    int render_flags; // combination of RenderFlag
     int light_count;
     int pad1[2];
 

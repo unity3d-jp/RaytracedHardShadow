@@ -118,8 +118,10 @@ DeformerDXR::~DeformerDXR()
 {
 }
 
-bool DeformerDXR::prepare()
+bool DeformerDXR::prepare(bool clamp_blendshape_weights)
 {
+    m_clamp_blendshape_weights = clamp_blendshape_weights;
+
     bool ret = true;
     if (m_needs_execute_and_reset) {
         m_needs_execute_and_reset = false;
@@ -247,7 +249,10 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
             writeBuffer(inst_dxr.bs_weights, [&](void *dst_) {
                 auto dst = (float*)dst_;
                 for (int bsi = 0; bsi < blendshape_count; ++bsi) {
-                    *dst++ = inst.blendshape_weights[bsi] / 100.0f; // 0-100 -> 0.0-1.0
+                    float weight = inst.blendshape_weights[bsi];
+                    if (m_clamp_blendshape_weights)
+                        weight = clamp(weight, 0.0f, mesh.blendshapes[bsi].frames.back().weight);
+                    *dst++ = weight / 100.0f; // 0-100 -> 0.0-1.0;
                 }
             });
         }

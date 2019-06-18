@@ -60,24 +60,45 @@ float3 ApplyBlendshape(uint vid, float3 base)
     for (int bsi = 0; bsi < num_blendshapes; ++bsi) {
         float weight = g_bs_weights[bsi];
         if (weight != 0.0f) {
-            float3 p1 = 0.0f, p2 = 0.0f;
-            float w1 = 0.0f, w2 = 0.0f;
-
             BlendshapeCount bsc = g_bs_counts[bsi];
-            for (int fi = 0; fi < bsc.frame_count; ++fi) {
-                BlendshapeFrame frame = g_bs_frames[bsc.frame_offset + fi];
-                if (weight <= frame.weight) {
-                    p2 = g_bs_delta[frame.delta_offset + vid].xyz;
-                    w2 = frame.weight;
-                    break;
+            BlendshapeFrame last_frame = g_bs_frames[bsc.frame_offset + bsc.frame_count - 1];
+            if (weight < 0.0f) {
+                BlendshapeFrame first_frame = g_bs_frames[bsc.frame_offset];
+                float3 delta = g_bs_delta[first_frame.delta_offset + vid].xyz;
+                float s = weight / first_frame.weight;
+                result += delta * s;
+            }
+            else if (weight > last_frame.weight) {
+                float3 delta = g_bs_delta[last_frame.delta_offset + vid].xyz;
+                float s = 0.0f;
+                if (bsc.frame_count >= 2) {
+                    BlendshapeFrame prev_frame = g_bs_frames[bsc.frame_offset + bsc.frame_count - 2];
+                    s = (weight - prev_frame.weight) / (last_frame.weight - prev_frame.weight);
                 }
                 else {
-                    p1 = g_bs_delta[frame.delta_offset + vid].xyz;
-                    w1 = frame.weight;
+                    s = weight / last_frame.weight;
                 }
+                result += delta * s;
             }
-            float s = (weight - w1) / (w2 - w1);
-            result += lerp(p1, p2, s);
+            else {
+                float3 p1 = 0.0f, p2 = 0.0f;
+                float w1 = 0.0f, w2 = 0.0f;
+
+                for (int fi = 0; fi < bsc.frame_count; ++fi) {
+                    BlendshapeFrame frame = g_bs_frames[bsc.frame_offset + fi];
+                    if (weight <= frame.weight) {
+                        p2 = g_bs_delta[frame.delta_offset + vid].xyz;
+                        w2 = frame.weight;
+                        break;
+                    }
+                    else {
+                        p1 = g_bs_delta[frame.delta_offset + vid].xyz;
+                        w1 = frame.weight;
+                    }
+                }
+                float s = (weight - w1) / (w2 - w1);
+                result += lerp(p1, p2, s);
+            }
         }
     }
     return result;

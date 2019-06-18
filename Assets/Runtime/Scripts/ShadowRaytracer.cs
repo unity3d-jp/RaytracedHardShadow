@@ -502,11 +502,13 @@ namespace UTJ.RaytracedHardShadow
             {
                 int flags = 0;
                 if (m_ignoreSelfShadow)
-                    flags |= (int)rthsRaytraceFlags.IgnoreSelfShadow;
+                    flags |= (int)rthsRenderFlag.IgnoreSelfShadow;
                 if (m_keepSelfDropShadow)
-                    flags |= (int)rthsRaytraceFlags.KeepSelfDropShadow;
+                    flags |= (int)rthsRenderFlag.KeepSelfDropShadow;
                 if (m_GPUSkinning)
-                    flags |= (int)rthsRaytraceFlags.GPUSkinning;
+                    flags |= (int)rthsRenderFlag.GPUSkinning;
+                if (PlayerSettings.legacyClampBlendShapeWeights)
+                    flags |= (int)rthsRenderFlag.ClampBlendShapeWights;
 
                 m_renderer.BeginScene();
                 m_renderer.SetRaytraceFlags(flags);

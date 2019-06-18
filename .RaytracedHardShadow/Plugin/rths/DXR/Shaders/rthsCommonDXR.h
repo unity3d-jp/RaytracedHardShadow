@@ -8,10 +8,10 @@ enum LIGHT_TYPE
     LT_REVERSE_POINT = 4,
 };
 
-enum RAYTRACE_FLAGS
+enum RENDER_FLAG
 {
-    RTF_IGNORE_SELF_SHADOW = 1,
-    RTF_KEEP_SELF_DROP_SHADOW = 2,
+    RF_IGNORE_SELF_SHADOW = 1,
+    RF_KEEP_SELF_DROP_SHADOW = 2,
 };
 
 struct CameraData
@@ -40,7 +40,7 @@ struct SceneData
 {
     CameraData camera;
 
-    int raytrace_flags;
+    int render_flags;
     int light_count;
     int2 pad1;
 
@@ -64,7 +64,7 @@ float CameraFocalLength() { return abs(gScene.camera.proj[1][1]); }
 float CameraNearPlane() { return gScene.camera.near_plane; }
 float CameraFarPlane() { return gScene.camera.far_plane; }
 
-int RaytraceFlags() { return gScene.raytrace_flags; }
+int RenderFlags() { return gScene.render_flags; }
 float ShadowRayOffset() { return gScene.shadow_ray_offset; }
 float SelfShadowThreshold() { return gScene.self_shadow_threshold; }
 
