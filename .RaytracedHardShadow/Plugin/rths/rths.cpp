@@ -35,7 +35,7 @@ rthsAPI void rthsMeshSetSkinBindposes(MeshData *self, const float4x4 *bindposes,
         return;
     self->skin.bindposes.assign(bindposes, bindposes + num_bindposes);
 }
-rthsAPI void rthsMeshSetSkinWeights(MeshData *self, const uint8_t *c, int nc, const BoneWeight *w, int nw)
+rthsAPI void rthsMeshSetSkinWeights(MeshData *self, const uint8_t *c, int nc, const BoneWeight1 *w, int nw)
 {
     if (!self)
         return;

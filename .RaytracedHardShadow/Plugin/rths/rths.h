@@ -23,7 +23,7 @@ enum class RenderFlag : uint32_t
     ClampBlendShapeWights   = 0x0200,
 };
 
-struct BoneWeight
+struct BoneWeight1
 {
     float weight;
     int index;
@@ -37,7 +37,7 @@ struct BoneWeight4
 struct float3;
 struct float4;
 struct float4x4;
-struct BoneWeight;
+struct BoneWeight1;
 struct BoneWeight4;
 #endif // rthsImpl
 
@@ -53,7 +53,7 @@ rthsAPI void rthsMeshRelease(rths::MeshData *self);
 rthsAPI void rthsMeshSetGPUBuffers(rths::MeshData *self, rths::GPUResourcePtr vb, rths::GPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset);
 rthsAPI void rthsMeshSetSkinBindposes(rths::MeshData *self, const rths::float4x4 *bindposes, int num_bindposes);
-rthsAPI void rthsMeshSetSkinWeights(rths::MeshData *self, const uint8_t *c, int nc, const rths::BoneWeight *w, int nw);
+rthsAPI void rthsMeshSetSkinWeights(rths::MeshData *self, const uint8_t *c, int nc, const rths::BoneWeight1 *w, int nw);
 rthsAPI void rthsMeshSetSkinWeights4(rths::MeshData *self, const rths::BoneWeight4 *w4, int nw4);
 rthsAPI void rthsMeshSetBlendshapeCount(rths::MeshData *self, int num_bs);
 rthsAPI void rthsMeshAddBlendshapeFrame(rths::MeshData *self, int bs_index, const rths::float3 *delta, float weight);

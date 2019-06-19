@@ -188,7 +188,7 @@ using GPUResourcePtr = void*;
 using TextureData = GPUResourcePtr;
 using BufferData = GPUResourcePtr;
 
-struct BoneWeight
+struct BoneWeight1
 {
     float weight = 0.0f;
     int index = 0;
@@ -202,7 +202,7 @@ struct SkinData
 {
     std::vector<float4x4>    bindposes;
     std::vector<uint8_t>     bone_counts;
-    std::vector<BoneWeight>  weights;
+    std::vector<BoneWeight1> weights;
 };
 
 struct BlendshapeFrameData

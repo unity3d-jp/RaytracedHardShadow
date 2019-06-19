@@ -1,4 +1,4 @@
-#define kThreadBlockSize 128
+#define kThreadBlockSize 4
 
 enum DEFORM_FLAG
 {
@@ -185,7 +185,7 @@ float3 ApplySkinning(uint vi, float3 base_)
 }
 
 [numthreads(kThreadBlockSize, 1, 1)]
-void main(uint3 tid : SV_DispatchThreadID)
+void main(uint3 tid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
 {
     uint vi = tid.x;
 

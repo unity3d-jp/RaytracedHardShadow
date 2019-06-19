@@ -27,11 +27,17 @@ struct BlendshapeInfo
     int frame_offset;
 };
 
+struct BoneWeight
+{
+    float weight;
+    int index;
+};
 struct BoneCount
 {
     int weight_count;
     int weight_offset;
 };
+
 struct MeshInfo
 {
     int deform_flags;
