@@ -14,6 +14,9 @@ public:
 
     void render() override;
     void finish() override;
+
+private:
+    RenderDataDXR m_render_data;
 };
 
 
@@ -33,16 +36,17 @@ void RendererDXR::render()
     if (!ctx->validateDevice()) {
         return;
     }
-    ctx->setSceneData(m_scene_data);
-    ctx->setRenderTarget(m_render_target);
-    ctx->setMeshes(m_mesh_instance_data);
-    ctx->flush();
+    ctx->prepare(m_render_data);
+    ctx->setSceneData(m_render_data, m_scene_data);
+    ctx->setRenderTarget(m_render_data, m_render_target);
+    ctx->setMeshes(m_render_data, m_mesh_instance_data);
+    ctx->flush(m_render_data);
 }
 
 void RendererDXR::finish()
 {
     auto ctx = GfxContextDXR::getInstance();
-    ctx->finish();
+    ctx->finish(m_render_data);
     clearMeshInstances();
 }
 

@@ -20,12 +20,12 @@ public:
     ID3D12Device5Ptr getDevice();
 
     bool initializeDevice();
-    void setSceneData(SceneData& data);
-    void setRenderTarget(TextureData& rt);
-    void setMeshes(std::vector<MeshInstanceData*>& instances);
-    void sync();
-    void flush();
-    void finish();
+    void prepare(RenderDataDXR& rd);
+    void setSceneData(RenderDataDXR& rd, SceneData& data);
+    void setRenderTarget(RenderDataDXR& rd, TextureData& rt);
+    void setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>& instances);
+    void flush(RenderDataDXR& rd);
+    void finish(RenderDataDXR& rd);
     void releaseUnusedResources();
 
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
@@ -73,27 +73,15 @@ private:
     int m_shader_table_entry_capacity = 0;
     int m_shader_record_size = 0;
 
-    ID3D12DescriptorHeapPtr m_srvuav_heap;
-
-    std::map<TextureData, TextureDataDXRPtr> m_texture_records;
-    std::map<BufferData, BufferDataDXRPtr> m_buffer_records;
+    std::map<void*, TextureDataDXRPtr> m_texture_records;
+    std::map<void*, BufferDataDXRPtr> m_buffer_records;
     std::map<MeshData*, MeshDataDXRPtr> m_mesh_records;
     std::map<MeshInstanceData*, MeshInstanceDataDXRPtr> m_meshinstance_records;
     std::vector<ID3D12ResourcePtr> m_temporary_buffers;
+
     MeshDataCallback m_on_mesh_delete;
     MeshInstanceDataCallback m_on_meshinstance_delete;
 
-    ID3D12ResourcePtr m_scene_buffer;
-    DescriptorHandleDXR m_scene_buffer_handle;
-
-    TextureDataDXRPtr m_render_target;
-    DescriptorHandleDXR m_render_target_handle;
-
-    std::vector<MeshInstanceDataDXRPtr> m_mesh_instances;
-    ID3D12ResourcePtr m_tlas;
-    DescriptorHandleDXR m_tlas_handle;
-
-    int m_render_flags = 0;
     bool m_flushing = false;
 
 #ifdef rthsEnableTimestamp

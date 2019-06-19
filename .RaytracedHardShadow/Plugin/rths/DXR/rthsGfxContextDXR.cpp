@@ -252,32 +252,6 @@ bool GfxContextDXR::initializeDevice()
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_cmd_allocator_copy, nullptr, IID_PPV_ARGS(&m_cmd_list_copy));
     }
 
-    // descriptor heap
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC desc{};
-        desc.NumDescriptors = 16;
-        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvuav_heap));
-
-        auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, m_srvuav_heap);
-        m_render_target_handle = handle_allocator.allocate();
-        m_tlas_handle = handle_allocator.allocate();
-        m_scene_buffer_handle = handle_allocator.allocate();
-    }
-
-    // scene constant buffer
-    {
-        // size of constant buffer must be multiple of 256
-        int cb_size = align_to(256, sizeof(SceneData));
-        m_scene_buffer = createBuffer(cb_size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-
-        D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc{};
-        cbv_desc.BufferLocation = m_scene_buffer->GetGPUVirtualAddress();
-        cbv_desc.SizeInBytes = cb_size;
-        m_device->CreateConstantBufferView(&cbv_desc, m_scene_buffer_handle.hcpu);
-    }
-
     // local root signature
     {
         D3D12_DESCRIPTOR_RANGE ranges[] = {
@@ -406,22 +380,50 @@ bool GfxContextDXR::initializeDevice()
     return true;
 }
 
-void GfxContextDXR::setSceneData(SceneData& data)
+void GfxContextDXR::prepare(RenderDataDXR& rd)
 {
-    SceneData *dst;
-    auto hr = m_scene_buffer->Map(0, nullptr, (void**)&dst);
-    if (FAILED(hr)) {
-        SetErrorLog("m_scene_buffer->Map() failed\n");
-    }
-    else {
-        *dst = data;
-        m_scene_buffer->Unmap(0, nullptr);
+    // desc heap
+    if (!rd.desc_heap) {
+        D3D12_DESCRIPTOR_HEAP_DESC desc{};
+        desc.NumDescriptors = 16;
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rd.desc_heap));
+
+        auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, rd.desc_heap);
+        rd.render_target_handle = handle_allocator.allocate();
+        rd.tlas_handle = handle_allocator.allocate();
+        rd.scene_data_handle = handle_allocator.allocate();
     }
 
-    m_render_flags = data.render_flags;
+    // scene constant buffer
+    if (!rd.scene_data) {
+        // size of constant buffer must be multiple of 256
+        int cb_size = align_to(256, sizeof(SceneData));
+        rd.scene_data = createBuffer(cb_size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc{};
+        cbv_desc.BufferLocation = rd.scene_data->GetGPUVirtualAddress();
+        cbv_desc.SizeInBytes = cb_size;
+        m_device->CreateConstantBufferView(&cbv_desc, rd.scene_data_handle.hcpu);
+    }
 }
 
-void GfxContextDXR::setRenderTarget(TextureData& rt)
+void GfxContextDXR::setSceneData(RenderDataDXR& rd, SceneData& data)
+{
+    SceneData *dst;
+    auto hr = rd.scene_data->Map(0, nullptr, (void**)&dst);
+    if (SUCCEEDED(hr)) {
+        *dst = data;
+        rd.scene_data->Unmap(0, nullptr);
+    }
+    else {
+        SetErrorLog("rd.scene_data->Map() failed\n");
+    }
+    rd.render_flags = data.render_flags;
+}
+
+void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, TextureData& rt)
 {
     auto& data = m_texture_records[rt];
     if (!data) {
@@ -433,31 +435,31 @@ void GfxContextDXR::setRenderTarget(TextureData& rt)
     }
     ++data->use_count;
 
-    m_render_target = data;
+    rd.render_target = data;
 
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
     uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    uav_desc.Format = GetTypedFormatDXR(m_render_target->format); // typeless is not allowed for unordered access view
+    uav_desc.Format = GetTypedFormatDXR(rd.render_target->format); // typeless is not allowed for unordered access view
     uav_desc.Texture2D.MipSlice = 0;
     uav_desc.Texture2D.PlaneSlice = 0;
-    m_device->CreateUnorderedAccessView(m_render_target->resource, nullptr, &uav_desc, m_render_target_handle.hcpu);
+    m_device->CreateUnorderedAccessView(rd.render_target->resource, nullptr, &uav_desc, rd.render_target_handle.hcpu);
 
 #ifdef rthsEnableRenderTargetValidation
     // fill texture with 0.0-1.0 gradation for debug
     {
-        int n = m_render_target->width * m_render_target->height;
+        int n = rd.render_target->width * rd.render_target->height;
         float r = 1.0f / (float)n;
 
         std::vector<float> data;
         data.resize(n);
         for (int i = 0; i < n; ++i)
             data[i] = r * (float)i;
-        uploadTexture(m_render_target->resource, data.data(), m_render_target->width, m_render_target->height, sizeof(float));
+        uploadTexture(rd.render_target->resource, data.data(), rd.render_target->width, rd.render_target->height, sizeof(float));
     }
 #endif
 }
 
-void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
+void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>& instances)
 {
     auto translate_buffer = [this](void *buffer) {
         auto& data = m_buffer_records[buffer];
@@ -467,16 +469,16 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
         return data;
     };
 
-    bool gpu_skinning = (m_render_flags & (int)RenderFlag::GPUSkinning) != 0;
+    bool gpu_skinning = (rd.render_flags & (int)RenderFlag::GPUSkinning) != 0;
     int deform_count = 0;
     if (gpu_skinning)
-        m_deformer->prepare(m_render_flags);
+        m_deformer->prepare(rd.render_flags);
 
     TimestampReset(m_timestamp);
     TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: building acceleration structure begin");
 
-    size_t num_meshes = instances.size();
-    for (size_t i = 0; i < num_meshes; ++i) {
+    size_t instance_count = instances.size();
+    for (size_t i = 0; i < instance_count; ++i) {
         auto& inst = instances[i];
         auto& mesh = inst->mesh;
         if (mesh->vertex_count == 0 || mesh->index_count == 0)
@@ -546,7 +548,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
             if (m_deformer->deform(*inst_dxr))
                 ++deform_count;
         }
-        m_mesh_instances.push_back(inst_dxr);
+        rd.mesh_instances.push_back(inst_dxr);
     }
 
     if (deform_count > 0) {
@@ -561,9 +563,9 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
     }
 
     // build bottom level acceleration structures
-    num_meshes = m_mesh_instances.size();
-    for (size_t i = 0; i < num_meshes; ++i) {
-        auto& inst_dxr = *m_mesh_instances[i];
+    instance_count = rd.mesh_instances.size();
+    for (size_t i = 0; i < instance_count; ++i) {
+        auto& inst_dxr = *rd.mesh_instances[i];
         auto& mesh_dxr = *inst_dxr.mesh;
         auto& inst = *inst_dxr.base;
         auto& mesh = *mesh_dxr.base;
@@ -635,7 +637,7 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
 
                 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
                 inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-                inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
+                inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
                 inputs.NumDescs = 1;
                 inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
                 inputs.pGeometryDescs = &geom_desc;
@@ -664,65 +666,94 @@ void GfxContextDXR::setMeshes(std::vector<MeshInstanceData*>& instances)
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
         inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
         inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-        inputs.NumDescs = (UINT)num_meshes;
+        inputs.NumDescs = (UINT)instance_count;
         inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
         m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
 
-        ID3D12ResourcePtr scratch_buf;
-        ID3D12ResourcePtr instance_descs_buf;
-
-        // Create the buffers
-        scratch_buf = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
-        m_temporary_buffers.push_back(scratch_buf);
-        m_tlas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
-        uint64_t tlas_size = info.ResultDataMaxSizeInBytes;
-
-        if (num_meshes > 0) {
-            // The instance desc should be inside a buffer, create and map the buffer
-            instance_descs_buf = createBuffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-            m_temporary_buffers.push_back(instance_descs_buf);
-            D3D12_RAYTRACING_INSTANCE_DESC* instance_descs;
-            instance_descs_buf->Map(0, nullptr, (void**)&instance_descs);
-            ZeroMemory(instance_descs, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * num_meshes);
-            for (uint32_t i = 0; i < num_meshes; i++) {
-                auto& inst = m_mesh_instances[i];
-                auto& blas = gpu_skinning && inst->deformed_vertices ? inst->blas_deformed : inst->mesh->blas;
-
-                (float3x4&)instance_descs[i].Transform = to_float3x4(inst->base->transform);
-                instance_descs[i].InstanceID = i; // This value will be exposed to the shader via InstanceID()
-                instance_descs[i].InstanceMask = 0xFF;
-                instance_descs[i].InstanceContributionToHitGroupIndex = i;
-                instance_descs[i].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
-                instance_descs[i].AccelerationStructure = blas->GetGPUVirtualAddress();
-            }
-            instance_descs_buf->Unmap(0, nullptr);
+        // scratch buffer
+        if (rd.tlas_scratch) {
+            auto capacity = rd.tlas_scratch->GetDesc().Width;
+            if (capacity < info.ScratchDataSizeInBytes)
+                rd.tlas_scratch = nullptr;
+        }
+        if (!rd.tlas_scratch) {
+            rd.tlas_scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
         }
 
-        // Create the TLAS
-        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
-        as_desc.DestAccelerationStructureData = m_tlas->GetGPUVirtualAddress();
-        as_desc.Inputs = inputs;
-        if (instance_descs_buf)
-            as_desc.Inputs.InstanceDescs = instance_descs_buf->GetGPUVirtualAddress();
-        if (scratch_buf)
-            as_desc.ScratchAccelerationStructureData = scratch_buf->GetGPUVirtualAddress();
+        // TLAS buffer
+        if(rd.tlas) {
+            auto capacity = rd.tlas->GetDesc().Width;
+            if (capacity < info.ScratchDataSizeInBytes)
+                rd.tlas = nullptr;
+        }
+        if (!rd.tlas) {
+            rd.tlas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
 
-        m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+            // TLAS SRV
+            D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+            srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srv_desc.RaytracingAccelerationStructure.Location = rd.tlas->GetGPUVirtualAddress();
+            m_device->CreateShaderResourceView(nullptr, &srv_desc, rd.tlas_handle.hcpu);
+        }
 
-        // We need to insert a UAV barrier before using the acceleration structures in a raytracing operation
-        D3D12_RESOURCE_BARRIER uav_barrier{};
-        uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        uav_barrier.UAV.pResource = m_tlas;
-        m_cmd_list->ResourceBarrier(1, &uav_barrier);
+        // instance desc buffer
+        if (rd.instance_desc) {
+            auto capacity_in_byte = rd.instance_desc->GetDesc().Width;
+            auto capacity = capacity_in_byte / sizeof(D3D12_RAYTRACING_INSTANCE_DESC);
+            if (capacity < instance_count)
+                rd.instance_desc = nullptr;
+        }
+        if (!rd.instance_desc) {
+            size_t capacity = 1024;
+            while (capacity < instance_count)
+                capacity *= 2;
+            rd.instance_desc = createBuffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+        }
 
-        // Create the TLAS SRV
-        D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-        srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-        srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        srv_desc.RaytracingAccelerationStructure.Location = m_tlas->GetGPUVirtualAddress();
-        m_device->CreateShaderResourceView(nullptr, &srv_desc, m_tlas_handle.hcpu);
+        // create instance desc
+        if (instance_count > 0) {
+            D3D12_RAYTRACING_INSTANCE_DESC *instance_descs;
+            rd.instance_desc->Map(0, nullptr, (void**)&instance_descs);
+            for (size_t i = 0; i < instance_count; i++) {
+                auto& inst = rd.mesh_instances[i];
+                auto& blas = gpu_skinning && inst->deformed_vertices ? inst->blas_deformed : inst->mesh->blas;
+
+                D3D12_RAYTRACING_INSTANCE_DESC tmp{};
+                (float3x4&)tmp.Transform = to_float3x4(inst->base->transform);
+                tmp.InstanceID = i; // This value will be exposed to the shader via InstanceID()
+                tmp.InstanceMask = 0xFF;
+                tmp.InstanceContributionToHitGroupIndex = i;
+                tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
+                tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
+                instance_descs[i] = tmp;
+            }
+            rd.instance_desc->Unmap(0, nullptr);
+            inputs.InstanceDescs = rd.instance_desc->GetGPUVirtualAddress();
+        }
+
+        // create TLAS
+        {
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
+            as_desc.DestAccelerationStructureData = rd.tlas->GetGPUVirtualAddress();
+            as_desc.Inputs = inputs;
+            if (rd.instance_desc)
+                as_desc.Inputs.InstanceDescs = rd.instance_desc->GetGPUVirtualAddress();
+            if (rd.tlas_scratch)
+                as_desc.ScratchAccelerationStructureData = rd.tlas_scratch->GetGPUVirtualAddress();
+
+            m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+        }
+
+        // add UAV barrier
+        {
+            D3D12_RESOURCE_BARRIER uav_barrier{};
+            uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+            uav_barrier.UAV.pResource = rd.tlas;
+            m_cmd_list->ResourceBarrier(1, &uav_barrier);
+        }
     }
     TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: building acceleration structure end");
 }
@@ -909,18 +940,9 @@ void GfxContextDXR::executeAndWaitCopy()
 }
 
 
-void GfxContextDXR::sync()
+void GfxContextDXR::flush(RenderDataDXR& rd)
 {
-    submitCommandList();
-    ::WaitForSingleObject(m_fence_event, INFINITE);
-
-    m_cmd_allocator->Reset();
-    m_cmd_list->Reset(m_cmd_allocator, nullptr);
-}
-
-void GfxContextDXR::flush()
-{
-    if (!m_render_target->resource) {
+    if (!rd.render_target->resource) {
         SetErrorLog("GfxContext::flush(): render target is null\n");
         return;
     }
@@ -931,7 +953,7 @@ void GfxContextDXR::flush()
 
     TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: raytrace begin");
 
-    int num_meshes = (int)m_mesh_instances.size();
+    int num_meshes = (int)rd.mesh_instances.size();
 
     // setup shader table
     {
@@ -957,11 +979,11 @@ void GfxContextDXR::flush()
             ID3D12StateObjectPropertiesPtr sop;
             m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
 
-            auto add_shader_table = [&data, this](void *shader_id) {
+            auto add_shader_table = [&](void *shader_id) {
                 auto dst = data;
                 memcpy(dst, shader_id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
                 dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-                *(UINT64*)(dst) = m_srvuav_heap->GetGPUDescriptorHandleForHeapStart().ptr;
+                *(UINT64*)(dst) = rd.desc_heap->GetGPUDescriptorHandleForHeapStart().ptr;
 
                 data += m_shader_record_size;
             };
@@ -983,13 +1005,13 @@ void GfxContextDXR::flush()
     }
 
     D3D12_RESOURCE_STATES prev_state = D3D12_RESOURCE_STATE_COMMON;
-    addResourceBarrier(m_render_target->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    addResourceBarrier(rd.render_target->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // dispatch rays
     {
         D3D12_DISPATCH_RAYS_DESC dr_desc{};
-        dr_desc.Width = m_render_target->width;
-        dr_desc.Height = m_render_target->height;
+        dr_desc.Width = rd.render_target->width;
+        dr_desc.Height = rd.render_target->height;
         dr_desc.Depth = 1;
 
         auto addr = m_shader_table->GetGPUVirtualAddress();
@@ -1011,7 +1033,7 @@ void GfxContextDXR::flush()
 
         // descriptor heaps
         ID3D12DescriptorHeap *desc_heaps[] = {
-            m_srvuav_heap,
+            rd.desc_heap,
             // sampler heap will be here
         };
         m_cmd_list->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
@@ -1024,7 +1046,7 @@ void GfxContextDXR::flush()
         m_cmd_list->DispatchRays(&dr_desc);
     }
 
-    addResourceBarrier(m_render_target->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
+    addResourceBarrier(rd.render_target->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
     TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: raytrace end");
     TimestampResolve(m_timestamp, m_cmd_list);
 
@@ -1032,7 +1054,7 @@ void GfxContextDXR::flush()
     m_flushing = true;
 }
 
-void GfxContextDXR::finish()
+void GfxContextDXR::finish(RenderDataDXR& rd)
 {
     if (m_flushing) {
         ::WaitForSingleObject(m_fence_event, INFINITE);
@@ -1046,18 +1068,18 @@ void GfxContextDXR::finish()
 #ifdef rthsEnableRenderTargetValidation
     {
         std::vector<float> data;
-        data.resize(m_render_target->width * m_render_target->height, std::numeric_limits<float>::quiet_NaN());
-        readbackTexture(data.data(), m_render_target->resource, m_render_target->width, m_render_target->height, sizeof(float));
+        data.resize(rd.render_target->width * rd.render_target->height, std::numeric_limits<float>::quiet_NaN());
+        readbackTexture(data.data(), rd.render_target->resource, rd.render_target->width, rd.render_target->height, sizeof(float));
         // break here to inspect data
     }
 #endif
 
-    if (m_render_target) {
+    if (rd.render_target) {
         // copy content of render target to Unity side
-        m_resource_translator->applyTexture(*m_render_target);
-        m_render_target = nullptr;
+        m_resource_translator->applyTexture(*rd.render_target);
+        rd.render_target = nullptr;
     }
-    m_mesh_instances.clear();
+    rd.mesh_instances.clear();
 
     m_deformer->debugPrint();
     TimestampPrint(m_timestamp, m_cmd_queue);

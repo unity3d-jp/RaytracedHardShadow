@@ -73,6 +73,27 @@ DefPtr(IDxcOperationResult);
 DefPtr(IDxcBlob);
 #undef DefPtr
 
+struct DescriptorHandleDXR
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE hcpu{};
+    D3D12_GPU_DESCRIPTOR_HANDLE hgpu{};
+
+    operator bool() const;
+};
+
+class DescriptorHeapAllocatorDXR
+{
+public:
+    DescriptorHeapAllocatorDXR(ID3D12DevicePtr device, ID3D12DescriptorHeapPtr heap);
+    DescriptorHandleDXR allocate();
+
+private:
+    UINT m_stride{};
+    D3D12_CPU_DESCRIPTOR_HANDLE m_hcpu{};
+    D3D12_GPU_DESCRIPTOR_HANDLE m_hgpu{};
+};
+
+
 class TextureDataDXR
 {
 public:
@@ -153,25 +174,24 @@ public:
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 
-
-struct DescriptorHandleDXR
-{
-    D3D12_CPU_DESCRIPTOR_HANDLE hcpu{};
-    D3D12_GPU_DESCRIPTOR_HANDLE hgpu{};
-
-    operator bool() const;
-};
-
-class DescriptorHeapAllocatorDXR
+class RenderDataDXR
 {
 public:
-    DescriptorHeapAllocatorDXR(ID3D12DevicePtr device, ID3D12DescriptorHeapPtr heap);
-    DescriptorHandleDXR allocate();
+    ID3D12DescriptorHeapPtr desc_heap;
+    DescriptorHandleDXR tlas_handle;
+    DescriptorHandleDXR scene_data_handle;
+    DescriptorHandleDXR render_target_handle;
 
-private:
-    UINT m_stride{};
-    D3D12_CPU_DESCRIPTOR_HANDLE m_hcpu{};
-    D3D12_GPU_DESCRIPTOR_HANDLE m_hgpu{};
+    std::vector<MeshInstanceDataDXRPtr> mesh_instances;
+    ID3D12ResourcePtr instance_desc;
+    ID3D12ResourcePtr tlas_scratch;
+    ID3D12ResourcePtr tlas;
+    ID3D12ResourcePtr scene_data;
+    TextureDataDXRPtr render_target;
+
+    ID3D12ResourcePtr shader_table;
+
+    int render_flags = 0;
 };
 
 
