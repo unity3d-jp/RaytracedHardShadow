@@ -63,11 +63,11 @@ namespace UTJ.RaytracedHardShadow
 
     public enum rthsRenderFlag
     {
-        None = 0,
-        IgnoreSelfShadow = 1,
-        KeepSelfDropShadow = 2,
-        GPUSkinning = 4,
-        ClampBlendShapeWights = 8,
+        CullBackFace            = 0x0001,
+        IgnoreSelfShadow        = 0x0002,
+        KeepSelfDropShadow      = 0x0004,
+        GPUSkinning             = 0x0100,
+        ClampBlendShapeWights   = 0x0200,
     }
 
     public struct rthsMeshData

@@ -150,7 +150,8 @@ std::vector<std::tuple<uint64_t, const char*>> TimestampDXR::getSamples()
     ret.resize(m_sample_index);
 
     uint64_t *data;
-    auto hr = m_timestamp_buffer->Map(0, nullptr, (void**)&data);
+    D3D12_RANGE ragne{ 0, sizeof(uint64_t)*m_sample_index };
+    auto hr = m_timestamp_buffer->Map(0, &ragne, (void**)&data);
     if (SUCCEEDED(hr)) {
         for (int si = 0; si < m_sample_index; ++si)
             ret[si] = std::make_tuple(data[si], m_messages[si].c_str());

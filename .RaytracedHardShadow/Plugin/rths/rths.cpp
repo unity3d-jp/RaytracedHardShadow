@@ -106,7 +106,7 @@ rthsAPI void rthsMeshInstanceSetTransform(MeshInstanceData *self, float4x4 trans
         return;
 
     if (self->transform != transform) {
-        self->is_updated = true;
+        self->update_flags |= (int)UpdateFlag::Transform;
         self->transform = transform;
     }
 }
@@ -116,15 +116,16 @@ rthsAPI void rthsMeshInstanceSetBones(MeshInstanceData *self, const float4x4 *bo
         return;
 
     if (self->bones.size() != num_bones)
-        self->is_updated = true;
+        self->update_flags |= (int)UpdateFlag::Bone;
 
     if (num_bones == 0) {
         self->bones.clear();
     }
     else {
         if (self->bones.size() == num_bones && !std::equal(bones, bones + num_bones, self->bones.data()))
-            self->is_updated = true;
+            self->update_flags |= (int)UpdateFlag::Bone;
         self->bones.assign(bones, bones + num_bones);
+        self->transform = float4x4::identity();
     }
 }
 rthsAPI void rthsMeshInstanceSetBlendshapeWeights(MeshInstanceData *self, const float *bsw, int num_bsw)
@@ -133,14 +134,14 @@ rthsAPI void rthsMeshInstanceSetBlendshapeWeights(MeshInstanceData *self, const 
         return;
 
     if (self->blendshape_weights.size() != num_bsw)
-        self->is_updated = true;
+        self->update_flags |= (int)UpdateFlag::Blendshape;
 
     if (num_bsw == 0) {
         self->blendshape_weights.clear();
     }
     else {
         if (self->blendshape_weights.size() == num_bsw && !std::equal(bsw, bsw + num_bsw, self->blendshape_weights.data()))
-            self->is_updated = true;
+            self->update_flags |= (int)UpdateFlag::Blendshape;
         self->blendshape_weights.assign(bsw, bsw + num_bsw);
     }
 }

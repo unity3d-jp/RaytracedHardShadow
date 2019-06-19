@@ -14,12 +14,13 @@ struct float3 { float x, y, z; };
 struct float4 { float x, y, z, w; };
 struct float4x4 { float4 v[4]; };
 
-enum class RenderFlag : int
+enum class RenderFlag : uint32_t
 {
-    IgnoreSelfShadow = 1,
-    KeepSelfDropShadow = 2,
-    GPUSkinning = 4,
-    ClampBlendShapeWights = 8,
+    CullBackFace            = 0x0001,
+    IgnoreSelfShadow        = 0x0002,
+    KeepSelfDropShadow      = 0x0004,
+    GPUSkinning             = 0x0100,
+    ClampBlendShapeWights   = 0x0200,
 };
 
 struct BoneWeight

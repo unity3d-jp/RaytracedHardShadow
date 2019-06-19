@@ -137,15 +137,16 @@ struct CameraData
     float pad1;
 };
 
-enum class RenderFlag : int
+enum class RenderFlag : uint32_t
 {
-    IgnoreSelfShadow = 1,
-    KeepSelfDropShadow = 2,
-    GPUSkinning = 4,
-    ClampBlendShapeWights = 8,
+    CullBackFace            = 0x0001,
+    IgnoreSelfShadow        = 0x0002,
+    KeepSelfDropShadow      = 0x0004,
+    GPUSkinning             = 0x0100,
+    ClampBlendShapeWights   = 0x0200,
 };
 
-enum class LightType : int
+enum class LightType : uint32_t
 {
     Directional = 1,
     Spot        = 2,
@@ -236,6 +237,14 @@ struct MeshData
     ~MeshData();
 };
 
+enum class UpdateFlag : uint32_t
+{
+    None = 0,
+    Transform = 1,
+    Blendshape = 2,
+    Bone = 4,
+};
+
 struct MeshInstanceData;
 using MeshInstanceDataCallback = std::function<void(MeshInstanceData*)>;
 
@@ -245,7 +254,7 @@ struct MeshInstanceData
     float4x4 transform = float4x4::identity();
     std::vector<float4x4> bones;
     std::vector<float> blendshape_weights;
-    bool is_updated = true;
+    uint32_t update_flags = 0; // combination of UpdateFlag
 
     static void addOnDelete(const MeshInstanceDataCallback& cb);
     static void removeOnDelete(const MeshInstanceDataCallback& cb);

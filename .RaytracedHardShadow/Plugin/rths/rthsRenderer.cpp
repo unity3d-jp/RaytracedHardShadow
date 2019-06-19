@@ -114,7 +114,7 @@ void RendererBase::addMesh(MeshInstanceData *mesh)
 void RendererBase::clearMeshInstances()
 {
     for (auto *inst : m_mesh_instance_data)
-        inst->is_updated = false;
+        inst->update_flags = 0;
     m_mesh_instance_data.clear();
 }
 

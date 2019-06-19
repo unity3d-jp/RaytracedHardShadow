@@ -120,7 +120,8 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_keepSelfDropShadow = false;
         [SerializeField] float m_shadowRayOffset = 0.0001f;
         [SerializeField] float m_selfShadowThreshold = 0.001f;
-        [SerializeField] bool m_GPUSkinning = false;
+        [SerializeField] bool m_cullBackFace = true;
+        [SerializeField] bool m_GPUSkinning = true;
 
         [Tooltip("Light scope for shadow geometries.")]
         [SerializeField] ObjectScope m_lightScope;
@@ -176,6 +177,11 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_keepSelfDropShadow; }
             set { m_keepSelfDropShadow = value; }
+        }
+        public bool cullBackFace
+        {
+            get { return m_cullBackFace; }
+            set { m_cullBackFace = value; }
         }
         public bool GPUSkinning
         {
@@ -596,6 +602,8 @@ namespace UTJ.RaytracedHardShadow
             if (m_camera != null && m_shadowBuffer != null)
             {
                 int flags = 0;
+                if (m_cullBackFace)
+                    flags |= (int)rthsRenderFlag.CullBackFace;
                 if (m_ignoreSelfShadow)
                     flags |= (int)rthsRenderFlag.IgnoreSelfShadow;
                 if (m_keepSelfDropShadow)

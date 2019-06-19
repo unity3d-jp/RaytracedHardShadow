@@ -10,7 +10,7 @@
 
 namespace rths {
 
-enum class DeformFlag : int
+enum class DeformFlag : uint32_t
 {
     Blendshape = 1,
     Skinning = 2,
@@ -148,7 +148,10 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
     if (!m_rootsig_deform || !m_pipeline_state || !inst_dxr.mesh)
         return false;
 
-    if (!inst_dxr.base->is_updated)
+    uint32_t update_flags = inst_dxr.base->update_flags;
+    bool blendshape_updated = update_flags & (int)UpdateFlag::Blendshape;
+    bool bone_updated = update_flags & (int)UpdateFlag::Bone;
+    if (!blendshape_updated && !bone_updated)
         return false; // no need to deform
 
     auto& inst = *inst_dxr.base;
@@ -158,15 +161,6 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
     int vertex_count = mesh.vertex_count;
     int blendshape_count = (int)inst.blendshape_weights.size();
     int bone_count = (int)inst.bones.size();
-
-    int non_zero_blendshape_weight_count = 0;
-    for (float w : inst.blendshape_weights) {
-        if (w != 0.0f)
-            ++non_zero_blendshape_weight_count;
-    }
-
-    if (non_zero_blendshape_weight_count == 0 && bone_count == 0)
-        return false; // no need to deform
 
     // setup descriptors
     if (!inst_dxr.srvuav_heap) {
@@ -310,11 +304,8 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
             // update on every frame
             writeBuffer(inst_dxr.bone_matrices, [&](void *dst_) {
                 auto dst = (float4x4*)dst_;
-
-                auto iroot = invert(inst.transform);
-                for (int bi = 0; bi < bone_count; ++bi) {
-                    *dst++ = mesh.skin.bindposes[bi] * inst.bones[bi] * iroot;
-                }
+                for (int bi = 0; bi < bone_count; ++bi)
+                    *dst++ = mesh.skin.bindposes[bi] * inst.bones[bi];
             });
         }
 
@@ -332,9 +323,9 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
             MeshInfo info{};
             info.vertex_stride = mesh_dxr.getVertexStride() / 4;
             info.deform_flags = 0;
-            if (blendshape_count > 0)
+            if (blendshape_updated && blendshape_count > 0)
                 info.deform_flags |= (int)DeformFlag::Blendshape;
-            if (bone_count > 0)
+            if (bone_updated && bone_count > 0)
                 info.deform_flags |= (int)DeformFlag::Skinning;
 
             *(MeshInfo*)dst_ = info;

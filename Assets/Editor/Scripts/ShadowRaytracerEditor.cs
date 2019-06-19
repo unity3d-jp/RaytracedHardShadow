@@ -54,6 +54,7 @@ namespace UTJ.RaytracedHardShadowEditor
                 EditorGUILayout.PropertyField(so.FindProperty("m_geometryObjects"), true);
             EditorGUILayout.Space();
 
+            EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFace"));
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
 
             so.ApplyModifiedProperties();

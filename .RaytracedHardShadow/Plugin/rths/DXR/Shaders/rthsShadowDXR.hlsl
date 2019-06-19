@@ -32,7 +32,11 @@ void RayGen()
     payload.pass = 0;
     payload.instance_id = 0;
 
-    int ray_flags = RAY_FLAG_FORCE_OPAQUE & RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+    int render_flags = RenderFlags();
+    int ray_flags = RAY_FLAG_FORCE_OPAQUE;
+    if (render_flags & RF_CULL_BACK_FACE)
+        ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+
     TraceRay(gRtScene, ray_flags, 0xFF, 0, 0, 0, ray, payload);
     gOutput[screen_idx.xy] = payload.shadow;
 }
@@ -72,8 +76,10 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
         // shoot shadow ray (hit position -> light)
 
         int render_flags = RenderFlags();
-        int ray_flags = RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
-        if ((render_flags & RF_IGNORE_SELF_SHADOW) != 0)
+        int ray_flags = 0;
+        if (render_flags & RF_CULL_BACK_FACE)
+            ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+        if (render_flags & RF_IGNORE_SELF_SHADOW)
             ray_flags |= RAY_FLAG_FORCE_NON_OPAQUE; // calling any hit shader require non-opaque flag
         else
             ray_flags |= RAY_FLAG_FORCE_OPAQUE & RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH;

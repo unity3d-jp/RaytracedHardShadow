@@ -440,18 +440,23 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, TextureData& rt)
     }
     ++data->use_count;
 
-    rd.render_target = data;
+    if (rd.render_target != data) {
+        rd.render_target = data;
 
-    D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
-    uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    uav_desc.Format = GetTypedFormatDXR(rd.render_target->format); // typeless is not allowed for unordered access view
-    uav_desc.Texture2D.MipSlice = 0;
-    uav_desc.Texture2D.PlaneSlice = 0;
-    m_device->CreateUnorderedAccessView(rd.render_target->resource, nullptr, &uav_desc, rd.render_target_handle.hcpu);
+        if (rd.render_target) {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+            uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+            uav_desc.Format = GetTypedFormatDXR(rd.render_target->format); // typeless is not allowed for unordered access view
+            uav_desc.Texture2D.MipSlice = 0;
+            uav_desc.Texture2D.PlaneSlice = 0;
+            m_device->CreateUnorderedAccessView(rd.render_target->resource, nullptr, &uav_desc, rd.render_target_handle.hcpu);
+        }
+    }
 
 #ifdef rthsEnableRenderTargetValidation
-    // fill texture with 0.0-1.0 gradation for debug
-    {
+    if (rd.render_target) {
+        // fill texture with 0.0-1.0 gradation for debug
+
         int n = rd.render_target->width * rd.render_target->height;
         float r = 1.0f / (float)n;
 
@@ -575,7 +580,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
         auto& mesh = *mesh_dxr.base;
 
         if (gpu_skinning && inst_dxr.deformed_vertices) {
-            if (!inst_dxr.blas_deformed || inst.is_updated) {
+            if (!inst_dxr.blas_deformed || inst.update_flags) {
                 // BLAS for deformable meshes
 
                 bool update_blas = inst_dxr.blas_deformed != nullptr;
