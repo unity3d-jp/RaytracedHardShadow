@@ -152,8 +152,6 @@ public:
     ID3D12ResourcePtr blas; // bottom level acceleration structure
     ID3D12ResourcePtr blas_scratch;
 
-    int use_count = 0;
-
     int getVertexStride() const;
     int getIndexStride() const;
 };
@@ -177,6 +175,9 @@ using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 class RenderDataDXR
 {
 public:
+    ID3D12GraphicsCommandList4Ptr cmd_list_direct;
+    ID3D12GraphicsCommandList4Ptr cmd_list_copy;
+
     ID3D12DescriptorHeapPtr desc_heap;
     DescriptorHandleDXR tlas_handle;
     DescriptorHandleDXR scene_data_handle;

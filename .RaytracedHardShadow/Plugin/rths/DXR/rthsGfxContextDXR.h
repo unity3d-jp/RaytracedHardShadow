@@ -24,20 +24,20 @@ public:
     void setSceneData(RenderDataDXR& rd, SceneData& data);
     void setRenderTarget(RenderDataDXR& rd, TextureData& rt);
     void setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>& instances);
-    void flush(RenderDataDXR& rd);
+    uint64_t flush(RenderDataDXR& rd);
     void finish(RenderDataDXR& rd);
     void releaseUnusedResources();
 
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     ID3D12ResourcePtr createTexture(int width, int height, DXGI_FORMAT format);
 
-    void addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
-    uint64_t submitCommandList();
-    bool readbackBuffer(void *dst, ID3D12Resource *src, size_t size);
-    bool uploadBuffer(ID3D12Resource *dst, const void *src, size_t size);
-    bool readbackTexture(void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride);
-    bool uploadTexture(ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride);
-    void executeAndWaitCopy();
+    void addResourceBarrier(ID3D12GraphicsCommandList4Ptr cl, ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
+    uint64_t submitCommandList(ID3D12GraphicsCommandList4Ptr cl);
+    bool readbackBuffer(ID3D12GraphicsCommandList4Ptr cl, void *dst, ID3D12Resource *src, size_t size);
+    bool uploadBuffer(ID3D12GraphicsCommandList4Ptr cl, ID3D12Resource *dst, const void *src, size_t size);
+    bool readbackTexture(ID3D12GraphicsCommandList4Ptr cl, void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride);
+    bool uploadTexture(ID3D12GraphicsCommandList4Ptr cl, ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride);
+    void executeAndWaitCopy(ID3D12GraphicsCommandList4Ptr cl);
 
 private:
     friend std::unique_ptr<GfxContextDXR> std::make_unique<GfxContextDXR>();
@@ -52,13 +52,11 @@ private:
     ID3D12Device5Ptr m_device;
 
     // command list for raytrace
-    ID3D12CommandAllocatorPtr m_cmd_allocator;
-    ID3D12GraphicsCommandList4Ptr m_cmd_list;
-    ID3D12CommandQueuePtr m_cmd_queue;
+    ID3D12CommandAllocatorPtr m_cmd_allocator_direct;
+    ID3D12CommandQueuePtr m_cmd_queue_direct;
 
     // command list for copy resources
     ID3D12CommandAllocatorPtr m_cmd_allocator_copy;
-    ID3D12GraphicsCommandList4Ptr m_cmd_list_copy;
     ID3D12CommandQueuePtr m_cmd_queue_copy;
 
     ID3D12FencePtr m_fence;
@@ -68,16 +66,10 @@ private:
     ID3D12RootSignaturePtr m_global_rootsig;
     ID3D12RootSignaturePtr m_local_rootsig;
 
-    ID3D12ResourcePtr m_shader_table;
-    int m_shader_table_entry_count = 0;
-    int m_shader_table_entry_capacity = 0;
-    int m_shader_record_size = 0;
-
     std::map<void*, TextureDataDXRPtr> m_texture_records;
     std::map<void*, BufferDataDXRPtr> m_buffer_records;
     std::map<MeshData*, MeshDataDXRPtr> m_mesh_records;
     std::map<MeshInstanceData*, MeshInstanceDataDXRPtr> m_meshinstance_records;
-    std::vector<ID3D12ResourcePtr> m_temporary_buffers;
 
     MeshDataCallback m_on_mesh_delete;
     MeshInstanceDataCallback m_on_meshinstance_delete;

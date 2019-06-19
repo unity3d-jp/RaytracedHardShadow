@@ -167,10 +167,10 @@ bool GfxContextDXR::initializeDevice()
                     debug1->SetEnableGPUBasedValidation(true);
                     debug1->SetEnableSynchronizedCommandQueueValidation(true);
                 }
-#endif
+#endif // rthsEnableD3D12GBV
             }
         }
-#endif
+#endif // rthsEnableD3D12DebugLayer
 
 #ifdef rthsEnableD3D12DREAD
         {
@@ -180,7 +180,7 @@ bool GfxContextDXR::initializeDevice()
                 dread_settings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
             }
         }
-#endif
+#endif // rthsEnableD3D12DREAD
 
         IDXGIFactory4Ptr dxgi_factory;
         ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
@@ -234,10 +234,9 @@ bool GfxContextDXR::initializeDevice()
             D3D12_COMMAND_QUEUE_DESC desc{};
             desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
             desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-            m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue));
+            m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_direct));
         }
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator_direct));
     }
 
     // command queue for read back
@@ -249,7 +248,6 @@ bool GfxContextDXR::initializeDevice()
             m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_copy));
         }
         m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&m_cmd_allocator_copy));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_cmd_allocator_copy, nullptr, IID_PPV_ARGS(&m_cmd_list_copy));
     }
 
     // local root signature
@@ -382,6 +380,13 @@ bool GfxContextDXR::initializeDevice()
 
 void GfxContextDXR::prepare(RenderDataDXR& rd)
 {
+    if (!rd.cmd_list_direct) {
+        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator_direct, nullptr, IID_PPV_ARGS(&rd.cmd_list_direct));
+    }
+    if (!rd.cmd_list_copy) {
+        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_cmd_allocator_copy, nullptr, IID_PPV_ARGS(&rd.cmd_list_copy));
+    }
+
     // desc heap
     if (!rd.desc_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
@@ -454,9 +459,9 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, TextureData& rt)
         data.resize(n);
         for (int i = 0; i < n; ++i)
             data[i] = r * (float)i;
-        uploadTexture(rd.render_target->resource, data.data(), rd.render_target->width, rd.render_target->height, sizeof(float));
+        uploadTexture(rd.cmd_list_copy, rd.render_target->resource, data.data(), rd.render_target->width, rd.render_target->height, sizeof(float));
     }
-#endif
+#endif // rthsEnableRenderTargetValidation
 }
 
 void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>& instances)
@@ -475,7 +480,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
         m_deformer->prepare(rd.render_flags);
 
     TimestampReset(m_timestamp);
-    TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: building acceleration structure begin");
+    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building acceleration structure begin");
 
     size_t instance_count = instances.size();
     for (size_t i = 0; i < instance_count; ++i) {
@@ -489,7 +494,6 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
             mesh_dxr = std::make_shared<MeshDataDXR>();
             mesh_dxr->base = mesh;
         }
-        ++mesh_dxr->use_count;
 
         if (!mesh_dxr->vertex_buffer) {
             mesh_dxr->vertex_buffer = translate_buffer(mesh->vertex_buffer);
@@ -507,9 +511,9 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
                 // inspect buffer
                 std::vector<float> vertex_buffer_data;
                 vertex_buffer_data.resize(mesh_dxr->vertex_buffer->size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
-                readbackBuffer(vertex_buffer_data.data(), mesh_dxr->vertex_buffer->resource, mesh_dxr->vertex_buffer->size);
+                readbackBuffer(rd.cmd_list_copy, vertex_buffer_data.data(), mesh_dxr->vertex_buffer->resource, mesh_dxr->vertex_buffer->size);
             }
-#endif
+#endif // rthsEnableBufferValidation
         }
         if (!mesh_dxr->index_buffer) {
             mesh_dxr->index_buffer = translate_buffer(mesh->index_buffer);
@@ -526,16 +530,16 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
                 // inspect buffer
                 std::vector<uint32_t> index_buffer_data32;
                 std::vector<uint16_t> index_buffer_data16;
-                if (mesh_dxr->index_stride == 2) {
+                if (mesh_dxr->getIndexStride() == 2) {
                     index_buffer_data16.resize(mesh_dxr->index_buffer->size / sizeof(uint16_t), std::numeric_limits<uint16_t>::max());
-                    readbackBuffer(index_buffer_data16.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
+                    readbackBuffer(rd.cmd_list_copy, index_buffer_data16.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
                 }
                 else {
                     index_buffer_data32.resize(mesh_dxr->index_buffer->size / sizeof(uint32_t), std::numeric_limits<uint32_t>::max());
-                    readbackBuffer(index_buffer_data32.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
+                    readbackBuffer(rd.cmd_list_copy, index_buffer_data32.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
                 }
             }
-#endif
+#endif // rthsEnableBufferValidation
         }
 
         auto& inst_dxr = m_meshinstance_records[inst];
@@ -557,7 +561,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
         fence_value = m_deformer->execute(m_fence, fence_value);
         if (fence_value) {
             // add wait command because building acceleration structure depends on deform
-            m_cmd_queue->Wait(m_fence, fence_value);
+            m_cmd_queue_direct->Wait(m_fence, fence_value);
             m_resource_translator->setFenceValue(fence_value);
         }
     }
@@ -615,7 +619,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
                 as_desc.DestAccelerationStructureData = inst_dxr.blas_deformed->GetGPUVirtualAddress();
                 as_desc.ScratchAccelerationStructureData = inst_dxr.blas_scratch->GetGPUVirtualAddress();
 
-                m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+                rd.cmd_list_direct->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
             }
         }
         else {
@@ -655,14 +659,14 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
                 as_desc.DestAccelerationStructureData = mesh_dxr.blas->GetGPUVirtualAddress();
                 as_desc.ScratchAccelerationStructureData = mesh_dxr.blas_scratch->GetGPUVirtualAddress();
 
-                m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+                rd.cmd_list_direct->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
             }
         }
     }
 
     // build top level acceleration structure
     {
-        // First, get the size of the TLAS buffers and create them
+        // get the size of the TLAS buffers
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
         inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
         inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
@@ -701,9 +705,8 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
 
         // instance desc buffer
         if (rd.instance_desc) {
-            auto capacity_in_byte = rd.instance_desc->GetDesc().Width;
-            auto capacity = capacity_in_byte / sizeof(D3D12_RAYTRACING_INSTANCE_DESC);
-            if (capacity < instance_count)
+            auto capacity = rd.instance_desc->GetDesc().Width;
+            if (capacity < instance_count * sizeof(D3D12_RAYTRACING_INSTANCE_DESC))
                 rd.instance_desc = nullptr;
         }
         if (!rd.instance_desc) {
@@ -744,7 +747,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
             if (rd.tlas_scratch)
                 as_desc.ScratchAccelerationStructureData = rd.tlas_scratch->GetGPUVirtualAddress();
 
-            m_cmd_list->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+            rd.cmd_list_direct->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
         }
 
         // add UAV barrier
@@ -752,10 +755,10 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
             D3D12_RESOURCE_BARRIER uav_barrier{};
             uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
             uav_barrier.UAV.pResource = rd.tlas;
-            m_cmd_list->ResourceBarrier(1, &uav_barrier);
+            rd.cmd_list_direct->ResourceBarrier(1, &uav_barrier);
         }
     }
-    TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: building acceleration structure end");
+    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building acceleration structure end");
 }
 
 
@@ -782,7 +785,7 @@ bool GfxContextDXR::validateDevice()
                 // todo: get error log
             }
         }
-#endif
+#endif // rthsEnableD3D12DREAD
 
         PSTR buf = nullptr;
         size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -798,7 +801,7 @@ bool GfxContextDXR::validateDevice()
 ID3D12Device5Ptr GfxContextDXR::getDevice() { return m_device; }
 
 
-void GfxContextDXR::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
+void GfxContextDXR::addResourceBarrier(ID3D12GraphicsCommandList4Ptr cl, ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
 {
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -806,28 +809,28 @@ void GfxContextDXR::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURC
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barrier.Transition.StateBefore = state_before;
     barrier.Transition.StateAfter = state_after;
-    m_cmd_list->ResourceBarrier(1, &barrier);
+    cl->ResourceBarrier(1, &barrier);
 }
 
-uint64_t GfxContextDXR::submitCommandList()
+uint64_t GfxContextDXR::submitCommandList(ID3D12GraphicsCommandList4Ptr cl)
 {
-    m_cmd_list->Close();
-    ID3D12CommandList* cmd_list[]{ m_cmd_list.GetInterfacePtr() };
-    m_cmd_queue->ExecuteCommandLists(_countof(cmd_list), cmd_list);
+    cl->Close();
+    ID3D12CommandList* cmd_list[]{ cl.GetInterfacePtr() };
+    m_cmd_queue_direct->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 
     auto fence_value = m_resource_translator->inclementFenceValue();
-    m_cmd_queue->Signal(m_fence, fence_value);
+    m_cmd_queue_direct->Signal(m_fence, fence_value);
     m_fence->SetEventOnCompletion(fence_value, m_fence_event);
     return fence_value;
 }
 
 
-bool GfxContextDXR::readbackBuffer(void *dst, ID3D12Resource *src, size_t size)
+bool GfxContextDXR::readbackBuffer(ID3D12GraphicsCommandList4Ptr cl, void *dst, ID3D12Resource *src, size_t size)
 {
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
-    m_cmd_list_copy->CopyBufferRegion(readback_buf, 0, src, 0, size);
-    m_cmd_list_copy->Close();
-    executeAndWaitCopy();
+    cl->CopyBufferRegion(readback_buf, 0, src, 0, size);
+    cl->Close();
+    executeAndWaitCopy(cl);
 
     float* mapped;
     if (SUCCEEDED(readback_buf->Map(0, nullptr, (void**)&mapped))) {
@@ -839,7 +842,7 @@ bool GfxContextDXR::readbackBuffer(void *dst, ID3D12Resource *src, size_t size)
     return false;
 }
 
-bool GfxContextDXR::uploadBuffer(ID3D12Resource *dst, const void *src, size_t size)
+bool GfxContextDXR::uploadBuffer(ID3D12GraphicsCommandList4Ptr cl, ID3D12Resource *dst, const void *src, size_t size)
 {
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
     void *mapped;
@@ -847,15 +850,15 @@ bool GfxContextDXR::uploadBuffer(ID3D12Resource *dst, const void *src, size_t si
         memcpy(mapped, src, size);
         upload_buf->Unmap(0, nullptr);
 
-        m_cmd_list_copy->CopyBufferRegion(dst, 0, upload_buf, 0, size);
-        m_cmd_list_copy->Close();
-        executeAndWaitCopy();
+        cl->CopyBufferRegion(dst, 0, upload_buf, 0, size);
+        cl->Close();
+        executeAndWaitCopy(cl);
         return true;
     }
     return false;
 }
 
-bool GfxContextDXR::readbackTexture(void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride)
+bool GfxContextDXR::readbackTexture(ID3D12GraphicsCommandList4Ptr cl, void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride)
 {
     size_t size = width * height * stride;
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
@@ -877,9 +880,9 @@ bool GfxContextDXR::readbackTexture(void *dst, ID3D12Resource *src, size_t width
     src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     src_loc.SubresourceIndex = 0;
 
-    m_cmd_list_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
-    m_cmd_list_copy->Close();
-    executeAndWaitCopy();
+    cl->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
+    cl->Close();
+    executeAndWaitCopy(cl);
 
     float* mapped;
     if (SUCCEEDED(readback_buf->Map(0, nullptr, (void**)&mapped))) {
@@ -890,7 +893,7 @@ bool GfxContextDXR::readbackTexture(void *dst, ID3D12Resource *src, size_t width
     return false;
 }
 
-bool GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride)
+bool GfxContextDXR::uploadTexture(ID3D12GraphicsCommandList4Ptr cl, ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride)
 {
     size_t size = width * height * stride;
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
@@ -917,18 +920,18 @@ bool GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src, size_t w
         src_loc.PlacedFootprint.Footprint.Depth = 1;
         src_loc.PlacedFootprint.Footprint.RowPitch = (UINT)(width * stride);
 
-        m_cmd_list_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
-        m_cmd_list_copy->Close();
-        executeAndWaitCopy();
+        cl->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
+        cl->Close();
+        executeAndWaitCopy(cl);
         return true;
     }
     return false;
 }
 
-void GfxContextDXR::executeAndWaitCopy()
+void GfxContextDXR::executeAndWaitCopy(ID3D12GraphicsCommandList4Ptr cl)
 {
-    ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-    m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
+    ID3D12CommandList *cmd_list[]{ cl.GetInterfacePtr() };
+    m_cmd_queue_copy->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 
     auto fence_value = m_resource_translator->inclementFenceValue();
     m_cmd_queue_copy->Signal(m_fence, fence_value);
@@ -936,76 +939,80 @@ void GfxContextDXR::executeAndWaitCopy()
     ::WaitForSingleObject(m_fence_event, INFINITE);
 
     m_cmd_allocator_copy->Reset();
-    m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
+    cl->Reset(m_cmd_allocator_copy, nullptr);
 }
 
 
-void GfxContextDXR::flush(RenderDataDXR& rd)
+uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
 {
     if (!rd.render_target->resource) {
         SetErrorLog("GfxContext::flush(): render target is null\n");
-        return;
+        return 0;
     }
     if (m_flushing) {
         SetErrorLog("GfxContext::flush(): called before finish()\n");
-        return;
+        return 0;
     }
 
-    TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: raytrace begin");
+    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace begin");
 
-    int num_meshes = (int)rd.mesh_instances.size();
+    size_t shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+    shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
+    shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, shader_record_size);
+
+    size_t instance_count = rd.mesh_instances.size();
 
     // setup shader table
     {
         // ray-gen + miss + hit for each meshes
-        int required_count = 2 + num_meshes;
+        size_t required_count = 2 + instance_count;
 
-        m_shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-        m_shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
-        m_shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, m_shader_record_size);
-
-        // allocate new buffer if required count exceeds capacity
-        if (required_count > m_shader_table_entry_capacity) {
-            int new_capacity = std::max<int>(required_count, std::max<int>(m_shader_table_entry_capacity * 2, 1024));
-            m_shader_table = createBuffer(m_shader_record_size * new_capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-            m_shader_table_entry_capacity = new_capacity;
+        if (rd.shader_table) {
+            auto capacity = rd.shader_table->GetDesc().Width;
+            if (capacity < required_count * shader_record_size)
+                rd.shader_table = nullptr;
         }
+        if (!rd.shader_table) {
+            size_t capacity = 1024;
+            while (capacity < required_count)
+                capacity *= 2;
+            rd.shader_table = createBuffer(shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
 
-        // setup shader table entries
-        if (required_count > m_shader_table_entry_count) {
-            uint8_t *data;
-            m_shader_table->Map(0, nullptr, (void**)&data);
+            // setup shader table
+            {
+                uint8_t *data;
+                rd.shader_table->Map(0, nullptr, (void**)&data);
 
-            ID3D12StateObjectPropertiesPtr sop;
-            m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
+                ID3D12StateObjectPropertiesPtr sop;
+                m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
 
-            auto add_shader_table = [&](void *shader_id) {
-                auto dst = data;
-                memcpy(dst, shader_id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-                dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-                *(UINT64*)(dst) = rd.desc_heap->GetGPUDescriptorHandleForHeapStart().ptr;
+                auto add_shader_table = [&](void *shader_id) {
+                    auto dst = data;
+                    memcpy(dst, shader_id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+                    dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+                    *(UINT64*)(dst) = rd.desc_heap->GetGPUDescriptorHandleForHeapStart().ptr;
 
-                data += m_shader_record_size;
-            };
+                    data += shader_record_size;
+                };
 
-            // ray-gen
-            add_shader_table(sop->GetShaderIdentifier(kRayGenShader));
+                // ray-gen
+                add_shader_table(sop->GetShaderIdentifier(kRayGenShader));
 
-            // miss
-            add_shader_table(sop->GetShaderIdentifier(kMissShader));
+                // miss
+                add_shader_table(sop->GetShaderIdentifier(kMissShader));
 
-            // hit for each meshes
-            void *hit = sop->GetShaderIdentifier(kHitGroup);
-            for (int i = 0; i < num_meshes; ++i)
-                add_shader_table(hit);
+                // hit for each meshes
+                void *hit = sop->GetShaderIdentifier(kHitGroup);
+                for (int i = 0; i < capacity - 2; ++i)
+                    add_shader_table(hit);
 
-            m_shader_table->Unmap(0, nullptr);
-            m_shader_table_entry_count = required_count;
+                rd.shader_table->Unmap(0, nullptr);
+            }
         }
     }
 
     D3D12_RESOURCE_STATES prev_state = D3D12_RESOURCE_STATE_COMMON;
-    addResourceBarrier(rd.render_target->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    addResourceBarrier(rd.cmd_list_direct, rd.render_target->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // dispatch rays
     {
@@ -1014,44 +1021,42 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         dr_desc.Height = rd.render_target->height;
         dr_desc.Depth = 1;
 
-        auto addr = m_shader_table->GetGPUVirtualAddress();
+        auto addr = rd.shader_table->GetGPUVirtualAddress();
         // ray-gen
         dr_desc.RayGenerationShaderRecord.StartAddress = addr;
-        dr_desc.RayGenerationShaderRecord.SizeInBytes = m_shader_record_size;
-        addr += m_shader_record_size;
+        dr_desc.RayGenerationShaderRecord.SizeInBytes = shader_record_size;
+        addr += shader_record_size;
 
         // miss
         dr_desc.MissShaderTable.StartAddress = addr;
-        dr_desc.MissShaderTable.StrideInBytes = m_shader_record_size;
-        dr_desc.MissShaderTable.SizeInBytes = m_shader_record_size; 
-        addr += m_shader_record_size;
+        dr_desc.MissShaderTable.StrideInBytes = shader_record_size;
+        dr_desc.MissShaderTable.SizeInBytes = shader_record_size; 
+        addr += shader_record_size;
 
         // hit for each meshes
         dr_desc.HitGroupTable.StartAddress = addr;
-        dr_desc.HitGroupTable.StrideInBytes = m_shader_record_size;
-        dr_desc.HitGroupTable.SizeInBytes = m_shader_record_size * num_meshes;
+        dr_desc.HitGroupTable.StrideInBytes = shader_record_size;
+        dr_desc.HitGroupTable.SizeInBytes = shader_record_size * instance_count;
 
         // descriptor heaps
-        ID3D12DescriptorHeap *desc_heaps[] = {
-            rd.desc_heap,
-            // sampler heap will be here
-        };
-        m_cmd_list->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
+        ID3D12DescriptorHeap *desc_heaps[] = { rd.desc_heap };
+        rd.cmd_list_direct->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
 
         // bind root signature and shader resources
-        m_cmd_list->SetComputeRootSignature(m_global_rootsig);
+        rd.cmd_list_direct->SetComputeRootSignature(m_global_rootsig);
 
         // dispatch
-        m_cmd_list->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
-        m_cmd_list->DispatchRays(&dr_desc);
+        rd.cmd_list_direct->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
+        rd.cmd_list_direct->DispatchRays(&dr_desc);
     }
 
-    addResourceBarrier(rd.render_target->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
-    TimestampQuery(m_timestamp, m_cmd_list, "GfxContextDXR: raytrace end");
-    TimestampResolve(m_timestamp, m_cmd_list);
+    addResourceBarrier(rd.cmd_list_direct, rd.render_target->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
+    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace end");
+    TimestampResolve(m_timestamp, rd.cmd_list_direct);
 
-    submitCommandList();
+    auto ret = submitCommandList(rd.cmd_list_direct);
     m_flushing = true;
+    return ret;
 }
 
 void GfxContextDXR::finish(RenderDataDXR& rd)
@@ -1062,17 +1067,17 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
     }
 
     m_deformer->onFinish();
-    m_cmd_allocator->Reset();
-    m_cmd_list->Reset(m_cmd_allocator, nullptr);
+    m_cmd_allocator_direct->Reset();
+    rd.cmd_list_direct->Reset(m_cmd_allocator_direct, nullptr);
 
 #ifdef rthsEnableRenderTargetValidation
     {
         std::vector<float> data;
         data.resize(rd.render_target->width * rd.render_target->height, std::numeric_limits<float>::quiet_NaN());
-        readbackTexture(data.data(), rd.render_target->resource, rd.render_target->width, rd.render_target->height, sizeof(float));
+        readbackTexture(rd.cmd_list_copy, data.data(), rd.render_target->resource, rd.render_target->width, rd.render_target->height, sizeof(float));
         // break here to inspect data
     }
-#endif
+#endif // rthsEnableRenderTargetValidation
 
     if (rd.render_target) {
         // copy content of render target to Unity side
@@ -1082,7 +1087,7 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
     rd.mesh_instances.clear();
 
     m_deformer->debugPrint();
-    TimestampPrint(m_timestamp, m_cmd_queue);
+    TimestampPrint(m_timestamp, m_cmd_queue_direct);
 }
 
 void GfxContextDXR::releaseUnusedResources()
@@ -1106,9 +1111,6 @@ void GfxContextDXR::releaseUnusedResources()
     };
     erase_unused_records(m_texture_records, "GfxContextDXR::releaseUnusedResources(): erased %d texture records\n");
     erase_unused_records(m_buffer_records, "GfxContextDXR::releaseUnusedResources(): erased %d buffer records\n");
-    erase_unused_records(m_mesh_records, "GfxContextDXR::releaseUnusedResources(): erased %d mesh records\n");
-
-    m_temporary_buffers.clear();
 }
 
 } // namespace rths
