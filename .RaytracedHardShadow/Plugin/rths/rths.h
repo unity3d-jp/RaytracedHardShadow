@@ -57,7 +57,7 @@ rthsAPI void rthsMeshSetSkinWeights4(rths::MeshData *self, const rths::BoneWeigh
 rthsAPI void rthsMeshSetBlendshapeCount(rths::MeshData *self, int num_bs);
 rthsAPI void rthsMeshAddBlendshapeFrame(rths::MeshData *self, int bs_index, const rths::float3 *delta, float weight);
 
-rthsAPI rths::MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh, bool auto_release);
+rthsAPI rths::MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh);
 rthsAPI void rthsMeshInstanceRelease(rths::MeshInstanceData *self);
 rthsAPI void rthsMeshInstanceSetTransform(rths::MeshInstanceData *self, rths::float4x4 transform);
 rthsAPI void rthsMeshInstanceSetBones(rths::MeshInstanceData *self, const rths::float4x4 *bones, int num_bones);

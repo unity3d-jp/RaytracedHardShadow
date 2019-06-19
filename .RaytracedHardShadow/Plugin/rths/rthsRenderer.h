@@ -49,7 +49,7 @@ public:
     void addMesh(MeshInstanceData *mesh) override;
 
 protected:
-    void releaseMeshInstances();
+    void clearMeshInstances();
 
     TextureData m_render_target;
     SceneData m_scene_data;

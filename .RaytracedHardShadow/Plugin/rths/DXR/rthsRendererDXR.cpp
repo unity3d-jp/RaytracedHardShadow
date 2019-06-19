@@ -43,7 +43,7 @@ void RendererDXR::finish()
 {
     auto ctx = GfxContextDXR::getInstance();
     ctx->finish();
-    releaseMeshInstances();
+    clearMeshInstances();
 }
 
 IRenderer* CreateRendererDXR()

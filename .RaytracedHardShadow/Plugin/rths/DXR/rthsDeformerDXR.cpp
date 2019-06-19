@@ -156,7 +156,13 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
     int blendshape_count = (int)inst.blendshape_weights.size();
     int bone_count = (int)inst.bones.size();
 
-    if (blendshape_count == 0 && bone_count == 0)
+    int non_zero_blendshape_weight_count = 0;
+    for (float w : inst.blendshape_weights) {
+        if (w != 0.0f)
+            ++non_zero_blendshape_weight_count;
+    }
+
+    if (non_zero_blendshape_weight_count == 0 && bone_count == 0)
         return false; // no need to deform
 
     // setup descriptors

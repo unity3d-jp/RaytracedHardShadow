@@ -86,6 +86,8 @@ namespace UTJ.RaytracedHardShadow
         #endregion
 
         public static implicit operator bool(rthsMeshData v) { return v.self != IntPtr.Zero; }
+        public static bool operator ==(rthsMeshData a, rthsMeshData b) { return a.self == b.self; }
+        public static bool operator !=(rthsMeshData a, rthsMeshData b) { return a.self != b.self; }
 
         public static rthsMeshData Create()
         {
@@ -159,7 +161,7 @@ namespace UTJ.RaytracedHardShadow
     {
         #region internal
         public IntPtr self;
-        [DllImport("rths")] static extern IntPtr rthsMeshInstanceCreate(rthsMeshData mesh, byte autoRelease);
+        [DllImport("rths")] static extern IntPtr rthsMeshInstanceCreate(rthsMeshData mesh);
         [DllImport("rths")] static extern void rthsMeshInstanceRelease(IntPtr self);
         [DllImport("rths")] static extern void rthsMeshInstanceSetTransform(IntPtr self, Matrix4x4 transform);
         [DllImport("rths")] static extern void rthsMeshInstanceSetBones(IntPtr self, Matrix4x4[] bones, int num_bones);
@@ -168,10 +170,12 @@ namespace UTJ.RaytracedHardShadow
         #endregion
 
         public static implicit operator bool(rthsMeshInstanceData v) { return v.self != IntPtr.Zero; }
+        public static bool operator ==(rthsMeshInstanceData a, rthsMeshInstanceData b) { return a.self == b.self; }
+        public static bool operator !=(rthsMeshInstanceData a, rthsMeshInstanceData b) { return a.self != b.self; }
 
-        public static rthsMeshInstanceData Create(rthsMeshData mesh, bool autoRelease = true)
+        public static rthsMeshInstanceData Create(rthsMeshData mesh)
         {
-            return new rthsMeshInstanceData { self = rthsMeshInstanceCreate(mesh, (byte)(autoRelease ? 1 : 0)) };
+            return new rthsMeshInstanceData { self = rthsMeshInstanceCreate(mesh) };
         }
 
         public void Release()

@@ -70,6 +70,8 @@ struct float4x4
 
     float4& operator[](size_t i) { return v[i]; }
     const float4& operator[](size_t i) const { return v[i]; }
+    bool operator==(float4x4& v) const { return std::memcmp(this, &v, sizeof(*this)) == 0; }
+    bool operator!=(float4x4& v) const { return !(*this == v); }
 
     static float4x4 identity()
     {
@@ -240,7 +242,7 @@ struct MeshInstanceData
     float4x4 transform = float4x4::identity();
     std::vector<float4x4> bones;
     std::vector<float> blendshape_weights;
-    bool auto_release = false;
+    bool is_updated = true;
 
     MeshInstanceData();
     ~MeshInstanceData();

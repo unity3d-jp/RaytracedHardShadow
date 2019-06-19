@@ -111,13 +111,8 @@ void RendererBase::addMesh(MeshInstanceData *mesh)
     m_mesh_instance_data.push_back(mesh);
 }
 
-void RendererBase::releaseMeshInstances()
+void RendererBase::clearMeshInstances()
 {
-    for(auto& mesh : m_mesh_instance_data) {
-        if (mesh->auto_release) {
-            delete mesh;
-        }
-    }
     m_mesh_instance_data.clear();
 }
 
