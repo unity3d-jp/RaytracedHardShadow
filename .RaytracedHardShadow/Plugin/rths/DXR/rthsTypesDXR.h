@@ -17,6 +17,8 @@
 
     #define rthsEnableTimestamp
 
+    #define rthsEnableResourceName
+
     //// VB & IB validation
     //#define rthsEnableBufferValidation
 
@@ -127,6 +129,7 @@ public:
     ID3D12ResourcePtr bone_weights;
 
     ID3D12ResourcePtr blas; // bottom level acceleration structure
+    ID3D12ResourcePtr blas_scratch;
 
     int use_count = 0;
 
@@ -146,6 +149,7 @@ public:
     ID3D12ResourcePtr bone_matrices;
     ID3D12ResourcePtr deformed_vertices;
     ID3D12ResourcePtr blas_deformed;
+    ID3D12ResourcePtr blas_scratch;
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 
@@ -206,6 +210,12 @@ using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
     #define TimestampResolve(...)
     #define TimestampPrint(...)
 #endif rthsEnableTimestamp
+
+#ifdef rthsEnableResourceName
+    #define DbgSetName(res, name) res->SetName(name)
+#else
+    #define DbgSetName(...)
+#endif
 
 
 extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;

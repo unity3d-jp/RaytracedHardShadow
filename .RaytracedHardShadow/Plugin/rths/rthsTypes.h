@@ -230,11 +230,14 @@ struct MeshData
     SkinData skin;
     std::vector<BlendshapeData> blendshapes;
 
-    static void addOnMeshDelete(const MeshDataCallback& cb);
-    static void removeOnMeshDelete(const MeshDataCallback& cb);
+    static void addOnDelete(const MeshDataCallback& cb);
+    static void removeOnDelete(const MeshDataCallback& cb);
     MeshData();
     ~MeshData();
 };
+
+struct MeshInstanceData;
+using MeshInstanceDataCallback = std::function<void(MeshInstanceData*)>;
 
 struct MeshInstanceData
 {
@@ -244,6 +247,8 @@ struct MeshInstanceData
     std::vector<float> blendshape_weights;
     bool is_updated = true;
 
+    static void addOnDelete(const MeshInstanceDataCallback& cb);
+    static void removeOnDelete(const MeshInstanceDataCallback& cb);
     MeshInstanceData();
     ~MeshInstanceData();
 };

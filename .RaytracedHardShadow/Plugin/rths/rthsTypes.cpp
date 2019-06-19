@@ -105,19 +105,31 @@ float4x4 invert(const float4x4& x)
     return s;
 }
 
-static std::vector<MeshDataCallback> g_on_mesh_delete;
-
-void MeshData::addOnMeshDelete(const MeshDataCallback& cb)
+template<class StdFuncT>
+static inline void add_callback(std::vector<StdFuncT>& funcs, const StdFuncT& to_add)
 {
-    g_on_mesh_delete.push_back(cb);
+    funcs.push_back(to_add);
 }
 
-void MeshData::removeOnMeshDelete(const MeshDataCallback& cb)
+template<class StdFuncT>
+static inline void erase_callback(std::vector<StdFuncT>& funcs, const StdFuncT& to_erase)
 {
-    auto it = std::find_if(g_on_mesh_delete.begin(), g_on_mesh_delete.end(),
-        [&cb](auto& a) { return a.target<void*>() == cb.target<void*>(); });
-    if (it != g_on_mesh_delete.end())
-        g_on_mesh_delete.erase(it);
+    auto it = std::find_if(funcs.begin(), funcs.end(),
+        [&to_erase](auto& a) { return a.target<void*>() == to_erase.target<void*>(); });
+    if (it != funcs.end())
+        funcs.erase(it);
+}
+
+static std::vector<MeshDataCallback> g_on_mesh_delete;
+
+void MeshData::addOnDelete(const MeshDataCallback& cb)
+{
+    add_callback(g_on_mesh_delete, cb);
+}
+
+void MeshData::removeOnDelete(const MeshDataCallback& cb)
+{
+    erase_callback(g_on_mesh_delete, cb);
 }
 
 MeshData::MeshData()
@@ -130,12 +142,26 @@ MeshData::~MeshData()
         cb(this);
 }
 
+static std::vector<MeshInstanceDataCallback> g_on_meshinstance_delete;
+
+void MeshInstanceData::addOnDelete(const MeshInstanceDataCallback& cb)
+{
+    add_callback(g_on_meshinstance_delete, cb);
+}
+
+void MeshInstanceData::removeOnDelete(const MeshInstanceDataCallback& cb)
+{
+    erase_callback(g_on_meshinstance_delete, cb);
+}
+
 MeshInstanceData::MeshInstanceData()
 {
 }
 
 MeshInstanceData::~MeshInstanceData()
 {
+    for (auto& cb : g_on_meshinstance_delete)
+        cb(this);
 }
 
 } // namespace rths 

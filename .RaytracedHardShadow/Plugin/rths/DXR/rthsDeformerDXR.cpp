@@ -148,6 +148,9 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
     if (!m_rootsig_deform || !m_pipeline_state || !inst_dxr.mesh)
         return false;
 
+    if (!inst_dxr.base->is_updated)
+        return false; // no need to deform
+
     auto& inst = *inst_dxr.base;
     auto& mesh = *inst_dxr.mesh->base;
     auto& mesh_dxr = *inst_dxr.mesh;
