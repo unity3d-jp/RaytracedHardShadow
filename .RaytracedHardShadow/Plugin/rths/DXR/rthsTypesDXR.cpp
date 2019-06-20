@@ -83,6 +83,145 @@ DescriptorHandleDXR DescriptorHeapAllocatorDXR::allocate()
 }
 
 
+CommandManagerDXR::CommandManagerDXR(ID3D12DevicePtr device, ID3D12FencePtr fence)
+    : m_device(device)
+    , m_fence(fence)
+{
+    {
+        D3D12_COMMAND_QUEUE_DESC desc{};
+        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        desc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_queue_copy));
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&m_allocator_copy));
+    }
+    {
+        D3D12_COMMAND_QUEUE_DESC desc{};
+        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_queue_direct));
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_allocator_direct));
+    }
+    {
+        D3D12_COMMAND_QUEUE_DESC desc{};
+        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_queue_compute));
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&m_allocator_compute));
+    }
+}
+
+ID3D12CommandAllocatorPtr CommandManagerDXR::getAllocator(D3D12_COMMAND_LIST_TYPE type)
+{
+    switch (type) {
+    case D3D12_COMMAND_LIST_TYPE_DIRECT:
+        return m_allocator_direct;
+    case D3D12_COMMAND_LIST_TYPE_COMPUTE:
+        return m_allocator_compute;
+    case D3D12_COMMAND_LIST_TYPE_COPY:
+        return m_allocator_copy;
+    default:
+        return nullptr;
+    }
+}
+
+ID3D12CommandQueuePtr CommandManagerDXR::getQueue(D3D12_COMMAND_LIST_TYPE type)
+{
+    switch (type) {
+    case D3D12_COMMAND_LIST_TYPE_DIRECT:
+        return m_queue_direct;
+    case D3D12_COMMAND_LIST_TYPE_COMPUTE:
+        return m_queue_compute;
+    case D3D12_COMMAND_LIST_TYPE_COPY:
+        return m_queue_copy;
+    default:
+        return nullptr;
+    }
+}
+
+ID3D12GraphicsCommandList4Ptr CommandManagerDXR::allocCommandList(D3D12_COMMAND_LIST_TYPE type)
+{
+    ID3D12GraphicsCommandList4Ptr ret;
+    m_device->CreateCommandList(0, type, getAllocator(type), nullptr, IID_PPV_ARGS(&ret));
+    return ret;
+}
+
+void CommandManagerDXR::releaseCommandList(ID3D12GraphicsCommandList4Ptr cl)
+{
+    auto type = cl->GetType();
+    switch (type) {
+    case D3D12_COMMAND_LIST_TYPE_DIRECT:
+        m_list_direct_pool.push_back(cl);
+        break;
+    case D3D12_COMMAND_LIST_TYPE_COMPUTE:
+        m_list_compute_pool.push_back(cl);
+        break;
+    case D3D12_COMMAND_LIST_TYPE_COPY:
+        m_list_copy_pool.push_back(cl);
+        break;
+    default:
+        break;
+    }
+}
+
+uint64_t CommandManagerDXR::submit(ID3D12GraphicsCommandList4Ptr cl, ID3D12GraphicsCommandList4Ptr prev, ID3D12GraphicsCommandList4Ptr next)
+{
+    uint64_t fence_value = m_fence_value;
+    auto type = cl->GetType();
+    auto queue = getQueue(type);
+
+    if (prev) {
+        auto type_prev = prev->GetType();
+        auto queue_prev = getQueue(type_prev);
+        queue_prev->Signal(m_fence, fence_value);
+        queue->Wait(m_fence, fence_value);
+        ++fence_value;
+    }
+    {
+        cl->Close();
+        ID3D12CommandList* cmd_list[]{ cl.GetInterfacePtr() };
+        queue->ExecuteCommandLists(_countof(cmd_list), cmd_list);
+    }
+    if (next) {
+        auto type_next = next->GetType();
+        auto queue_next = getQueue(type_next);
+
+        queue->Signal(m_fence, fence_value);
+        queue_next->Wait(m_fence, fence_value);
+        ++fence_value;
+    }
+    m_fence_value = fence_value;
+    return fence_value;
+}
+
+void CommandManagerDXR::resetQueues()
+{
+    m_allocator_copy->Reset();
+    m_allocator_direct->Reset();
+    m_allocator_compute->Reset();
+}
+
+void CommandManagerDXR::reset(ID3D12GraphicsCommandList4Ptr cl, ID3D12PipelineStatePtr state)
+{
+    cl->Reset(getAllocator(cl->GetType()), state);
+}
+
+void CommandManagerDXR::wait(uint64_t fence_value)
+{
+    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
+    ::WaitForSingleObject(m_fence_event, INFINITE);
+}
+
+void CommandManagerDXR::setFenceValue(uint64_t v)
+{
+    m_fence_value = v;
+}
+
+uint64_t CommandManagerDXR::inclementFenceValue()
+{
+    return ++m_fence_value;
+}
+
+
 TimestampDXR::TimestampDXR(ID3D12DevicePtr device, int max_sample)
 {
     m_max_sample = max_sample;

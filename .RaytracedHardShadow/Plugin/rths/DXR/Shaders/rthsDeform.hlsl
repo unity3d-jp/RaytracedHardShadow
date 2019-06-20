@@ -196,9 +196,9 @@ void main(uint3 tid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 
         g_base_vertices[vertex_stride * vi + 2]);
 
     uint deform_flags = DeformFlags();
-    if ((deform_flags & DF_APPLY_BLENDSHAPE) != 0)
+    if (deform_flags & DF_APPLY_BLENDSHAPE)
         result = ApplyBlendshape(vi, result);
-    if ((deform_flags & DF_APPLY_SKINNING) != 0)
+    if (deform_flags & DF_APPLY_SKINNING)
         result = ApplySkinning(vi, result);
 
     g_dst_vertices[vi] = float4(result, 1.0f);

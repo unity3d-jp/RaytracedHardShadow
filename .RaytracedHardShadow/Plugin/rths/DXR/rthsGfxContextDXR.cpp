@@ -1059,9 +1059,9 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
     TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace end");
     TimestampResolve(m_timestamp, rd.cmd_list_direct);
 
-    auto ret = submitCommandList(rd.cmd_list_direct);
+    rd.fence_value = submitCommandList(rd.cmd_list_direct);
     m_flushing = true;
-    return ret;
+    return rd.fence_value;
 }
 
 void GfxContextDXR::finish(RenderDataDXR& rd)

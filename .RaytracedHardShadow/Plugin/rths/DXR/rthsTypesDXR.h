@@ -192,9 +192,49 @@ public:
 
     ID3D12ResourcePtr shader_table;
 
+    uint64_t fence_value = 0;
     int render_flags = 0;
 };
 
+// thin wrapper for Windows' event
+class FenceEventDXR
+{
+public:
+    FenceEventDXR();
+    ~FenceEventDXR();
+    operator HANDLE() const;
+
+private:
+    HANDLE m_handle = nullptr;
+};
+
+class CommandManagerDXR
+{
+public:
+    CommandManagerDXR(ID3D12DevicePtr device, ID3D12FencePtr fence);
+    ID3D12CommandAllocatorPtr getAllocator(D3D12_COMMAND_LIST_TYPE type);
+    ID3D12CommandQueuePtr getQueue(D3D12_COMMAND_LIST_TYPE type);
+    ID3D12GraphicsCommandList4Ptr allocCommandList(D3D12_COMMAND_LIST_TYPE type);
+    void releaseCommandList(ID3D12GraphicsCommandList4Ptr cl);
+    uint64_t submit(ID3D12GraphicsCommandList4Ptr cl, ID3D12GraphicsCommandList4Ptr prev = nullptr, ID3D12GraphicsCommandList4Ptr next = nullptr);
+    void wait(uint64_t fence_value);
+
+    void resetQueues();
+    void reset(ID3D12GraphicsCommandList4Ptr cl, ID3D12PipelineStatePtr state = nullptr);
+
+    void setFenceValue(uint64_t v);
+    uint64_t inclementFenceValue();
+
+private:
+    ID3D12DevicePtr m_device;
+    ID3D12FencePtr m_fence;
+
+    ID3D12CommandAllocatorPtr m_allocator_copy, m_allocator_direct, m_allocator_compute;
+    ID3D12CommandQueuePtr m_queue_copy, m_queue_direct, m_queue_compute;
+    std::vector<ID3D12GraphicsCommandList4Ptr> m_list_copy_pool, m_list_direct_pool, m_list_compute_pool;
+    uint64_t m_fence_value = 0;
+    FenceEventDXR m_fence_event;
+};
 
 class TimestampDXR
 {
@@ -242,18 +282,6 @@ using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
 extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
 extern const D3D12_HEAP_PROPERTIES kReadbackHeapProps;
-
-// thin wrapper for Windows' event
-class FenceEventDXR
-{
-public:
-    FenceEventDXR();
-    ~FenceEventDXR();
-    operator HANDLE() const;
-
-private:
-    HANDLE m_handle = nullptr;
-};
 
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
 std::string ToString(ID3DBlob *blob);
