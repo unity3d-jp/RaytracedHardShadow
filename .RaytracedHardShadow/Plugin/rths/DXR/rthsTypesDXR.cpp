@@ -308,12 +308,35 @@ void TimestampDXR::printElapsed(ID3D12CommandQueuePtr cq)
 
         size_t n = time_samples.size();
         auto base = time_samples[0];
-        for (size_t si = 1; si < n; ++si) {
-            auto sample = time_samples[si];
-            auto message = std::get<1>(sample);
-            auto epalsed = std::get<0>(sample) - std::get<0>(base);
-            auto epalsed_ms = float(double(epalsed * 1000) / double(freq));
-            DebugPrint("%s %f\n", message, epalsed_ms);
+        for (size_t si = 0; si < n; ++si) {
+            auto s1 = time_samples[si];
+            auto begin_pos = std::strstr(std::get<1>(s1), " begin");
+            if (begin_pos != nullptr) {
+                size_t len1 = size_t(begin_pos - std::get<1>(s1));
+                auto it = std::find_if(time_samples.begin() + (si + 1), time_samples.end(),
+                    [&](auto& s2) {
+                        auto end_pos = std::strstr(std::get<1>(s2), " end");
+                        if (end_pos != nullptr) {
+                            size_t len2 = size_t(end_pos - std::get<1>(s2));
+                            return len1 == len2 && std::strncmp(std::get<1>(s1), std::get<1>(s2), len1) == 0;
+                        }
+                        return false;
+                    });
+                if (it != time_samples.end()) {
+                    auto& s2 = *it;
+                    auto epalsed = std::get<0>(s2) - std::get<0>(s1);
+                    auto epalsed_ms = float(double(epalsed * 1000) / double(freq));
+                    DebugPrint("%s %f\n", std::get<1>(s2), epalsed_ms);
+                    continue;
+                }
+            }
+
+            auto end_pos = std::strstr(std::get<1>(s1), " end");
+            if (begin_pos == nullptr && end_pos == nullptr) {
+                auto epalsed = std::get<0>(s1);
+                auto epalsed_ms = float(double(epalsed * 1000) / double(freq));
+                DebugPrint("%s %f\n", std::get<1>(s1), epalsed_ms);
+            }
         }
     }
 }

@@ -380,6 +380,8 @@ bool GfxContextDXR::initializeDevice()
 
 void GfxContextDXR::prepare(RenderDataDXR& rd)
 {
+    TimestampReset(m_timestamp);
+
     if (!rd.cmd_list_direct) {
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator_direct, nullptr, IID_PPV_ARGS(&rd.cmd_list_direct));
     }
@@ -438,7 +440,6 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, TextureData& rt)
             return;
         }
     }
-    ++data->use_count;
 
     if (rd.render_target != data) {
         rd.render_target = data;
@@ -475,7 +476,6 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
         auto& data = m_buffer_records[buffer];
         if (!data)
             data = m_resource_translator->translateBuffer(buffer);
-        ++data->use_count;
         return data;
     };
 
@@ -483,13 +483,10 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
     int deform_count = 0;
     if (gpu_skinning)
         m_deformer->prepare(rd.render_flags);
+    rd.mesh_instances.clear();
 
-    TimestampReset(m_timestamp);
-    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building acceleration structure begin");
-
-    size_t instance_count = instances.size();
-    for (size_t i = 0; i < instance_count; ++i) {
-        auto& inst = instances[i];
+    bool needs_build_tlas = false;
+    for (auto& inst : instances) {
         auto& mesh = inst->mesh;
         if (mesh->vertex_count == 0 || mesh->index_count == 0)
             continue;
@@ -571,10 +568,11 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
         }
     }
 
+    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building BLAS begin");
+
     // build bottom level acceleration structures
-    instance_count = rd.mesh_instances.size();
-    for (size_t i = 0; i < instance_count; ++i) {
-        auto& inst_dxr = *rd.mesh_instances[i];
+    for (auto & pinst_dxr : rd.mesh_instances) {
+        auto& inst_dxr = *pinst_dxr;
         auto& mesh_dxr = *inst_dxr.mesh;
         auto& inst = *inst_dxr.base;
         auto& mesh = *mesh_dxr.base;
@@ -625,6 +623,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
                 as_desc.ScratchAccelerationStructureData = inst_dxr.blas_scratch->GetGPUVirtualAddress();
 
                 rd.cmd_list_direct->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+                needs_build_tlas = true;
             }
         }
         else {
@@ -665,12 +664,21 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
                 as_desc.ScratchAccelerationStructureData = mesh_dxr.blas_scratch->GetGPUVirtualAddress();
 
                 rd.cmd_list_direct->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+                needs_build_tlas = true;
             }
         }
     }
+    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building BLAS end");
+
+    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building TLAS begin");
+
+    if (!needs_build_tlas)
+        needs_build_tlas = rd.mesh_instances != rd.mesh_instances_prev;
 
     // build top level acceleration structure
-    {
+    if (needs_build_tlas) {
+        size_t instance_count = rd.mesh_instances.size();
+
         // get the size of the TLAS buffers
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
         inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
@@ -726,11 +734,12 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
             D3D12_RAYTRACING_INSTANCE_DESC *instance_descs;
             rd.instance_desc->Map(0, nullptr, (void**)&instance_descs);
             for (size_t i = 0; i < instance_count; i++) {
-                auto& inst = rd.mesh_instances[i];
-                auto& blas = gpu_skinning && inst->deformed_vertices ? inst->blas_deformed : inst->mesh->blas;
+                auto& inst_dxr = *rd.mesh_instances[i];
+                bool deformed = gpu_skinning && inst_dxr.deformed_vertices;
+                auto& blas = deformed ? inst_dxr.blas_deformed : inst_dxr.mesh->blas;
 
                 D3D12_RAYTRACING_INSTANCE_DESC tmp{};
-                (float3x4&)tmp.Transform = to_float3x4(inst->base->transform);
+                (float3x4&)tmp.Transform = to_float3x4(deformed ? float4x4::identity() : inst_dxr.base->transform);
                 tmp.InstanceID = i; // This value will be exposed to the shader via InstanceID()
                 tmp.InstanceMask = 0xFF;
                 tmp.InstanceContributionToHitGroupIndex = i;
@@ -763,7 +772,13 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
             rd.cmd_list_direct->ResourceBarrier(1, &uav_barrier);
         }
     }
-    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building acceleration structure end");
+    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building TLAS end");
+
+    // clear update flags here to avoid needless update if there are multiple renderers
+    for (auto& pinst_dxr : rd.mesh_instances) {
+        pinst_dxr->base->update_flags = 0;
+    }
+
 }
 
 
@@ -1087,8 +1102,8 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
     if (rd.render_target) {
         // copy content of render target to Unity side
         m_resource_translator->applyTexture(*rd.render_target);
-        rd.render_target = nullptr;
     }
+    std::swap(rd.mesh_instances, rd.mesh_instances_prev);
     rd.mesh_instances.clear();
 
     m_deformer->debugPrint();
@@ -1101,12 +1116,11 @@ void GfxContextDXR::releaseUnusedResources()
     auto erase_unused_records = [](auto& records, const char *message) {
         int num_erased = 0;
         for (auto it = records.begin(); it != records.end(); /**/) {
-            if (it->second->use_count == 0) {
+            if (it->second.use_count() == 1) {
                 records.erase(it++);
                 ++num_erased;
             }
             else {
-                it->second->use_count = 0;
                 ++it;
             }
         }

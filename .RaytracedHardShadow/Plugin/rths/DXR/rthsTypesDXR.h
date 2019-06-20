@@ -106,7 +106,6 @@ public:
     ID3D11Texture2DPtr temporary_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;
-    int use_count = 0;
 
     TextureDataDXR();
     ~TextureDataDXR();
@@ -123,7 +122,6 @@ public:
     ID3D11BufferPtr   temporary_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;
-    int use_count = 0;
 
     BufferDataDXR();
     ~BufferDataDXR();
@@ -183,7 +181,7 @@ public:
     DescriptorHandleDXR scene_data_handle;
     DescriptorHandleDXR render_target_handle;
 
-    std::vector<MeshInstanceDataDXRPtr> mesh_instances;
+    std::vector<MeshInstanceDataDXRPtr> mesh_instances, mesh_instances_prev;
     ID3D12ResourcePtr instance_desc;
     ID3D12ResourcePtr tlas_scratch;
     ID3D12ResourcePtr tlas;

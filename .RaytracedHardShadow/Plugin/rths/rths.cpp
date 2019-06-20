@@ -125,7 +125,6 @@ rthsAPI void rthsMeshInstanceSetBones(MeshInstanceData *self, const float4x4 *bo
         if (self->bones.size() == num_bones && !std::equal(bones, bones + num_bones, self->bones.data()))
             self->update_flags |= (int)UpdateFlag::Bone;
         self->bones.assign(bones, bones + num_bones);
-        self->transform = float4x4::identity();
     }
 }
 rthsAPI void rthsMeshInstanceSetBlendshapeWeights(MeshInstanceData *self, const float *bsw, int num_bsw)
