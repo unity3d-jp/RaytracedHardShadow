@@ -91,6 +91,18 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE m_hgpu{};
 };
 
+// thin wrapper for Windows' event
+class FenceEventDXR
+{
+public:
+    FenceEventDXR();
+    ~FenceEventDXR();
+    operator HANDLE() const;
+
+private:
+    HANDLE m_handle = nullptr;
+};
+
 
 class TextureDataDXR
 {
@@ -165,15 +177,57 @@ public:
     ID3D12ResourcePtr deformed_vertices;
     ID3D12ResourcePtr blas_deformed;
     ID3D12ResourcePtr blas_scratch;
-    uint32_t update_flags = -1;
+    bool is_updated = false;
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
+
+class TimestampDXR
+{
+public:
+    TimestampDXR(ID3D12DevicePtr device, int max_sample = 64);
+
+    bool valid() const;
+    void reset();
+    bool query(ID3D12GraphicsCommandList4Ptr cl, const char *message);
+    bool resolve(ID3D12GraphicsCommandList4Ptr cl);
+
+    std::vector<std::tuple<uint64_t, const char*>> getSamples();
+    void printElapsed(ID3D12CommandQueuePtr cq);
+
+private:
+    ID3D12QueryHeapPtr m_query_heap;
+    ID3D12ResourcePtr m_timestamp_buffer;
+    int m_max_sample = 0;
+    int m_sample_index=0;
+    std::vector<std::string> m_messages;
+};
+using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
+
+#ifdef rthsEnableTimestamp
+    #define TimestampInitialize(q, d) if(!q) { q = std::make_shared<TimestampDXR>(d); }
+    #define TimestampReset(q) q->reset()
+    #define TimestampQuery(q, cl, m) q->query(cl, m)
+    #define TimestampResolve(q, cl) q->resolve(cl)
+    #define TimestampPrint(q, cq) q->printElapsed(cq)
+#else rthsEnableTimestamp
+    #define TimestampInitialize(...)
+    #define TimestampReset(...)
+    #define TimestampQuery(...)
+    #define TimestampResolve(...)
+    #define TimestampPrint(...)
+#endif rthsEnableTimestamp
+
+#ifdef rthsEnableResourceName
+    #define DbgSetName(res, name) res->SetName(name)
+#else
+    #define DbgSetName(...)
+#endif
 
 class RenderDataDXR
 {
 public:
-    ID3D12CommandAllocatorPtr cmd_allocator_direct, cmd_allocator_immediate_copy;
-    ID3D12GraphicsCommandList4Ptr cmd_list_direct, cmd_list_immediate_copy;
+    ID3D12CommandAllocatorPtr cmd_allocator_direct, cmd_allocator_compute, cmd_allocator_immediate_copy;
+    ID3D12GraphicsCommandList4Ptr cmd_list_direct, cmd_list_compute, cmd_list_immediate_copy;
 
     ID3D12DescriptorHeapPtr desc_heap;
     DescriptorHandleDXR tlas_handle;
@@ -191,19 +245,12 @@ public:
     ID3D12ResourcePtr shader_table;
 
     uint64_t fence_value = 0;
+    FenceEventDXR fence_event;
     int render_flags = 0;
-};
 
-// thin wrapper for Windows' event
-class FenceEventDXR
-{
-public:
-    FenceEventDXR();
-    ~FenceEventDXR();
-    operator HANDLE() const;
-
-private:
-    HANDLE m_handle = nullptr;
+#ifdef rthsEnableTimestamp
+    TimestampDXRPtr timestamp;
+#endif // rthsEnableTimestamp
 };
 
 class CommandManagerDXR
@@ -233,48 +280,6 @@ private:
     uint64_t m_fence_value = 0;
     FenceEventDXR m_fence_event;
 };
-
-class TimestampDXR
-{
-public:
-    TimestampDXR(ID3D12DevicePtr device, int max_sample = 64);
-
-    bool valid() const;
-    void reset();
-    bool query(ID3D12GraphicsCommandList4Ptr cl, const char *message);
-    bool resolve(ID3D12GraphicsCommandList4Ptr cl);
-
-    std::vector<std::tuple<uint64_t, const char*>> getSamples();
-    void printElapsed(ID3D12CommandQueuePtr cq);
-
-private:
-    ID3D12QueryHeapPtr m_query_heap;
-    ID3D12ResourcePtr m_timestamp_buffer;
-    int m_max_sample = 0;
-    int m_sample_index=0;
-    std::vector<std::string> m_messages;
-};
-using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
-
-#ifdef rthsEnableTimestamp
-    #define TimestampInitialize(q, d) q = std::make_shared<TimestampDXR>(d)
-    #define TimestampReset(q) q->reset()
-    #define TimestampQuery(q, cl, m) q->query(cl, m)
-    #define TimestampResolve(q, cl) q->resolve(cl)
-    #define TimestampPrint(q, cq) q->printElapsed(cq)
-#else rthsEnableTimestamp
-    #define TimestampInitialize(...)
-    #define TimestampReset(...)
-    #define TimestampQuery(...)
-    #define TimestampResolve(...)
-    #define TimestampPrint(...)
-#endif rthsEnableTimestamp
-
-#ifdef rthsEnableResourceName
-    #define DbgSetName(res, name) res->SetName(name)
-#else
-    #define DbgSetName(...)
-#endif
 
 
 extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;

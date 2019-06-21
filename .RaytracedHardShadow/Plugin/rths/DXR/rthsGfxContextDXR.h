@@ -55,10 +55,8 @@ private:
     DeformerDXRPtr m_deformer;
 
     ID3D12Device5Ptr m_device;
-    ID3D12CommandQueuePtr m_cmd_queue_direct, m_cmd_queue_immediate_copy;
-
+    ID3D12CommandQueuePtr m_cmd_queue_direct, m_cmd_queue_compute, m_cmd_queue_immediate_copy;
     ID3D12FencePtr m_fence;
-    FenceEventDXR m_fence_event;
 
     ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_global_rootsig;
@@ -73,12 +71,6 @@ private:
     FrameEndCallback m_on_frame_end;
     MeshDataCallback m_on_mesh_delete;
     MeshInstanceDataCallback m_on_meshinstance_delete;
-
-    bool m_flushing = false;
-
-#ifdef rthsEnableTimestamp
-    TimestampDXRPtr m_timestamp;
-#endif // rthsEnableTimestamp
 };
 
 } // namespace rths

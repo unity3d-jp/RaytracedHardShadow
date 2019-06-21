@@ -51,29 +51,6 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
     : m_device(device)
 {
     {
-        {
-            D3D12_COMMAND_QUEUE_DESC desc{};
-            desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-            desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-            m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue));
-        }
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
-        m_cmd_list->Close();
-    }
-    {
-        {
-            D3D12_COMMAND_QUEUE_DESC desc{};
-            desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-            desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-            m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_compute));
-        }
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&m_cmd_allocator_compute));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_cmd_allocator_compute, nullptr, IID_PPV_ARGS(&m_cmd_list_compute));
-        m_cmd_list_compute->Close();
-    }
-
-    {
         const D3D12_DESCRIPTOR_RANGE ranges[] = {
                 { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 },
                 { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, 0 },
@@ -117,39 +94,31 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
             SetErrorLog("CreateComputePipelineState() failed\n");
         }
     }
-
-    TimestampInitialize(m_timestamp, m_device);
 }
 
 DeformerDXR::~DeformerDXR()
 {
 }
 
-bool DeformerDXR::prepare(int render_flags)
+bool DeformerDXR::prepare(RenderDataDXR& rd)
 {
-    m_clamp_blendshape_weights = (render_flags & (int)RenderFlag::ClampBlendShapeWights) != 0;
-
-    bool ret = true;
-    if (m_needs_execute_and_reset) {
-        m_needs_execute_and_reset = false;
-
-        if (FAILED(m_cmd_allocator->Reset()))
-            ret = false;
-        else if (FAILED(m_cmd_list->Reset(m_cmd_allocator, nullptr)))
-            ret = false;
-
-        if (FAILED(m_cmd_allocator_compute->Reset()))
-            ret = false;
-        else if (FAILED(m_cmd_list_compute->Reset(m_cmd_allocator_compute, m_pipeline_state)))
-            ret = false;
+    if (!rd.cmd_list_compute) {
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&rd.cmd_allocator_compute));
+        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, rd.cmd_allocator_compute, nullptr, IID_PPV_ARGS(&rd.cmd_list_compute));
+        rd.cmd_list_compute->Close();
     }
 
-    TimestampReset(m_timestamp);
-    TimestampQuery(m_timestamp, m_cmd_list_compute, "DeformerDXR: begin");
+    bool ret = true;
+    if (FAILED(rd.cmd_allocator_compute->Reset()))
+        ret = false;
+    else if (FAILED(rd.cmd_list_compute->Reset(rd.cmd_allocator_compute, m_pipeline_state)))
+        ret = false;
+
+    TimestampQuery(rd.timestamp, rd.cmd_list_compute, "DeformerDXR: begin");
     return ret;
 }
 
-bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
+bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
 {
     if (!m_rootsig_deform || !m_pipeline_state || !inst_dxr.mesh)
         return false;
@@ -164,6 +133,7 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
     auto& mesh = *inst_dxr.mesh->base;
     auto& mesh_dxr = *inst_dxr.mesh;
 
+    bool clamp_blendshape_weights = (rd.render_flags & (int)RenderFlag::ClampBlendShapeWights) != 0;
     int vertex_count = mesh.vertex_count;
     int blendshape_count = (int)inst.blendshape_weights.size();
     int bone_count = (int)inst.bones.size();
@@ -192,7 +162,6 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
         // deformed vertices
         inst_dxr.deformed_vertices = createBuffer(sizeof(float4) * vertex_count, kDefaultHeapProps, true);
     }
-    addResourceBarrier(inst_dxr.deformed_vertices, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     createUAV(hdst_vertices.hcpu, inst_dxr.deformed_vertices, vertex_count, sizeof(float4));
 
     // interpret source vertex buffer as just an array of float
@@ -262,7 +231,7 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
                 auto dst = (float*)dst_;
                 for (int bsi = 0; bsi < blendshape_count; ++bsi) {
                     float weight = inst.blendshape_weights[bsi];
-                    if (m_clamp_blendshape_weights)
+                    if (clamp_blendshape_weights)
                         weight = clamp(weight, 0.0f, mesh.blendshapes[bsi].frames.back().weight);
                     *dst++ = weight / 100.0f; // 0-100 -> 0.0-1.0;
                 }
@@ -340,62 +309,30 @@ bool DeformerDXR::deform(MeshInstanceDataDXR& inst_dxr)
     createCBV(hmesh_info.hcpu, mesh_dxr.mesh_info, mesh_info_size);
 
     {
-        m_cmd_list_compute->SetComputeRootSignature(m_rootsig_deform);
+        auto cl = rd.cmd_list_compute;
+        cl->SetComputeRootSignature(m_rootsig_deform);
 
         ID3D12DescriptorHeap* heaps[] = { inst_dxr.srvuav_heap };
-        m_cmd_list_compute->SetDescriptorHeaps(_countof(heaps), heaps);
-        m_cmd_list_compute->SetComputeRootDescriptorTable(0, hdst_vertices.hgpu);
-        m_cmd_list_compute->SetComputeRootDescriptorTable(1, hbase_vertices.hgpu);
-        m_cmd_list_compute->SetComputeRootDescriptorTable(2, hmesh_info.hgpu);
-        m_cmd_list_compute->Dispatch(mesh.vertex_count, 1, 1);
-
-        m_needs_execute_and_reset = true;
+        cl->SetDescriptorHeaps(_countof(heaps), heaps);
+        cl->SetComputeRootDescriptorTable(0, hdst_vertices.hgpu);
+        cl->SetComputeRootDescriptorTable(1, hbase_vertices.hgpu);
+        cl->SetComputeRootDescriptorTable(2, hmesh_info.hgpu);
+        cl->Dispatch(mesh.vertex_count, 1, 1);
     }
 
     return true;
 }
 
-uint64_t DeformerDXR::execute(ID3D12FencePtr fence, uint64_t fence_value)
+bool DeformerDXR::finish(RenderDataDXR& rd)
 {
-    TimestampQuery(m_timestamp, m_cmd_list_compute, "DeformerDXR: end");
-    TimestampResolve(m_timestamp, m_cmd_list_compute);
-    if (!m_needs_execute_and_reset || FAILED(m_cmd_list->Close()) || FAILED(m_cmd_list_compute->Close()))
-        return 0;
-    {
-        ID3D12CommandList* cmd_list[] = { m_cmd_list.GetInterfacePtr() };
-        m_cmd_queue->ExecuteCommandLists(_countof(cmd_list), cmd_list);
-        m_cmd_queue->Signal(fence, fence_value);
-        m_cmd_queue_compute->Wait(fence, fence_value);
+    auto cl = rd.cmd_list_compute;
+    TimestampQuery(rd.timestamp, cl, "DeformerDXR: end");
+    if (SUCCEEDED(cl->Close())) {
+        return true;
     }
-    ++fence_value;
-    {
-        ID3D12CommandList* cmd_list[] = { m_cmd_list_compute.GetInterfacePtr() };
-        m_cmd_queue_compute->ExecuteCommandLists(_countof(cmd_list), cmd_list);
-        m_cmd_queue_compute->Signal(fence, fence_value);
-    }
-    return fence_value;
+    return false;
 }
 
-void DeformerDXR::onFinish()
-{
-}
-
-void DeformerDXR::debugPrint()
-{
-    TimestampPrint(m_timestamp, m_cmd_queue_compute);
-}
-
-
-void DeformerDXR::addResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
-{
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = resource;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = state_before;
-    barrier.Transition.StateAfter = state_after;
-    m_cmd_list->ResourceBarrier(1, &barrier);
-}
 
 void DeformerDXR::createSRV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int num_elements, int stride)
 {
@@ -445,9 +382,10 @@ ID3D12ResourcePtr DeformerDXR::createBuffer(int size, const D3D12_HEAP_PROPERTIE
     desc.SampleDesc.Quality = 0;
     desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     desc.Flags = uav ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
+    D3D12_RESOURCE_STATES state = uav ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : D3D12_RESOURCE_STATE_GENERIC_READ;
 
     ID3D12ResourcePtr ret;
-    auto hr = m_device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&ret));
+    auto hr = m_device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, state, nullptr, IID_PPV_ARGS(&ret));
     if (FAILED(hr)) {
         SetErrorLog("CreateCommittedResource() failed\n");
     }

@@ -162,10 +162,10 @@ void MarkFrameEnd()
 void RenderAll()
 {
     MarkFrameBegin();
-    for (auto renderer : g_renderers) {
+    for (auto renderer : g_renderers)
         renderer->render();
+    for (auto renderer : g_renderers)
         renderer->finish();
-    }
     MarkFrameEnd();
 }
 

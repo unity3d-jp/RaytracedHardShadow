@@ -244,15 +244,18 @@ bool GfxContextDXR::initializeDevice()
     // deformer
     m_deformer = std::make_shared<DeformerDXR>(m_device);
 
-    // command queue for raytrace
     {
         D3D12_COMMAND_QUEUE_DESC desc{};
         desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
         desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_direct));
     }
-
-    // command queue for read back
+    {
+        D3D12_COMMAND_QUEUE_DESC desc{};
+        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_compute));
+    }
     {
         D3D12_COMMAND_QUEUE_DESC desc{};
         desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -383,21 +386,20 @@ bool GfxContextDXR::initializeDevice()
         }
     }
 
-    TimestampInitialize(m_timestamp, m_device);
-
     return true;
 }
 
 void GfxContextDXR::frameBegin()
 {
     for (auto& kvp : m_meshinstance_records) {
-        kvp.second->update_flags = -1;
+        kvp.second->is_updated = false;
     }
 }
 
 void GfxContextDXR::prepare(RenderDataDXR& rd)
 {
-    TimestampReset(m_timestamp);
+    TimestampInitialize(rd.timestamp, m_device);
+    TimestampReset(rd.timestamp);
 
     if (!rd.cmd_list_direct) {
         m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&rd.cmd_allocator_direct));
@@ -513,7 +515,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
     bool gpu_skinning = (rd.render_flags & (int)RenderFlag::GPUSkinning) != 0;
     int deform_count = 0;
     if (gpu_skinning)
-        m_deformer->prepare(rd.render_flags);
+        m_deformer->prepare(rd);
     rd.mesh_instances.clear();
 
     bool needs_build_tlas = false;
@@ -582,24 +584,28 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
             inst_dxr->mesh = mesh_dxr;
         }
         if (gpu_skinning) {
-            if (m_deformer->deform(*inst_dxr))
+            if (m_deformer->deform(rd, *inst_dxr))
                 ++deform_count;
         }
         rd.mesh_instances.push_back(inst_dxr);
     }
 
-    if (deform_count > 0) {
-        // execute deform
+    if (gpu_skinning) {
+        m_deformer->finish(rd);
+
         auto fence_value = m_resource_translator->inclementFenceValue();
-        fence_value = m_deformer->execute(m_fence, fence_value);
-        if (fence_value) {
-            // add wait command because building acceleration structure depends on deform
-            m_cmd_queue_direct->Wait(m_fence, fence_value);
-            m_resource_translator->setFenceValue(fence_value);
-        }
+        auto cl = rd.cmd_list_compute;
+
+        ID3D12CommandList* cmd_list[] = { cl.GetInterfacePtr() };
+        m_cmd_queue_compute->ExecuteCommandLists(_countof(cmd_list), cmd_list);
+        m_cmd_queue_compute->Signal(m_fence, fence_value);
+
+        // add wait command because building acceleration structure depends on deform
+        m_cmd_queue_direct->Wait(m_fence, fence_value);
+        m_resource_translator->setFenceValue(fence_value);
     }
 
-    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building BLAS begin");
+    TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: building BLAS begin");
 
     // build bottom level acceleration structures
     for (auto & pinst_dxr : rd.mesh_instances) {
@@ -607,6 +613,12 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
         auto& mesh_dxr = *inst_dxr.mesh;
         auto& inst = *inst_dxr.base;
         auto& mesh = *mesh_dxr.base;
+
+        // note:
+        // a instance can be processed multiple times in a frame (e.g. multiple renderers in the scene)
+        // so, we need to make sure a BLAS is updated *once* in a frame, but TLAS in all renderers need to be updated if there is any updated object.
+        // inst.update_flags indicates the object is updated, and is cleared immediately after processed.
+        // inst_dxr.blas_updated keeps if blas is updated in the frame.
 
         if (gpu_skinning && inst_dxr.deformed_vertices) {
             if (!inst_dxr.blas_deformed || inst.update_flags) {
@@ -653,8 +665,10 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
                 as_desc.DestAccelerationStructureData = inst_dxr.blas_deformed->GetGPUVirtualAddress();
                 as_desc.ScratchAccelerationStructureData = inst_dxr.blas_scratch->GetGPUVirtualAddress();
 
+                addResourceBarrier(rd.cmd_list_direct, inst_dxr.deformed_vertices, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 rd.cmd_list_direct->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
-                needs_build_tlas = true;
+                addResourceBarrier(rd.cmd_list_direct, inst_dxr.deformed_vertices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                inst_dxr.is_updated = true;
             }
         }
         else {
@@ -695,14 +709,18 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
                 as_desc.ScratchAccelerationStructureData = mesh_dxr.blas_scratch->GetGPUVirtualAddress();
 
                 rd.cmd_list_direct->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+                inst_dxr.is_updated = true;
             }
-            if (inst.update_flags)
-                needs_build_tlas = true;
+            else if (inst.update_flags)
+                inst_dxr.is_updated = true;
         }
+        if (inst_dxr.is_updated)
+            needs_build_tlas = true;
+        inst.update_flags = 0;
     }
-    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building BLAS end");
+    TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: building BLAS end");
 
-    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building TLAS begin");
+    TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: building TLAS begin");
 
     if (!needs_build_tlas)
         needs_build_tlas = rd.mesh_instances != rd.mesh_instances_prev;
@@ -804,13 +822,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
             rd.cmd_list_direct->ResourceBarrier(1, &uav_barrier);
         }
     }
-    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: building TLAS end");
-
-    // clear update flags here to avoid needless update if there are multiple renderers
-    for (auto& pinst_dxr : rd.mesh_instances) {
-        pinst_dxr->base->update_flags = 0;
-    }
-
+    TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: building TLAS end");
 }
 
 
@@ -872,7 +884,6 @@ uint64_t GfxContextDXR::submitCommandList(ID3D12GraphicsCommandList4Ptr cl)
 
     auto fence_value = m_resource_translator->inclementFenceValue();
     m_cmd_queue_direct->Signal(m_fence, fence_value);
-    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
     return fence_value;
 }
 
@@ -987,8 +998,8 @@ void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd)
 
     auto fence_value = m_resource_translator->inclementFenceValue();
     m_cmd_queue_immediate_copy->Signal(m_fence, fence_value);
-    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
-    ::WaitForSingleObject(m_fence_event, INFINITE);
+    m_fence->SetEventOnCompletion(fence_value, rd.fence_event);
+    ::WaitForSingleObject(rd.fence_event, INFINITE);
 
     allocator->Reset();
     command_list->Reset(allocator, nullptr);
@@ -1001,12 +1012,12 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
         SetErrorLog("GfxContext::flush(): render target is null\n");
         return 0;
     }
-    if (m_flushing) {
+    if (rd.fence_value != 0) {
         SetErrorLog("GfxContext::flush(): called before finish()\n");
         return 0;
     }
 
-    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace begin");
+    TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace begin");
 
     size_t shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
     shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
@@ -1103,21 +1114,22 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
     }
 
     addResourceBarrier(rd.cmd_list_direct, rd.render_target->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
-    TimestampQuery(m_timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace end");
-    TimestampResolve(m_timestamp, rd.cmd_list_direct);
+    TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace end");
+    TimestampResolve(rd.timestamp, rd.cmd_list_direct);
 
     rd.fence_value = submitCommandList(rd.cmd_list_direct);
-    m_flushing = true;
+    m_fence->SetEventOnCompletion(rd.fence_value, rd.fence_event);
     return rd.fence_value;
 }
 
 void GfxContextDXR::finish(RenderDataDXR& rd)
 {
-    if (m_flushing) {
-        ::WaitForSingleObject(m_fence_event, INFINITE);
-        m_flushing = false;
+    if (rd.fence_value == 0) {
+        return;
     }
-    m_deformer->onFinish();
+
+    ::WaitForSingleObject(rd.fence_event, INFINITE);
+    rd.fence_value = 0;
 
 #ifdef rthsEnableRenderTargetValidation
     {
@@ -1135,8 +1147,7 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
     std::swap(rd.mesh_instances, rd.mesh_instances_prev);
     rd.mesh_instances.clear();
 
-    m_deformer->debugPrint();
-    TimestampPrint(m_timestamp, m_cmd_queue_direct);
+    TimestampPrint(rd.timestamp, m_cmd_queue_direct);
 }
 
 void GfxContextDXR::frameEnd()
