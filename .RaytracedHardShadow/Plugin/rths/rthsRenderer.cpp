@@ -4,6 +4,28 @@
 
 namespace rths {
 
+static std::vector<FrameBeginCallback> g_on_frame_begin;
+static std::vector<FrameEndCallback> g_on_frame_end;
+
+void IRenderer::addOnFrameBegin(const FrameBeginCallback& cb)
+{
+    add_callback(g_on_frame_begin, cb);
+}
+void IRenderer::addOnFrameEnd(const FrameEndCallback& cb)
+{
+    add_callback(g_on_frame_end, cb);
+}
+void IRenderer::removeOnFrameBegin(const FrameBeginCallback& cb)
+{
+    erase_callback(g_on_frame_begin, cb);
+}
+
+void IRenderer::removeOnFrameEnd(const FrameEndCallback& cb)
+{
+    erase_callback(g_on_frame_end, cb);
+}
+
+
 static std::vector<RendererBase*> g_renderers;
 
 RendererBase::RendererBase()
@@ -127,15 +149,16 @@ namespace rths {
 
 void RenderAll()
 {
+    for (auto& cb : g_on_frame_begin)
+        cb();
+
     for (auto renderer : g_renderers) {
         renderer->render();
         renderer->finish();
     }
 
-#ifdef _WIN32
-    if(auto ctx = GfxContextDXR::getInstance())
-        ctx->releaseUnusedResources();
-#endif
+    for (auto& cb : g_on_frame_end)
+        cb();
 }
 
 } // namespace rths

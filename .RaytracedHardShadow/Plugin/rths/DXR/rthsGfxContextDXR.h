@@ -1,5 +1,6 @@
 #pragma once
 #ifdef _WIN32
+#include "rthsRenderer.h"
 #include "rthsTypesDXR.h"
 #include "rthsResourceTranslatorDXR.h"
 #include "rthsDeformerDXR.h"
@@ -26,7 +27,11 @@ public:
     void setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>& instances);
     uint64_t flush(RenderDataDXR& rd);
     void finish(RenderDataDXR& rd);
-    void releaseUnusedResources();
+
+    void onFrameBegin();
+    void onFrameEnd();
+    void onMeshDelete(MeshData *mesh);
+    void onMeshInstanceDelete(MeshInstanceData *inst);
 
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     ID3D12ResourcePtr createTexture(int width, int height, DXGI_FORMAT format);
@@ -71,6 +76,8 @@ private:
     std::map<MeshData*, MeshDataDXRPtr> m_mesh_records;
     std::map<MeshInstanceData*, MeshInstanceDataDXRPtr> m_meshinstance_records;
 
+    FrameBeginCallback m_on_frame_begin;
+    FrameEndCallback m_on_frame_end;
     MeshDataCallback m_on_mesh_delete;
     MeshInstanceDataCallback m_on_meshinstance_delete;
 

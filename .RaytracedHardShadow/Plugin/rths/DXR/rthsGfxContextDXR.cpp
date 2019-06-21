@@ -77,19 +77,26 @@ GfxContextDXR::GfxContextDXR()
     if (!initializeDevice())
         return;
 
-    m_on_mesh_delete = [this](MeshData *mesh) {
-        m_mesh_records.erase(mesh);
-    };
+    // setup callbacks
+
+    m_on_frame_begin = [this]() { onFrameBegin(); };
+    IRenderer::addOnFrameBegin(m_on_frame_begin);
+
+    m_on_frame_end = [this]() { onFrameEnd(); };
+    IRenderer::addOnFrameEnd(m_on_frame_end);
+
+    m_on_mesh_delete = [this](MeshData *mesh) { onMeshDelete(mesh); };
     MeshData::addOnDelete(m_on_mesh_delete);
 
-    m_on_meshinstance_delete = [this](MeshInstanceData *mesh) {
-        m_meshinstance_records.erase(mesh);
-    };
+    m_on_meshinstance_delete = [this](MeshInstanceData *isnt) { onMeshInstanceDelete(isnt); };
     MeshInstanceData::addOnDelete(m_on_meshinstance_delete);
 }
 
 GfxContextDXR::~GfxContextDXR()
 {
+    // remove callbacks
+    IRenderer::removeOnFrameBegin(m_on_frame_begin);
+    IRenderer::removeOnFrameEnd(m_on_frame_end);
     MeshData::removeOnDelete(m_on_mesh_delete);
     MeshInstanceData::removeOnDelete(m_on_meshinstance_delete);
 }
@@ -185,30 +192,39 @@ bool GfxContextDXR::initializeDevice()
         IDXGIFactory4Ptr dxgi_factory;
         ::CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory));
 
-        // Find the HW adapter
-        IDXGIAdapter1Ptr adapter;
-        for (uint32_t i = 0; dxgi_factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++) {
-            DXGI_ADAPTER_DESC1 desc;
-            adapter->GetDesc1(&desc);
+        // find DXR capable adapter and create device
+        auto create_device = [this, dxgi_factory](bool software) -> ID3D12Device5Ptr {
+            IDXGIAdapter1Ptr adapter;
+            for (uint32_t i = 0; dxgi_factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++) {
+                DXGI_ADAPTER_DESC1 desc;
+                adapter->GetDesc1(&desc);
 
-            // Skip SW adapters
-            if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-                continue;
+                if (!software && (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE))
+                    continue;
+                else if (software && (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0)
+                    continue;
 
-            // Create the device
-            ID3D12Device5Ptr device;
-            HRESULT hr = ::D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
-            if (FAILED(hr)) {
-                continue;
+                // Create the device
+                ID3D12Device5Ptr device;
+                HRESULT hr = ::D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device));
+                if (SUCCEEDED(hr)) {
+                    D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5{};
+                    hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
+                    if (SUCCEEDED(hr) && features5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
+                        return device;
+                    }
+                }
             }
+            return nullptr;
+        };
 
-            D3D12_FEATURE_DATA_D3D12_OPTIONS5 features5{};
-            hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &features5, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5));
-            if (SUCCEEDED(hr) && features5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED) {
-                m_device = device;
-                break;
-            }
-        }
+#ifdef rthsForceSoftwareDevice
+        m_device = create_device(true);
+#else // rthsForceSoftwareDevice
+        m_device = create_device(false);
+        if(!m_device)
+            m_device = create_device(true);
+#endif // rthsForceSoftwareDevice
     }
 
     // failed to create device (DXR is not supported)
@@ -382,12 +398,11 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
 {
     TimestampReset(m_timestamp);
 
-    if (!rd.cmd_list_direct) {
+    if (!rd.cmd_list_direct)
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator_direct, nullptr, IID_PPV_ARGS(&rd.cmd_list_direct));
-    }
-    if (!rd.cmd_list_copy) {
+    if (!rd.cmd_list_copy)
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_cmd_allocator_copy, nullptr, IID_PPV_ARGS(&rd.cmd_list_copy));
-    }
+    rd.fence_value = 0;
 
     // desc heap
     if (!rd.desc_heap) {
@@ -1110,7 +1125,15 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
     TimestampPrint(m_timestamp, m_cmd_queue_direct);
 }
 
-void GfxContextDXR::releaseUnusedResources()
+
+void GfxContextDXR::onFrameBegin()
+{
+    for (auto& kvp : m_meshinstance_records) {
+        kvp.second->update_flags = -1;
+    }
+}
+
+void GfxContextDXR::onFrameEnd()
 {
     // erase unused texture / buffer / mesh data
     auto erase_unused_records = [](auto& records, const char *message) {
@@ -1130,6 +1153,16 @@ void GfxContextDXR::releaseUnusedResources()
     };
     erase_unused_records(m_texture_records, "GfxContextDXR::releaseUnusedResources(): erased %d texture records\n");
     erase_unused_records(m_buffer_records, "GfxContextDXR::releaseUnusedResources(): erased %d buffer records\n");
+}
+
+void GfxContextDXR::onMeshDelete(MeshData *mesh)
+{
+    m_mesh_records.erase(mesh);
+}
+
+void GfxContextDXR::onMeshInstanceDelete(MeshInstanceData *mesh)
+{
+    m_meshinstance_records.erase(mesh);
 }
 
 } // namespace rths

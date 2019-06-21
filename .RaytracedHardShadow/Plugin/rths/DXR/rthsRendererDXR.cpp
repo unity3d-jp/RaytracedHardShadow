@@ -12,6 +12,7 @@ public:
     RendererDXR();
     ~RendererDXR() override;
 
+    bool valid() const override;
     void render() override;
     void finish() override;
 
@@ -30,12 +31,20 @@ RendererDXR::~RendererDXR()
     GfxContextDXR::finalizeInstance();
 }
 
-void RendererDXR::render()
+bool RendererDXR::valid() const
 {
     auto ctx = GfxContextDXR::getInstance();
-    if (!ctx->validateDevice()) {
+    if (!ctx || !ctx->validateDevice())
+        return false;
+    return true;
+}
+
+void RendererDXR::render()
+{
+    if (!valid())
         return;
-    }
+
+    auto ctx = GfxContextDXR::getInstance();
     ctx->prepare(m_render_data);
     ctx->setSceneData(m_render_data, m_scene_data);
     ctx->setRenderTarget(m_render_data, m_render_target);
@@ -45,6 +54,9 @@ void RendererDXR::render()
 
 void RendererDXR::finish()
 {
+    if (!valid())
+        return;
+
     auto ctx = GfxContextDXR::getInstance();
     ctx->finish(m_render_data);
     clearMeshInstances();
@@ -52,7 +64,12 @@ void RendererDXR::finish()
 
 IRenderer* CreateRendererDXR()
 {
-    return new RendererDXR();
+    auto ret = new RendererDXR();
+    if (!ret->valid()) {
+        delete ret;
+        ret = nullptr;
+    }
+    return ret;
 }
 
 } // namespace rths

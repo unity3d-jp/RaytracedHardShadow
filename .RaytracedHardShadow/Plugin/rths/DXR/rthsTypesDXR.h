@@ -19,11 +19,9 @@
 
     #define rthsEnableResourceName
 
-    //// VB & IB validation
     //#define rthsEnableBufferValidation
-
-    //// render target validation
     //#define rthsEnableRenderTargetValidation
+    //#define rthsForceSoftwareDevice
 #endif
 
 
@@ -167,6 +165,7 @@ public:
     ID3D12ResourcePtr deformed_vertices;
     ID3D12ResourcePtr blas_deformed;
     ID3D12ResourcePtr blas_scratch;
+    uint32_t update_flags = -1;
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 

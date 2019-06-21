@@ -3,10 +3,14 @@
 
 namespace rths {
 
+using FrameBeginCallback = std::function<void()>;
+using FrameEndCallback = std::function<void()>;
+
 class IRenderer
 {
 public:
     virtual ~IRenderer() {}
+    virtual bool valid() const = 0;
 
     virtual void beginScene() = 0;
     virtual void endScene() = 0;
@@ -24,6 +28,11 @@ public:
     virtual void addPointLight(const float4x4& trans, float range) = 0;
     virtual void addReversePointLight(const float4x4& trans, float range) = 0;
     virtual void addMesh(MeshInstanceData *mesh) = 0;
+
+    static void addOnFrameBegin(const FrameBeginCallback& cb);
+    static void addOnFrameEnd(const FrameEndCallback& cb);
+    static void removeOnFrameBegin(const FrameBeginCallback& cb);
+    static void removeOnFrameEnd(const FrameEndCallback& cb);
 };
 
 
