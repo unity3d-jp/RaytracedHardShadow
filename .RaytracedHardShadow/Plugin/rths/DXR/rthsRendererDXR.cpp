@@ -13,8 +13,8 @@ public:
     ~RendererDXR() override;
 
     bool valid() const override;
-    void render() override;
-    void finish() override;
+    void render() override; // called from render thread
+    void finish() override; // called from render thread
 
 private:
     RenderDataDXR m_render_data;

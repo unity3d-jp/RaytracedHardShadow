@@ -172,8 +172,8 @@ using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 class RenderDataDXR
 {
 public:
-    ID3D12GraphicsCommandList4Ptr cmd_list_direct;
-    ID3D12GraphicsCommandList4Ptr cmd_list_copy;
+    ID3D12CommandAllocatorPtr cmd_allocator_direct, cmd_allocator_immediate_copy;
+    ID3D12GraphicsCommandList4Ptr cmd_list_direct, cmd_list_immediate_copy;
 
     ID3D12DescriptorHeapPtr desc_heap;
     DescriptorHandleDXR tlas_handle;
@@ -181,6 +181,7 @@ public:
     DescriptorHandleDXR render_target_handle;
 
     std::vector<MeshInstanceDataDXRPtr> mesh_instances, mesh_instances_prev;
+    SceneData scene_data_prev{};
     ID3D12ResourcePtr instance_desc;
     ID3D12ResourcePtr tlas_scratch;
     ID3D12ResourcePtr tlas;

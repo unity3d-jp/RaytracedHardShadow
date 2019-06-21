@@ -21,15 +21,15 @@ public:
     ID3D12Device5Ptr getDevice();
 
     bool initializeDevice();
+    void frameBegin();
     void prepare(RenderDataDXR& rd);
     void setSceneData(RenderDataDXR& rd, SceneData& data);
     void setRenderTarget(RenderDataDXR& rd, TextureData& rt);
     void setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>& instances);
     uint64_t flush(RenderDataDXR& rd);
     void finish(RenderDataDXR& rd);
+    void frameEnd();
 
-    void onFrameBegin();
-    void onFrameEnd();
     void onMeshDelete(MeshData *mesh);
     void onMeshInstanceDelete(MeshInstanceData *inst);
 
@@ -38,11 +38,11 @@ public:
 
     void addResourceBarrier(ID3D12GraphicsCommandList4Ptr cl, ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
     uint64_t submitCommandList(ID3D12GraphicsCommandList4Ptr cl);
-    bool readbackBuffer(ID3D12GraphicsCommandList4Ptr cl, void *dst, ID3D12Resource *src, size_t size);
-    bool uploadBuffer(ID3D12GraphicsCommandList4Ptr cl, ID3D12Resource *dst, const void *src, size_t size);
-    bool readbackTexture(ID3D12GraphicsCommandList4Ptr cl, void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride);
-    bool uploadTexture(ID3D12GraphicsCommandList4Ptr cl, ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride);
-    void executeAndWaitCopy(ID3D12GraphicsCommandList4Ptr cl);
+    bool readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t size);
+    bool uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t size);
+    bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride);
+    bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride);
+    void executeImmediateCopy(RenderDataDXR& rd);
 
 private:
     friend std::unique_ptr<GfxContextDXR> std::make_unique<GfxContextDXR>();
@@ -55,14 +55,7 @@ private:
     DeformerDXRPtr m_deformer;
 
     ID3D12Device5Ptr m_device;
-
-    // command list for raytrace
-    ID3D12CommandAllocatorPtr m_cmd_allocator_direct;
-    ID3D12CommandQueuePtr m_cmd_queue_direct;
-
-    // command list for copy resources
-    ID3D12CommandAllocatorPtr m_cmd_allocator_copy;
-    ID3D12CommandQueuePtr m_cmd_queue_copy;
+    ID3D12CommandQueuePtr m_cmd_queue_direct, m_cmd_queue_immediate_copy;
 
     ID3D12FencePtr m_fence;
     FenceEventDXR m_fence_event;

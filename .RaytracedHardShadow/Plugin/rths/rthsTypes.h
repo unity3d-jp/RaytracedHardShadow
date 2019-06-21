@@ -181,6 +181,9 @@ struct SceneData
     float pad2[2];
 
     LightData lights[kMaxLights];
+
+    bool operator==(SceneData& v) const { return std::memcmp(this, &v, sizeof(*this)) == 0; }
+    bool operator!=(SceneData& v) const { return !(*this == v); }
 };
 
 using GPUResourcePtr = void*;

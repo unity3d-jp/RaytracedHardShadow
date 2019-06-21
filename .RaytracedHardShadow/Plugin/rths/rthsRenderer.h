@@ -14,8 +14,6 @@ public:
 
     virtual void beginScene() = 0;
     virtual void endScene() = 0;
-    virtual void render() = 0;
-    virtual void finish() = 0;
 
     virtual void setRaytraceFlags(int flags) = 0;
     virtual void setShadowRayOffset(float v) = 0;
@@ -28,6 +26,9 @@ public:
     virtual void addPointLight(const float4x4& trans, float range) = 0;
     virtual void addReversePointLight(const float4x4& trans, float range) = 0;
     virtual void addMesh(MeshInstanceData *mesh) = 0;
+
+    virtual void render() = 0; // called from render thread
+    virtual void finish() = 0; // called from render thread
 
     static void addOnFrameBegin(const FrameBeginCallback& cb);
     static void addOnFrameEnd(const FrameEndCallback& cb);
@@ -66,6 +67,9 @@ protected:
 };
 
 IRenderer* CreateRendererDXR();
+
+void MarkFrameBegin();
+void MarkFrameEnd();
 void RenderAll();
 
 } // namespace rths

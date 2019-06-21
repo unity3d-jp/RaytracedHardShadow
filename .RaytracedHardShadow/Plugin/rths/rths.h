@@ -81,6 +81,10 @@ rthsAPI void rthsAddReversePointLight(rths::IRenderer *self, rths::float4x4 tran
 rthsAPI void rthsAddMesh(rths::IRenderer *self, rths::MeshInstanceData *mesh);
 rthsAPI void rthsRender(rths::IRenderer *self);
 rthsAPI void rthsFinish(rths::IRenderer *self);
+rthsAPI void rthsMarkFrameBegin();
+rthsAPI void rthsMarkFrameEnd();
+
+// no need to call rthsMarkFrameBegin/End when use this
 rthsAPI void rthsRenderAll();
 
 #ifdef _WIN32

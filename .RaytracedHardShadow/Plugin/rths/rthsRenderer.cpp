@@ -147,18 +147,26 @@ void RendererBase::clearMeshInstances()
 
 namespace rths {
 
-void RenderAll()
+void MarkFrameBegin()
 {
     for (auto& cb : g_on_frame_begin)
         cb();
+}
 
+void MarkFrameEnd()
+{
+    for (auto& cb : g_on_frame_end)
+        cb();
+}
+
+void RenderAll()
+{
+    MarkFrameBegin();
     for (auto renderer : g_renderers) {
         renderer->render();
         renderer->finish();
     }
-
-    for (auto& cb : g_on_frame_end)
-        cb();
+    MarkFrameEnd();
 }
 
 } // namespace rths

@@ -257,6 +257,15 @@ rthsAPI void rthsFinish(IRenderer *self)
     self->finish();
 }
 
+rthsAPI void rthsMarkFrameBegin()
+{
+    rths::MarkFrameBegin();
+}
+rthsAPI void rthsMarkFrameEnd()
+{
+    rths::MarkFrameEnd();
+}
+
 rthsAPI void rthsRenderAll()
 {
     rths::RenderAll();
