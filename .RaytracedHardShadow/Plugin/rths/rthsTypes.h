@@ -234,8 +234,6 @@ struct MeshData
     SkinData skin;
     std::vector<BlendshapeData> blendshapes;
 
-    static void addOnDelete(const MeshDataCallback& cb);
-    static void removeOnDelete(const MeshDataCallback& cb);
     MeshData();
     ~MeshData();
 };

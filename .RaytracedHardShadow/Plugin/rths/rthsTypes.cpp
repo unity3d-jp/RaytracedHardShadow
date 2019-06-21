@@ -105,17 +105,9 @@ float4x4 invert(const float4x4& x)
     return s;
 }
 
-static std::vector<MeshDataCallback> g_on_mesh_delete;
 
-void MeshData::addOnDelete(const MeshDataCallback& cb)
-{
-    add_callback(g_on_mesh_delete, cb);
-}
-
-void MeshData::removeOnDelete(const MeshDataCallback& cb)
-{
-    erase_callback(g_on_mesh_delete, cb);
-}
+void CallOnMeshDelete(MeshData *mesh);
+void CallOnMeshInstanceDelete(MeshInstanceData *inst);
 
 MeshData::MeshData()
 {
@@ -123,20 +115,7 @@ MeshData::MeshData()
 
 MeshData::~MeshData()
 {
-    for (auto& cb : g_on_mesh_delete)
-        cb(this);
-}
-
-static std::vector<MeshInstanceDataCallback> g_on_meshinstance_delete;
-
-void MeshInstanceData::addOnDelete(const MeshInstanceDataCallback& cb)
-{
-    add_callback(g_on_meshinstance_delete, cb);
-}
-
-void MeshInstanceData::removeOnDelete(const MeshInstanceDataCallback& cb)
-{
-    erase_callback(g_on_meshinstance_delete, cb);
+    CallOnMeshDelete(this);
 }
 
 MeshInstanceData::MeshInstanceData()
@@ -145,8 +124,7 @@ MeshInstanceData::MeshInstanceData()
 
 MeshInstanceData::~MeshInstanceData()
 {
-    for (auto& cb : g_on_meshinstance_delete)
-        cb(this);
+    CallOnMeshInstanceDelete(this);
 }
 
 } // namespace rths 

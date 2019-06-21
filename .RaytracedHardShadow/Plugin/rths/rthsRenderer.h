@@ -6,6 +6,19 @@ namespace rths {
 using FrameBeginCallback = std::function<void()>;
 using FrameEndCallback = std::function<void()>;
 
+class ISceneCallback
+{
+public:
+    ISceneCallback();
+    virtual ~ISceneCallback();
+
+    virtual void frameBegin() = 0;
+    virtual void frameEnd() = 0;
+
+    virtual void onMeshDelete(MeshData *mesh) = 0;
+    virtual void onMeshInstanceDelete(MeshInstanceData *inst) = 0;
+};
+
 class IRenderer
 {
 public:
@@ -29,11 +42,6 @@ public:
 
     virtual void render() = 0; // called from render thread
     virtual void finish() = 0; // called from render thread
-
-    static void addOnFrameBegin(const FrameBeginCallback& cb);
-    static void addOnFrameEnd(const FrameEndCallback& cb);
-    static void removeOnFrameBegin(const FrameBeginCallback& cb);
-    static void removeOnFrameEnd(const FrameEndCallback& cb);
 };
 
 

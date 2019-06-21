@@ -4,25 +4,28 @@
 
 namespace rths {
 
-static std::vector<FrameBeginCallback> g_on_frame_begin;
-static std::vector<FrameEndCallback> g_on_frame_end;
+static std::vector<ISceneCallback*> g_scene_callbacks;
 
-void IRenderer::addOnFrameBegin(const FrameBeginCallback& cb)
+void CallOnMeshDelete(MeshData *mesh)
 {
-    add_callback(g_on_frame_begin, cb);
-}
-void IRenderer::addOnFrameEnd(const FrameEndCallback& cb)
-{
-    add_callback(g_on_frame_end, cb);
-}
-void IRenderer::removeOnFrameBegin(const FrameBeginCallback& cb)
-{
-    erase_callback(g_on_frame_begin, cb);
+    for (auto& cb : g_scene_callbacks)
+        cb->onMeshDelete(mesh);
 }
 
-void IRenderer::removeOnFrameEnd(const FrameEndCallback& cb)
+void CallOnMeshInstanceDelete(MeshInstanceData *inst)
 {
-    erase_callback(g_on_frame_end, cb);
+    for (auto& cb : g_scene_callbacks)
+        cb->onMeshInstanceDelete(inst);
+}
+
+ISceneCallback::ISceneCallback()
+{
+    g_scene_callbacks.push_back(this);
+}
+
+ISceneCallback::~ISceneCallback()
+{
+    g_scene_callbacks.erase(std::find(g_scene_callbacks.begin(), g_scene_callbacks.end(), this));
 }
 
 
@@ -149,14 +152,14 @@ namespace rths {
 
 void MarkFrameBegin()
 {
-    for (auto& cb : g_on_frame_begin)
-        cb();
+    for (auto *cb : g_scene_callbacks)
+        cb->frameBegin();
 }
 
 void MarkFrameEnd()
 {
-    for (auto& cb : g_on_frame_end)
-        cb();
+    for (auto& cb : g_scene_callbacks)
+        cb->frameEnd();
 }
 
 void RenderAll()

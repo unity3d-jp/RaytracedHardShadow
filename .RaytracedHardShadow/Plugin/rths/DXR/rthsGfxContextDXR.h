@@ -9,7 +9,7 @@
 
 namespace rths {
 
-class GfxContextDXR
+class GfxContextDXR : public ISceneCallback
 {
 public:
     static bool initializeInstance();
@@ -21,17 +21,17 @@ public:
     ID3D12Device5Ptr getDevice();
 
     bool initializeDevice();
-    void frameBegin();
+    void frameBegin() override;
     void prepare(RenderDataDXR& rd);
     void setSceneData(RenderDataDXR& rd, SceneData& data);
     void setRenderTarget(RenderDataDXR& rd, TextureData& rt);
     void setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>& instances);
     uint64_t flush(RenderDataDXR& rd);
     void finish(RenderDataDXR& rd);
-    void frameEnd();
+    void frameEnd() override;
 
-    void onMeshDelete(MeshData *mesh);
-    void onMeshInstanceDelete(MeshInstanceData *inst);
+    void onMeshDelete(MeshData *mesh) override;
+    void onMeshInstanceDelete(MeshInstanceData *inst) override;
 
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     ID3D12ResourcePtr createTexture(int width, int height, DXGI_FORMAT format);

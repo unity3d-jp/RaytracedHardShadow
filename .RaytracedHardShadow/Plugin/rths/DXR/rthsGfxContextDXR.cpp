@@ -76,29 +76,10 @@ GfxContextDXR::GfxContextDXR()
 {
     if (!initializeDevice())
         return;
-
-    // setup callbacks
-
-    m_on_frame_begin = [this]() { frameBegin(); };
-    IRenderer::addOnFrameBegin(m_on_frame_begin);
-
-    m_on_frame_end = [this]() { frameEnd(); };
-    IRenderer::addOnFrameEnd(m_on_frame_end);
-
-    m_on_mesh_delete = [this](MeshData *mesh) { onMeshDelete(mesh); };
-    MeshData::addOnDelete(m_on_mesh_delete);
-
-    m_on_meshinstance_delete = [this](MeshInstanceData *isnt) { onMeshInstanceDelete(isnt); };
-    MeshInstanceData::addOnDelete(m_on_meshinstance_delete);
 }
 
 GfxContextDXR::~GfxContextDXR()
 {
-    // remove callbacks
-    IRenderer::removeOnFrameBegin(m_on_frame_begin);
-    IRenderer::removeOnFrameEnd(m_on_frame_end);
-    MeshData::removeOnDelete(m_on_mesh_delete);
-    MeshInstanceData::removeOnDelete(m_on_meshinstance_delete);
 }
 
 ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props)
