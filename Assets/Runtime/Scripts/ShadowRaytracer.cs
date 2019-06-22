@@ -25,6 +25,7 @@ namespace UTJ.RaytracedHardShadow
         public class MeshRecord
         {
             public rthsMeshData meshData;
+            public Mesh bakedMesh;
             public int useCount;
 
             public void Update(Mesh mesh)
@@ -140,7 +141,8 @@ namespace UTJ.RaytracedHardShadow
         rthsRenderer m_renderer;
 
         static int s_instanceCount, s_updateCount;
-        static Dictionary<Mesh, MeshRecord> s_meshDataCache, s_bakedMeshDataCache;
+        static Dictionary<Mesh, MeshRecord> s_meshDataCache;
+        static Dictionary<Component, MeshRecord> s_bakedMeshDataCache;
         static Dictionary<Component, MeshInstanceRecord> s_meshInstDataCache;
         #endregion
 
@@ -361,17 +363,19 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        static rthsMeshData GetBakedMeshData(Mesh mesh)
+        static rthsMeshData GetBakedMeshData(SkinnedMeshRenderer smr)
         {
-            if (mesh == null)
+            if (smr == null || smr.sharedMesh == null)
                 return default(rthsMeshData);
 
             MeshRecord rec;
-            if (!s_bakedMeshDataCache.TryGetValue(mesh, out rec))
+            if (!s_bakedMeshDataCache.TryGetValue(smr, out rec))
             {
                 rec = new MeshRecord();
-                rec.Update(mesh);
-                s_bakedMeshDataCache.Add(mesh, rec);
+                rec.bakedMesh = new Mesh();
+                smr.BakeMesh(rec.bakedMesh);
+                rec.Update(rec.bakedMesh);
+                s_bakedMeshDataCache.Add(smr, rec);
             }
             rec.useCount++;
             return rec.meshData;
@@ -423,9 +427,7 @@ namespace UTJ.RaytracedHardShadow
             bool requireBake = cloth != null || (!m_GPUSkinning && (smr.rootBone != null || smr.sharedMesh.blendShapeCount != 0));
             if (requireBake)
             {
-                var mesh = new Mesh();
-                smr.BakeMesh(mesh);
-                rec.Update(GetBakedMeshData(mesh), smr.localToWorldMatrix);
+                rec.Update(GetBakedMeshData(smr), smr.localToWorldMatrix);
             }
             else
             {
@@ -517,7 +519,7 @@ namespace UTJ.RaytracedHardShadow
                 if (s_meshDataCache == null)
                 {
                     s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
-                    s_bakedMeshDataCache = new Dictionary<Mesh, MeshRecord>();
+                    s_bakedMeshDataCache = new Dictionary<Component, MeshRecord>();
                     s_meshInstDataCache = new Dictionary<Component, MeshInstanceRecord>();
                 }
             }
