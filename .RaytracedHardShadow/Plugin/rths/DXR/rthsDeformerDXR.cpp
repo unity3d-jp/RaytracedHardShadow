@@ -298,9 +298,9 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
             MeshInfo info{};
             info.vertex_stride = mesh_dxr.getVertexStride() / 4;
             info.deform_flags = 0;
-            if (blendshape_updated && blendshape_count > 0)
+            if (blendshape_count > 0)
                 info.deform_flags |= (int)DeformFlag::Blendshape;
-            if (bone_updated && bone_count > 0)
+            if (bone_count > 0)
                 info.deform_flags |= (int)DeformFlag::Skinning;
 
             *(MeshInfo*)dst_ = info;

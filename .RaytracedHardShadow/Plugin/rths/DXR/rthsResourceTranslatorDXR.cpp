@@ -23,10 +23,10 @@ public:
     uint64_t inclementFenceValue() override;
 
     TextureDataDXRPtr createTemporaryTexture(void *ptr) override;
-    void applyTexture(TextureDataDXR& tex) override;
+    uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
     BufferDataDXRPtr translateBuffer(void *ptr) override;
 
-    void copyResource(ID3D11Resource *dst, ID3D11Resource *src);
+    uint64_t copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool wait);
 
 private:
     // note:
@@ -50,7 +50,7 @@ public:
     uint64_t inclementFenceValue() override;
 
     TextureDataDXRPtr createTemporaryTexture(void *ptr) override;
-    void applyTexture(TextureDataDXR& tex) override;
+    uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
     BufferDataDXRPtr translateBuffer(void *ptr) override;
 
     void executeAndWaitCopy();
@@ -197,11 +197,15 @@ TextureDataDXRPtr D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
     return ret;
 }
 
-void D3D11ResourceTranslator::applyTexture(TextureDataDXR& src)
+uint64_t D3D11ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fence_value)
 {
     if (src.temporary_d3d11) {
-        copyResource((ID3D11Texture2D*)src.texture, src.temporary_d3d11);
+        m_host_context->Wait(m_fence, fence_value);
+        fence_value = copyResource((ID3D11Texture2D*)src.texture, src.temporary_d3d11, false);
+        m_host_context->Signal(m_fence, fence_value);
+        return fence_value;
     }
+    return 0;
 }
 
 BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(void *ptr)
@@ -222,7 +226,7 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(void *ptr)
     HRESULT hr = m_host_device->CreateBuffer(&tmp_desc, nullptr, &ret->temporary_d3d11);
     if (SUCCEEDED(hr)) {
         // copy contents to temporary
-        copyResource(ret->temporary_d3d11, buf_host);
+        copyResource(ret->temporary_d3d11, buf_host, true);
 
         // translate temporary as d3d12 resource
         IDXGIResourcePtr ires;
@@ -236,15 +240,18 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(void *ptr)
     return ret;
 }
 
-void D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resource *src)
+uint64_t D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool wait)
 {
     m_host_context->CopyResource(dst, src);
 
-    // wait for completion of CopyResource()
     auto fence_value = inclementFenceValue();
     m_host_context->Signal(m_fence, fence_value);
-    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
-    ::WaitForSingleObject(m_fence_event, INFINITE);
+    if (wait) {
+        // wait for completion of CopyResource()
+        m_fence->SetEventOnCompletion(fence_value, m_fence_event);
+        ::WaitForSingleObject(m_fence_event, INFINITE);
+    }
+    return fence_value;
 }
 
 
@@ -316,12 +323,12 @@ TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
     return ret;
 }
 
-void D3D12ResourceTranslator::applyTexture(TextureDataDXR& src)
+uint64_t D3D12ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fence_value)
 {
     auto tex_host = (ID3D12Resource*)src.texture;
     // copy is not needed if unordered access is allowed
     if (src.resource == tex_host)
-        return;
+        return 0;
 
     executeAndWaitResourceBarrier(tex_host, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON);
 
@@ -330,6 +337,7 @@ void D3D12ResourceTranslator::applyTexture(TextureDataDXR& src)
     executeAndWaitCopy();
 
     executeAndWaitResourceBarrier(tex_host, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ);
+    return m_fence_value;
 }
 
 BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(void *ptr)

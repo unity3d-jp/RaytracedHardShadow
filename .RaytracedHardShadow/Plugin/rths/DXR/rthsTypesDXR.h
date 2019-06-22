@@ -191,7 +191,7 @@ public:
     bool query(ID3D12GraphicsCommandList4Ptr cl, const char *message);
     bool resolve(ID3D12GraphicsCommandList4Ptr cl);
 
-    std::vector<std::tuple<uint64_t, const char*>> getSamples();
+    std::vector<std::tuple<uint64_t, std::string*>> getSamples();
     void printElapsed(ID3D12CommandQueuePtr cq);
 
 private:

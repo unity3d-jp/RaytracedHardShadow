@@ -280,9 +280,9 @@ bool TimestampDXR::resolve(ID3D12GraphicsCommandList4Ptr cl)
     return true;
 }
 
-std::vector<std::tuple<uint64_t, const char*>> TimestampDXR::getSamples()
+std::vector<std::tuple<uint64_t, std::string*>> TimestampDXR::getSamples()
 {
-    std::vector<std::tuple<uint64_t, const char*>> ret;
+    std::vector<std::tuple<uint64_t, std::string*>> ret;
     if (!valid())
         return ret;
 
@@ -293,7 +293,7 @@ std::vector<std::tuple<uint64_t, const char*>> TimestampDXR::getSamples()
     auto hr = m_timestamp_buffer->Map(0, &ragne, (void**)&data);
     if (SUCCEEDED(hr)) {
         for (int si = 0; si < m_sample_index; ++si)
-            ret[si] = std::make_tuple(data[si], m_messages[si].c_str());
+            ret[si] = std::make_tuple(data[si], &m_messages[si]);
         m_timestamp_buffer->Unmap(0, nullptr);
     }
     return ret;
@@ -301,6 +301,9 @@ std::vector<std::tuple<uint64_t, const char*>> TimestampDXR::getSamples()
 
 void TimestampDXR::printElapsed(ID3D12CommandQueuePtr cq)
 {
+    if (!valid() || !cq)
+        return;
+
     auto time_samples = getSamples();
     if (!time_samples.empty()) {
         uint64_t freq = 0;
@@ -310,15 +313,14 @@ void TimestampDXR::printElapsed(ID3D12CommandQueuePtr cq)
         auto base = time_samples[0];
         for (size_t si = 0; si < n; ++si) {
             auto s1 = time_samples[si];
-            auto begin_pos = std::strstr(std::get<1>(s1), " begin");
-            if (begin_pos != nullptr) {
-                size_t len1 = size_t(begin_pos - std::get<1>(s1));
+            auto pos1 = std::get<1>(s1)->find(" begin");
+            if (pos1 != std::string::npos) {
                 auto it = std::find_if(time_samples.begin() + (si + 1), time_samples.end(),
                     [&](auto& s2) {
-                        auto end_pos = std::strstr(std::get<1>(s2), " end");
-                        if (end_pos != nullptr) {
-                            size_t len2 = size_t(end_pos - std::get<1>(s2));
-                            return len1 == len2 && std::strncmp(std::get<1>(s1), std::get<1>(s2), len1) == 0;
+                        auto pos2 = std::get<1>(s2)->find(" end");
+                        if (pos2 != std::string::npos) {
+                            return pos1 == pos2 &&
+                                std::strncmp(std::get<1>(s1)->c_str(), std::get<1>(s2)->c_str(), pos1) == 0;
                         }
                         return false;
                     });
@@ -326,16 +328,16 @@ void TimestampDXR::printElapsed(ID3D12CommandQueuePtr cq)
                     auto& s2 = *it;
                     auto epalsed = std::get<0>(s2) - std::get<0>(s1);
                     auto epalsed_ms = float(double(epalsed * 1000) / double(freq));
-                    DebugPrint("%s %f\n", std::get<1>(s2), epalsed_ms);
+                    DebugPrint("%s %f\n", std::get<1>(s2)->c_str(), epalsed_ms);
                     continue;
                 }
             }
 
-            auto end_pos = std::strstr(std::get<1>(s1), " end");
-            if (begin_pos == nullptr && end_pos == nullptr) {
+            auto end_pos = std::get<1>(s1)->find(" end");
+            if (pos1 == std::string::npos && end_pos == std::string::npos) {
                 auto epalsed = std::get<0>(s1);
                 auto epalsed_ms = float(double(epalsed * 1000) / double(freq));
-                DebugPrint("%s %f\n", std::get<1>(s1), epalsed_ms);
+                DebugPrint("%s %f\n", std::get<1>(s1)->c_str(), epalsed_ms);
             }
         }
     }

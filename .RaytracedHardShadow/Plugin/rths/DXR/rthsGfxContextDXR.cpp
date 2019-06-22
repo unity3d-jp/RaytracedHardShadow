@@ -766,11 +766,12 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>&
             rd.instance_desc->Map(0, nullptr, (void**)&instance_descs);
             for (size_t i = 0; i < instance_count; i++) {
                 auto& inst_dxr = *rd.mesh_instances[i];
+                bool skinned = inst_dxr.base->bones.size() > 0;
                 bool deformed = gpu_skinning && inst_dxr.deformed_vertices;
                 auto& blas = deformed ? inst_dxr.blas_deformed : inst_dxr.mesh->blas;
 
                 D3D12_RAYTRACING_INSTANCE_DESC tmp{};
-                (float3x4&)tmp.Transform = to_float3x4(deformed ? float4x4::identity() : inst_dxr.base->transform);
+                (float3x4&)tmp.Transform = to_float3x4(skinned ? float4x4::identity() : inst_dxr.base->transform);
                 tmp.InstanceID = i; // This value will be exposed to the shader via InstanceID()
                 tmp.InstanceMask = 0xFF;
                 tmp.InstanceContributionToHitGroupIndex = i;
@@ -857,15 +858,20 @@ void GfxContextDXR::addResourceBarrier(ID3D12GraphicsCommandList4Ptr cl, ID3D12R
     cl->ResourceBarrier(1, &barrier);
 }
 
-uint64_t GfxContextDXR::submitCommandList(ID3D12GraphicsCommandList4Ptr cl)
+uint64_t GfxContextDXR::submitCommandList(ID3D12GraphicsCommandList4Ptr cl, bool add_signal)
 {
     cl->Close();
     ID3D12CommandList* cmd_list[]{ cl.GetInterfacePtr() };
     m_cmd_queue_direct->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 
-    auto fence_value = m_resource_translator->inclementFenceValue();
-    m_cmd_queue_direct->Signal(m_fence, fence_value);
-    return fence_value;
+    if (add_signal) {
+        auto fence_value = m_resource_translator->inclementFenceValue();
+        m_cmd_queue_direct->Signal(m_fence, fence_value);
+        return fence_value;
+    }
+    else {
+        return 0;
+    }
 }
 
 
@@ -1095,36 +1101,41 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
     }
 
     addResourceBarrier(rd.cmd_list_direct, rd.render_target->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
+
     TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace end");
     TimestampResolve(rd.timestamp, rd.cmd_list_direct);
 
-    rd.fence_value = submitCommandList(rd.cmd_list_direct);
-    m_fence->SetEventOnCompletion(rd.fence_value, rd.fence_event);
+    rd.fence_value = submitCommandList(rd.cmd_list_direct, true);
+    if (rd.fence_value && rd.render_target) {
+        // copy render target to Unity side
+        auto fv = m_resource_translator->syncTexture(*rd.render_target, rd.fence_value);
+        if (fv) {
+            m_cmd_queue_direct->Wait(m_fence, fv);
+            m_cmd_queue_direct->Signal(m_fence, ++fv);
+            m_resource_translator->setFenceValue(fv);
+            rd.fence_value = fv;
+        }
+    }
     return rd.fence_value;
 }
 
 void GfxContextDXR::finish(RenderDataDXR& rd)
 {
-    if (rd.fence_value == 0) {
-        return;
-    }
-
-    ::WaitForSingleObject(rd.fence_event, INFINITE);
-    rd.fence_value = 0;
+    if (rd.fence_value != 0) {
+        m_fence->SetEventOnCompletion(rd.fence_value, rd.fence_event);
+        ::WaitForSingleObject(rd.fence_event, INFINITE);
+        rd.fence_value = 0;
 
 #ifdef rthsEnableRenderTargetValidation
-    {
-        std::vector<float> data;
-        data.resize(rd.render_target->width * rd.render_target->height, std::numeric_limits<float>::quiet_NaN());
-        readbackTexture(rd, data.data(), rd.render_target->resource, rd.render_target->width, rd.render_target->height, sizeof(float));
-        // break here to inspect data
-    }
+        if (rd.render_target) {
+            std::vector<float> data;
+            data.resize(rd.render_target->width * rd.render_target->height, std::numeric_limits<float>::quiet_NaN());
+            readbackTexture(rd, data.data(), rd.render_target->resource, rd.render_target->width, rd.render_target->height, sizeof(float));
+            // break here to inspect data
+        }
 #endif // rthsEnableRenderTargetValidation
-
-    if (rd.render_target) {
-        // copy content of render target to Unity side
-        m_resource_translator->applyTexture(*rd.render_target);
     }
+
     std::swap(rd.mesh_instances, rd.mesh_instances_prev);
     rd.mesh_instances.clear();
 
