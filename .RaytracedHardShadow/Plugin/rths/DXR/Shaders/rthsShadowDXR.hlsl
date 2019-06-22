@@ -15,7 +15,7 @@ void RayGen()
     uint2 screen_dim = DispatchRaysDimensions().xy;
 
     float aspect_ratio = (float)screen_dim.x / (float)screen_dim.y;
-    float2 screen_pos = ((float2(screen_idx) / float2(screen_dim)) * 2.0f - 1.0f);
+    float2 screen_pos = ((float2(screen_idx) + 0.5f) / float2(screen_dim)) * 2.0f - 1.0f;
     screen_pos.x *= aspect_ratio;
 
     RayDesc ray;
