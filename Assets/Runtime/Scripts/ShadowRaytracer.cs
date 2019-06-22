@@ -497,20 +497,18 @@ namespace UTJ.RaytracedHardShadow
                 }
             }
         }
-#endregion
 
+        void InitializeRenderer()
+        {
+            if (m_renderer)
+                return;
 
 #if UNITY_EDITOR
-        void Reset()
-        {
-            m_camera = GetComponent<Camera>();
-            if (m_camera == null)
-                m_camera = Camera.main;
-        }
+            // initializing renderer on scene load causes a crash in GI baking. so wait until GI bake is completed.
+            if (Lightmapping.isRunning)
+                return;
 #endif
 
-        void OnEnable()
-        {
             m_renderer = rthsRenderer.Create();
             if (m_renderer)
             {
@@ -528,6 +526,22 @@ namespace UTJ.RaytracedHardShadow
                 Debug.Log("ShadowRenderer: " + rthsRenderer.errorLog);
             }
         }
+        #endregion
+
+
+#if UNITY_EDITOR
+        void Reset()
+        {
+            m_camera = GetComponent<Camera>();
+            if (m_camera == null)
+                m_camera = Camera.main;
+        }
+#endif
+
+        void OnEnable()
+        {
+            InitializeRenderer();
+        }
 
         void OnDisable()
         {
@@ -543,7 +557,11 @@ namespace UTJ.RaytracedHardShadow
 
         void Update()
         {
-            // first instance reset count and clear cache
+            InitializeRenderer();
+            if (!m_renderer)
+                return;
+
+            // first instance reset update count and clear cache
             if (s_updateCount != 0)
             {
                 s_updateCount = 0;
