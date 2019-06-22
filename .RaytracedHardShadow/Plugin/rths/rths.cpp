@@ -12,8 +12,11 @@ rthsAPI MeshData* rthsMeshCreate()
 }
 rthsAPI void rthsMeshRelease(MeshData *self)
 {
-    delete self;
+    if (!self)
+        return;
+    self->release();
 }
+
 rthsAPI void rthsMeshSetGPUBuffers(MeshData *self, GPUResourcePtr vb, GPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
 {
@@ -98,7 +101,9 @@ rthsAPI MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh)
 }
 rthsAPI void rthsMeshInstanceRelease(MeshInstanceData *self)
 {
-    delete self;
+    if (!self)
+        return;
+    self->release();
 }
 rthsAPI void rthsMeshInstanceSetTransform(MeshInstanceData *self, float4x4 transform)
 {

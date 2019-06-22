@@ -218,6 +218,41 @@ struct BlendshapeData
     std::vector<BlendshapeFrameData> frames;
 };
 
+template<class T>
+class ref_ptr
+{
+public:
+    ref_ptr() {}
+    ref_ptr(T *data) { reset(data); }
+    ref_ptr(T&& data) { swap(data); }
+    ref_ptr(const ref_ptr& v) { reset(v.m_data); }
+    ref_ptr& operator=(const ref_ptr& v) { reset(v.m_data); return *this; }
+    ~ref_ptr() { reset(); }
+    void reset(T *data = nullptr)
+    {
+        if (m_data)
+            m_data->release();
+        m_data = data;
+        if (m_data)
+            m_data->addref();
+    }
+    void swap(ref_ptr& v)
+    {
+        std::swap(m_data, v->m_data);
+    }
+
+    T& operator*() { return *m_data; }
+    const T& operator*() const { return *m_data; }
+    T* operator->() { return m_data; }
+    const T* operator->() const { return m_data; }
+    operator T*() { return m_data; }
+    operator const T*() const { return m_data; }
+    operator bool() const { return m_data; }
+
+private:
+    T *m_data = nullptr;
+};
+
 struct MeshData;
 using MeshDataCallback = std::function<void(MeshData*)>;
 
@@ -233,9 +268,13 @@ struct MeshData
     int index_offset = 0; // in byte
     SkinData skin;
     std::vector<BlendshapeData> blendshapes;
+    std::atomic_int ref_count = 1;
 
     MeshData();
     ~MeshData();
+    void addref();
+    void release();
+    bool valid() const;
 };
 
 enum class UpdateFlag : uint32_t
@@ -251,16 +290,18 @@ using MeshInstanceDataCallback = std::function<void(MeshInstanceData*)>;
 
 struct MeshInstanceData
 {
-    MeshData *mesh = nullptr;
+    ref_ptr<MeshData> mesh;
     float4x4 transform = float4x4::identity();
     std::vector<float4x4> bones;
     std::vector<float> blendshape_weights;
     uint32_t update_flags = 0; // combination of UpdateFlag
+    std::atomic_int ref_count = 1;
 
-    static void addOnDelete(const MeshInstanceDataCallback& cb);
-    static void removeOnDelete(const MeshInstanceDataCallback& cb);
     MeshInstanceData();
     ~MeshInstanceData();
+    void addref();
+    void release();
+    bool valid() const;
 };
 
 

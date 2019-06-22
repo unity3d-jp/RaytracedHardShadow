@@ -484,7 +484,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, TextureData& rt)
 #endif // rthsEnableRenderTargetValidation
 }
 
-void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceData*>& instances)
+void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<ref_ptr<MeshInstanceData>>& instances)
 {
     auto translate_buffer = [this](void *buffer) {
         auto& data = m_buffer_records[buffer];

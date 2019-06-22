@@ -133,7 +133,8 @@ void RendererBase::addReversePointLight(const float4x4& trans, float range)
 
 void RendererBase::addMesh(MeshInstanceData *mesh)
 {
-    m_mesh_instance_data.push_back(mesh);
+    if (mesh && mesh->valid())
+        m_mesh_instance_data.emplace_back(mesh);
 }
 
 void RendererBase::clearMeshInstances()

@@ -71,7 +71,7 @@ protected:
 
     TextureData m_render_target;
     SceneData m_scene_data;
-    std::vector<MeshInstanceData*> m_mesh_instance_data;
+    std::vector<ref_ptr<MeshInstanceData>> m_mesh_instance_data;
 };
 
 IRenderer* CreateRendererDXR();

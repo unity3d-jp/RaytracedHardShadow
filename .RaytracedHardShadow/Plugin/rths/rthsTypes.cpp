@@ -118,6 +118,23 @@ MeshData::~MeshData()
     CallOnMeshDelete(this);
 }
 
+void MeshData::addref()
+{
+    ++ref_count;
+}
+
+void MeshData::release()
+{
+    if (--ref_count == 0)
+        delete this;
+}
+
+bool MeshData::valid() const
+{
+    return vertex_buffer != nullptr && index_buffer != nullptr;
+}
+
+
 MeshInstanceData::MeshInstanceData()
 {
 }
@@ -125,6 +142,22 @@ MeshInstanceData::MeshInstanceData()
 MeshInstanceData::~MeshInstanceData()
 {
     CallOnMeshInstanceDelete(this);
+}
+
+void MeshInstanceData::addref()
+{
+    ++ref_count;
+}
+
+void MeshInstanceData::release()
+{
+    if (--ref_count == 0)
+        delete this;
+}
+
+bool MeshInstanceData::valid() const
+{
+    return mesh && mesh->valid();
 }
 
 } // namespace rths 
