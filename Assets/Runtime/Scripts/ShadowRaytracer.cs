@@ -124,6 +124,9 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_cullBackFace = true;
         [SerializeField] bool m_GPUSkinning = true;
 
+        // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
+        [SerializeField] bool m_clampBlendshapeWeights = false;
+
         [Tooltip("Light scope for shadow geometries.")]
         [SerializeField] ObjectScope m_lightScope;
 #if UNITY_EDITOR
@@ -621,6 +624,9 @@ namespace UTJ.RaytracedHardShadow
 
         void Update()
         {
+#if UNITY_EDITOR
+            m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
+#endif
             InitializeRenderer();
             if (!m_renderer)
                 return;
@@ -692,7 +698,7 @@ namespace UTJ.RaytracedHardShadow
                     flags |= (int)rthsRenderFlag.KeepSelfDropShadow;
                 if (m_GPUSkinning)
                     flags |= (int)rthsRenderFlag.GPUSkinning;
-                if (PlayerSettings.legacyClampBlendShapeWeights)
+                if (m_clampBlendshapeWeights)
                     flags |= (int)rthsRenderFlag.ClampBlendShapeWights;
 
                 m_renderer.BeginScene();
