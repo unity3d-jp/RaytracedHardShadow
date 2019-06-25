@@ -50,6 +50,31 @@ void RendererBase::beginScene()
 
 void RendererBase::endScene()
 {
+    if (!m_geometries.empty()) {
+        // filter duplicated instances with merging hit masks
+
+        std::sort(m_geometries.begin(), m_geometries.end(),
+            [](const auto& a, const auto& b) { return *a.instance < *b.instance; });
+        m_geometries_tmp.clear();
+        m_geometries_tmp.reserve(m_geometries.size());
+
+        GeometryData prev{ nullptr, 0 };
+        for (auto& geom : m_geometries) {
+            if (!prev.instance) {
+                prev = geom;
+            }
+            else if (*prev.instance == *geom.instance) {
+                // duplicated instance. just merge hit mask.
+                prev.hit_mask |= geom.hit_mask;
+            }
+            else {
+                m_geometries_tmp.push_back(prev);
+                prev = geom;
+            }
+        }
+        m_geometries_tmp.push_back(prev);
+        std::swap(m_geometries, m_geometries_tmp);
+    }
 }
 
 void RendererBase::setRaytraceFlags(uint32_t flags)

@@ -109,8 +109,11 @@ float4x4 invert(const float4x4& x)
 void CallOnMeshDelete(MeshData *mesh);
 void CallOnMeshInstanceDelete(MeshInstanceData *inst);
 
+static uint64_t g_meshdata_id = 0;
+
 MeshData::MeshData()
 {
+    id = ++g_meshdata_id;
 }
 
 MeshData::~MeshData()
@@ -134,9 +137,25 @@ bool MeshData::valid() const
     return vertex_buffer != nullptr && index_buffer != nullptr;
 }
 
+bool MeshData::operator==(const MeshData & v) const
+{
+    return id == v.id;
+}
+bool MeshData::operator!=(const MeshData & v) const
+{
+    return id != v.id;
+}
+bool MeshData::operator<(const MeshData& v) const
+{
+    return id < v.id;
+}
+
+
+static uint64_t g_meshinstancedata_id = 0;
 
 MeshInstanceData::MeshInstanceData()
 {
+    id = ++g_meshinstancedata_id;
 }
 
 MeshInstanceData::~MeshInstanceData()
@@ -158,6 +177,19 @@ void MeshInstanceData::release()
 bool MeshInstanceData::valid() const
 {
     return mesh && mesh->valid();
+}
+
+bool MeshInstanceData::operator==(const MeshInstanceData & v) const
+{
+    return id == v.id;
+}
+bool MeshInstanceData::operator!=(const MeshInstanceData & v) const
+{
+    return id != v.id;
+}
+bool MeshInstanceData::operator<(const MeshInstanceData & v) const
+{
+    return id < v.id;
 }
 
 bool GeometryData::valid() const

@@ -233,6 +233,9 @@ struct BlendshapeData
     std::vector<BlendshapeFrameData> frames;
 };
 
+template<class T> void addref(T *v) { v->addref(); }
+template<class T> void release(T *v) { v->release(); }
+
 template<class T>
 class ref_ptr
 {
@@ -240,39 +243,42 @@ public:
     ref_ptr() {}
     ref_ptr(T *data) { reset(data); }
     ref_ptr(T&& data) { swap(data); }
-    ref_ptr(const ref_ptr& v) { reset(v.m_data); }
-    ref_ptr& operator=(const ref_ptr& v) { reset(v.m_data); return *this; }
+    ref_ptr(const ref_ptr& v) { reset(v.m_ptr); }
+    ref_ptr& operator=(const ref_ptr& v) { reset(v.m_ptr); return *this; }
     ~ref_ptr() { reset(); }
     void reset(T *data = nullptr)
     {
-        if (m_data)
-            m_data->release();
-        m_data = data;
-        if (m_data)
-            m_data->addref();
+        if (m_ptr)
+            release<T>(m_ptr);
+        m_ptr = data;
+        if (m_ptr)
+            addref<T>(m_ptr);
     }
     void swap(ref_ptr& v)
     {
-        std::swap(m_data, v->m_data);
+        std::swap(m_ptr, v->m_data);
     }
 
-    T& operator*() { return *m_data; }
-    const T& operator*() const { return *m_data; }
-    T* operator->() { return m_data; }
-    const T* operator->() const { return m_data; }
-    operator T*() { return m_data; }
-    operator const T*() const { return m_data; }
-    operator bool() const { return m_data; }
+    T& operator*() { return *m_ptr; }
+    const T& operator*() const { return *m_ptr; }
+    T* operator->() { return m_ptr; }
+    const T* operator->() const { return m_ptr; }
+    operator T*() { return m_ptr; }
+    operator const T*() const { return m_ptr; }
+    operator bool() const { return m_ptr; }
+    bool operator==(const ref_ptr<T>& v) const { return m_ptr == v.m_ptr; }
+    bool operator!=(const ref_ptr<T>& v) const { return m_ptr != v.m_ptr; }
 
 private:
-    T *m_data = nullptr;
+    T *m_ptr = nullptr;
 };
 
-struct MeshData;
+class MeshData;
 using MeshDataCallback = std::function<void(MeshData*)>;
 
-struct MeshData
+class MeshData
 {
+public:
     GPUResourcePtr vertex_buffer = nullptr; // host
     GPUResourcePtr index_buffer = nullptr; // host
     int vertex_stride = 0; // if 0, treated as size_of_vertex_buffer / vertex_count
@@ -283,38 +289,55 @@ struct MeshData
     int index_offset = 0; // in byte
     SkinData skin;
     std::vector<BlendshapeData> blendshapes;
-    std::atomic_int ref_count = 1;
 
     MeshData();
     ~MeshData();
     void addref();
     void release();
     bool valid() const;
+    bool operator==(const MeshData& v) const;
+    bool operator!=(const MeshData& v) const;
+    bool operator<(const MeshData& v) const;
+
+private:
+    uint64_t id = 0;
+    std::atomic_int ref_count = 1;
 };
 using MeshDataPtr = ref_ptr<MeshData>;
 
-struct MeshInstanceData;
+class MeshInstanceData;
 using MeshInstanceDataCallback = std::function<void(MeshInstanceData*)>;
 
-struct MeshInstanceData
+class MeshInstanceData
 {
+public:
     MeshDataPtr mesh;
     float4x4 transform = float4x4::identity();
     std::vector<float4x4> bones;
     std::vector<float> blendshape_weights;
     uint32_t update_flags = 0; // combination of UpdateFlag
-    std::atomic_int ref_count = 1;
 
     MeshInstanceData();
     ~MeshInstanceData();
     void addref();
     void release();
     bool valid() const;
+    bool operator==(const MeshInstanceData& v) const;
+    bool operator!=(const MeshInstanceData& v) const;
+    bool operator<(const MeshInstanceData& v) const;
+
+private:
+    uint64_t id = 0;
+    std::atomic_int ref_count = 1;
 };
 using MeshInstanceDataPtr = ref_ptr<MeshInstanceData>;
 
-struct GeometryData
+// one instance may be rendered multiple times with different hit mask in one frame.
+// (e.g. one renderer render the object as a receiver, another one render it as a caster)
+// so, hit mask must be separated from MeshInstanceData.
+class GeometryData
 {
+public:
     MeshInstanceDataPtr instance;
     uint8_t hit_mask; // combination of HitMask
 

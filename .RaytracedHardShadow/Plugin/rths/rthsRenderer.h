@@ -72,6 +72,9 @@ protected:
     TextureData m_render_target;
     SceneData m_scene_data;
     std::vector<GeometryData> m_geometries;
+
+private:
+    std::vector<GeometryData> m_geometries_tmp;
 };
 
 IRenderer* CreateRendererDXR();

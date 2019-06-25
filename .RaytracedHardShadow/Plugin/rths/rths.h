@@ -49,8 +49,8 @@ struct BoneWeight4;
 #endif // rthsImpl
 
 using GPUResourcePtr = void*;
-struct MeshData;
-struct MeshInstanceData;
+class MeshData;
+class MeshInstanceData;
 class IRenderer;
 
 } // namespace rths
