@@ -14,10 +14,12 @@ namespace rths {
 extern ID3D12Device *g_host_d3d12_device;
 
 static const WCHAR* kRayGenShader = L"RayGen";
-static const WCHAR* kMissShader = L"Miss";
+static const WCHAR* kMissShader1 = L"Miss1";
+static const WCHAR* kMissShader2 = L"Miss2";
 static const WCHAR* kAnyHitShader = L"AnyHit";
 static const WCHAR* kClosestHitShader = L"ClosestHit";
-static const WCHAR* kHitGroup = L"HitGroup";
+static const WCHAR* kHitGroup1 = L"HitGroup1";
+static const WCHAR* kHitGroup2 = L"HitGroup2";
 
 const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
 {
@@ -314,11 +316,12 @@ bool GfxContextDXR::initializeDevice()
 
         D3D12_EXPORT_DESC export_descs[] = {
             { kRayGenShader,     nullptr, D3D12_EXPORT_FLAG_NONE },
-            { kMissShader,       nullptr, D3D12_EXPORT_FLAG_NONE },
-            { kAnyHitShader,     nullptr, D3D12_EXPORT_FLAG_NONE },
+            { kMissShader1,      nullptr, D3D12_EXPORT_FLAG_NONE },
+            { kMissShader2,      nullptr, D3D12_EXPORT_FLAG_NONE },
             { kClosestHitShader, nullptr, D3D12_EXPORT_FLAG_NONE },
+            { kAnyHitShader,     nullptr, D3D12_EXPORT_FLAG_NONE },
         };
-        LPCWSTR exports[] = { kRayGenShader, kMissShader, kAnyHitShader, kHitGroup };
+        LPCWSTR exports[] = { kRayGenShader, kMissShader1, kMissShader2, kHitGroup1, kHitGroup2 };
 
         D3D12_DXIL_LIBRARY_DESC dxil_desc{};
         dxil_desc.DXILLibrary.pShaderBytecode = rthsShadowDXR;
@@ -327,13 +330,21 @@ bool GfxContextDXR::initializeDevice()
         dxil_desc.pExports = export_descs;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &dxil_desc);
 
-        D3D12_HIT_GROUP_DESC hit_desc{};
-        hit_desc.HitGroupExport = kHitGroup;
-        hit_desc.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-        hit_desc.AnyHitShaderImport = kAnyHitShader;
-        hit_desc.ClosestHitShaderImport = kClosestHitShader;
-        hit_desc.IntersectionShaderImport = nullptr;
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc);
+        D3D12_HIT_GROUP_DESC hit_desc1{};
+        hit_desc1.HitGroupExport = kHitGroup1;
+        hit_desc1.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+        hit_desc1.AnyHitShaderImport = nullptr;
+        hit_desc1.ClosestHitShaderImport = kClosestHitShader;
+        hit_desc1.IntersectionShaderImport = nullptr;
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc1);
+
+        D3D12_HIT_GROUP_DESC hit_desc2{};
+        hit_desc1.HitGroupExport = kHitGroup2;
+        hit_desc1.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+        hit_desc1.AnyHitShaderImport = kAnyHitShader;
+        hit_desc1.ClosestHitShaderImport = nullptr;
+        hit_desc1.IntersectionShaderImport = nullptr;
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc2);
 
         D3D12_RAYTRACING_SHADER_CONFIG rt_shader_desc{};
         rt_shader_desc.MaxPayloadSizeInBytes = sizeof(float) * 4;
@@ -1012,54 +1023,61 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
     shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
     shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, shader_record_size);
 
-    size_t instance_count = rd.geometries.size();
+    size_t geometry_count = rd.geometries.size();
 
     // setup shader table
     {
-        // ray-gen + miss + hit for each meshes
-        size_t required_count = 2 + instance_count;
+        // ray-gen + (miss * 2) + (hit for each geom * 2)
+        size_t required_count = 1 + 2 + geometry_count * 2;
 
         if (rd.shader_table) {
             auto capacity = rd.shader_table->GetDesc().Width;
             if (capacity < required_count * shader_record_size)
                 rd.shader_table = nullptr;
         }
+
+        bool freshly_allocated = false;
         if (!rd.shader_table) {
             size_t capacity = 1024;
             while (capacity < required_count)
                 capacity *= 2;
             rd.shader_table = createBuffer(shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-
+            freshly_allocated = true;
+        }
+        if (rd.geometries.size() != rd.geometries_prev.size() || freshly_allocated) {
             // setup shader table
-            {
-                uint8_t *data;
-                rd.shader_table->Map(0, nullptr, (void**)&data);
+            uint8_t *data;
+            rd.shader_table->Map(0, nullptr, (void**)&data);
 
-                ID3D12StateObjectPropertiesPtr sop;
-                m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
+            ID3D12StateObjectPropertiesPtr sop;
+            m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
 
-                auto add_shader_table = [&](void *shader_id) {
-                    auto dst = data;
-                    memcpy(dst, shader_id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-                    dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-                    *(UINT64*)(dst) = rd.desc_heap->GetGPUDescriptorHandleForHeapStart().ptr;
+            auto add_shader_table = [&](void *shader_id) {
+                auto dst = data;
+                memcpy(dst, shader_id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+                dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+                *(UINT64*)(dst) = rd.desc_heap->GetGPUDescriptorHandleForHeapStart().ptr;
 
-                    data += shader_record_size;
-                };
+                data += shader_record_size;
+            };
 
-                // ray-gen
-                add_shader_table(sop->GetShaderIdentifier(kRayGenShader));
+            // ray-gen
+            add_shader_table(sop->GetShaderIdentifier(kRayGenShader));
 
-                // miss
-                add_shader_table(sop->GetShaderIdentifier(kMissShader));
+            // miss
+            add_shader_table(sop->GetShaderIdentifier(kMissShader1));
+            add_shader_table(sop->GetShaderIdentifier(kMissShader2));
 
-                // hit for each meshes
-                void *hit = sop->GetShaderIdentifier(kHitGroup);
-                for (int i = 0; i < capacity - 2; ++i)
-                    add_shader_table(hit);
+            // hit for each meshes
+            void *hit1 = sop->GetShaderIdentifier(kHitGroup1);
+            for (size_t i = 0; i < geometry_count; ++i)
+                add_shader_table(hit1);
 
-                rd.shader_table->Unmap(0, nullptr);
-            }
+            void *hit2 = sop->GetShaderIdentifier(kHitGroup2);
+            for (size_t i = 0; i < geometry_count; ++i)
+                add_shader_table(hit2);
+
+            rd.shader_table->Unmap(0, nullptr);
         }
     }
 
@@ -1082,13 +1100,13 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
         // miss
         dr_desc.MissShaderTable.StartAddress = addr;
         dr_desc.MissShaderTable.StrideInBytes = shader_record_size;
-        dr_desc.MissShaderTable.SizeInBytes = shader_record_size; 
+        dr_desc.MissShaderTable.SizeInBytes = shader_record_size * 2;
         addr += shader_record_size;
 
         // hit for each meshes
         dr_desc.HitGroupTable.StartAddress = addr;
         dr_desc.HitGroupTable.StrideInBytes = shader_record_size;
-        dr_desc.HitGroupTable.SizeInBytes = shader_record_size * instance_count;
+        dr_desc.HitGroupTable.SizeInBytes = shader_record_size * geometry_count * 2;
 
         // descriptor heaps
         ID3D12DescriptorHeap *desc_heaps[] = { rd.desc_heap };
