@@ -25,7 +25,7 @@ public:
     void prepare(RenderDataDXR& rd);
     void setSceneData(RenderDataDXR& rd, SceneData& data);
     void setRenderTarget(RenderDataDXR& rd, TextureData& rt);
-    void setMeshes(RenderDataDXR& rd, std::vector<ref_ptr<MeshInstanceData>>& instances);
+    void setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geometries);
     uint64_t flush(RenderDataDXR& rd);
     void finish(RenderDataDXR& rd);
     void frameEnd() override;

@@ -23,6 +23,13 @@ enum class RenderFlag : uint32_t
     ClampBlendShapeWights   = 0x0200,
 };
 
+enum class HitMask : uint8_t
+{
+    Receiver    = 0x0001,
+    Caster      = 0x0002,
+    All = Receiver | Caster,
+};
+
 struct BoneWeight1
 {
     float weight;
@@ -70,7 +77,7 @@ rthsAPI void rthsReleaseRenderer(rths::IRenderer *self);
 rthsAPI void rthsSetRenderTarget(rths::IRenderer *self, void *render_target);
 rthsAPI void rthsBeginScene(rths::IRenderer *self);
 rthsAPI void rthsEndScene(rths::IRenderer *self);
-rthsAPI void rthsSetRenderFlags(rths::IRenderer *self, int v);
+rthsAPI void rthsSetRenderFlags(rths::IRenderer *self, uint32_t flag); // flag: combination of RenderFlag
 rthsAPI void rthsSetShadowRayOffset(rths::IRenderer *self, float v);
 rthsAPI void rthsSetSelfShadowThreshold(rths::IRenderer *self, float v);
 rthsAPI void rthsSetCamera(rths::IRenderer *self, rths::float4x4 transform, rths::float4x4 view, rths::float4x4 proj, float near_plane, float far_plane, float fov);
@@ -78,7 +85,7 @@ rthsAPI void rthsAddDirectionalLight(rths::IRenderer *self, rths::float4x4 trans
 rthsAPI void rthsAddSpotLight(rths::IRenderer *self, rths::float4x4 transform, float range, float spot_angle);
 rthsAPI void rthsAddPointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
 rthsAPI void rthsAddReversePointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
-rthsAPI void rthsAddMesh(rths::IRenderer *self, rths::MeshInstanceData *mesh);
+rthsAPI void rthsAddGeometry(rths::IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask = 0xff); // mask: combination of HitMask
 rthsAPI void rthsRender(rths::IRenderer *self);
 rthsAPI void rthsFinish(rths::IRenderer *self);
 rthsAPI void rthsMarkFrameBegin();

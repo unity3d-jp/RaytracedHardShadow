@@ -83,6 +83,18 @@ DescriptorHandleDXR DescriptorHeapAllocatorDXR::allocate()
 }
 
 
+bool GeometryDataDXR::operator==(const GeometryDataDXR& v) const
+{
+    return inst == v.inst && hit_mask == v.hit_mask;
+}
+
+bool GeometryDataDXR::operator!=(const GeometryDataDXR& v) const
+{
+    return !(*this == v);
+}
+
+
+
 CommandManagerDXR::CommandManagerDXR(ID3D12DevicePtr device, ID3D12FencePtr fence)
     : m_device(device)
     , m_fence(fence)

@@ -644,8 +644,8 @@ namespace UTJ.RaytracedHardShadow
                     scl => { m_renderer.AddLight(scl); }
                     );
                 EnumerateMeshRenderers(
-                    mr => { m_renderer.AddMesh(GetMeshInstanceData(mr)); },
-                    smr => { m_renderer.AddMesh(GetMeshInstanceData(smr)); }
+                    mr => { m_renderer.AddGeometry(GetMeshInstanceData(mr)); },
+                    smr => { m_renderer.AddGeometry(GetMeshInstanceData(smr)); }
                     );
                 m_renderer.EndScene();
             }

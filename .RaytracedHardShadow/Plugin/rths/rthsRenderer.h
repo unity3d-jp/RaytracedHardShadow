@@ -28,7 +28,7 @@ public:
     virtual void beginScene() = 0;
     virtual void endScene() = 0;
 
-    virtual void setRaytraceFlags(int flags) = 0;
+    virtual void setRaytraceFlags(uint32_t flags) = 0;
     virtual void setShadowRayOffset(float v) = 0;
     virtual void setSelfShadowThreshold(float v) = 0;
 
@@ -38,7 +38,7 @@ public:
     virtual void addSpotLight(const float4x4& trans, float range, float spot_angle) = 0;
     virtual void addPointLight(const float4x4& trans, float range) = 0;
     virtual void addReversePointLight(const float4x4& trans, float range) = 0;
-    virtual void addMesh(MeshInstanceData *mesh) = 0;
+    virtual void addGeometry(GeometryData geom) = 0;
 
     virtual void render() = 0; // called from render thread
     virtual void finish() = 0; // called from render thread
@@ -54,7 +54,7 @@ public:
     void beginScene() override;
     void endScene() override;
 
-    void setRaytraceFlags(int flags) override;
+    void setRaytraceFlags(uint32_t flags) override;
     void setShadowRayOffset(float v) override;
     void setSelfShadowThreshold(float v) override;
 
@@ -64,14 +64,14 @@ public:
     void addSpotLight(const float4x4& trans, float range, float spot_angle) override;
     void addPointLight(const float4x4& trans, float range) override;
     void addReversePointLight(const float4x4& trans, float range) override;
-    void addMesh(MeshInstanceData *mesh) override;
+    void addGeometry(GeometryData geom) override;
 
 protected:
     void clearMeshInstances();
 
     TextureData m_render_target;
     SceneData m_scene_data;
-    std::vector<ref_ptr<MeshInstanceData>> m_mesh_instance_data;
+    std::vector<GeometryData> m_geometries;
 };
 
 IRenderer* CreateRendererDXR();

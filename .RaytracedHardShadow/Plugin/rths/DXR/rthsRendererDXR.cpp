@@ -48,7 +48,7 @@ void RendererDXR::render()
     ctx->prepare(m_render_data);
     ctx->setSceneData(m_render_data, m_scene_data);
     ctx->setRenderTarget(m_render_data, m_render_target);
-    ctx->setMeshes(m_render_data, m_mesh_instance_data);
+    ctx->setGeometries(m_render_data, m_geometries);
     ctx->flush(m_render_data);
 }
 

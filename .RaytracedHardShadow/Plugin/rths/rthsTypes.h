@@ -154,10 +154,25 @@ enum class LightType : uint32_t
     ReversePoint= 4,
 };
 
+enum class HitMask : uint8_t
+{
+    Receiver    = 0x0001,
+    Caster      = 0x0002,
+    All = Receiver | Caster,
+};
+
+enum class UpdateFlag : uint32_t
+{
+    None = 0,
+    Transform = 1,
+    Blendshape = 2,
+    Bone = 4,
+};
+
 struct LightData
 {
     LightType light_type{};
-    int pad[3];
+    uint32_t pad[3];
 
     float3 position{};
     float range{};
@@ -172,9 +187,9 @@ struct SceneData
 {
     CameraData camera;
 
-    int render_flags; // combination of RenderFlag
-    int light_count;
-    int pad1[2];
+    uint32_t render_flags; // combination of RenderFlag
+    uint32_t light_count;
+    uint32_t pad1[2];
 
     float shadow_ray_offset;
     float self_shadow_threshold;
@@ -276,21 +291,14 @@ struct MeshData
     void release();
     bool valid() const;
 };
-
-enum class UpdateFlag : uint32_t
-{
-    None = 0,
-    Transform = 1,
-    Blendshape = 2,
-    Bone = 4,
-};
+using MeshDataPtr = ref_ptr<MeshData>;
 
 struct MeshInstanceData;
 using MeshInstanceDataCallback = std::function<void(MeshInstanceData*)>;
 
 struct MeshInstanceData
 {
-    ref_ptr<MeshData> mesh;
+    MeshDataPtr mesh;
     float4x4 transform = float4x4::identity();
     std::vector<float4x4> bones;
     std::vector<float> blendshape_weights;
@@ -301,6 +309,15 @@ struct MeshInstanceData
     ~MeshInstanceData();
     void addref();
     void release();
+    bool valid() const;
+};
+using MeshInstanceDataPtr = ref_ptr<MeshInstanceData>;
+
+struct GeometryData
+{
+    MeshInstanceDataPtr instance;
+    uint8_t hit_mask; // combination of HitMask
+
     bool valid() const;
 };
 

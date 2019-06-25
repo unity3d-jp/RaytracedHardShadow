@@ -160,4 +160,9 @@ bool MeshInstanceData::valid() const
     return mesh && mesh->valid();
 }
 
+bool GeometryData::valid() const
+{
+    return hit_mask != 0 && instance && instance->valid();
+}
+
 } // namespace rths 

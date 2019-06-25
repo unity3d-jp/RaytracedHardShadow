@@ -45,14 +45,14 @@ void RendererBase::beginScene()
 {
     m_scene_data.render_flags = 0;
     m_scene_data.light_count = 0;
-    m_mesh_instance_data.clear();
+    m_geometries.clear();
 }
 
 void RendererBase::endScene()
 {
 }
 
-void RendererBase::setRaytraceFlags(int flags)
+void RendererBase::setRaytraceFlags(uint32_t flags)
 {
     m_scene_data.render_flags = flags;
 }
@@ -131,15 +131,15 @@ void RendererBase::addReversePointLight(const float4x4& trans, float range)
     dst.range = range;
 }
 
-void RendererBase::addMesh(MeshInstanceData *mesh)
+void RendererBase::addGeometry(GeometryData geom)
 {
-    if (mesh && mesh->valid())
-        m_mesh_instance_data.emplace_back(mesh);
+    if (geom.valid())
+        m_geometries.push_back(geom);
 }
 
 void RendererBase::clearMeshInstances()
 {
-    m_mesh_instance_data.clear();
+    m_geometries.clear();
 }
 
 } // namespace rths
