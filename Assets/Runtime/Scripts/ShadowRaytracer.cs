@@ -591,6 +591,8 @@ namespace UTJ.RaytracedHardShadow
             {
                 if (!m_shadowBuffer.IsCreated())
                     m_shadowBuffer.Create();
+                if (m_globalTextureName != null && m_globalTextureName.Length != 0)
+                    Shader.SetGlobalTexture(m_globalTextureName, m_shadowBuffer);
             }
             else
 #endif
