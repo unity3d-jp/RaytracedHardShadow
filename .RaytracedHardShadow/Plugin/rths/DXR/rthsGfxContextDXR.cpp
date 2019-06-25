@@ -484,7 +484,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, TextureData& rt)
 #endif // rthsEnableRenderTargetValidation
 }
 
-void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<ref_ptr<MeshInstanceData>>& instances)
+void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geoms)
 {
     auto translate_buffer = [this](void *buffer) {
         auto& data = m_buffer_records[buffer];
@@ -497,10 +497,11 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<ref_ptr<MeshInstanc
     int deform_count = 0;
     if (gpu_skinning)
         m_deformer->prepare(rd);
-    rd.mesh_instances.clear();
+    rd.geometries.clear();
 
     bool needs_build_tlas = false;
-    for (auto& inst : instances) {
+    for (auto& geom : geoms) {
+        auto& inst = geom.instance;
         auto& mesh = inst->mesh;
         if (mesh->vertex_count == 0 || mesh->index_count == 0)
             continue;
@@ -568,7 +569,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<ref_ptr<MeshInstanc
             if (m_deformer->deform(rd, *inst_dxr))
                 ++deform_count;
         }
-        rd.mesh_instances.push_back(inst_dxr);
+        rd.geometries.push_back({ inst_dxr, geom.hit_mask });
     }
 
     if (gpu_skinning) {
@@ -589,8 +590,8 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<ref_ptr<MeshInstanc
     TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: building BLAS begin");
 
     // build bottom level acceleration structures
-    for (auto & pinst_dxr : rd.mesh_instances) {
-        auto& inst_dxr = *pinst_dxr;
+    for (auto& geom_dxr : rd.geometries) {
+        auto& inst_dxr = *geom_dxr.inst;
         auto& mesh_dxr = *inst_dxr.mesh;
         auto& inst = *inst_dxr.base;
         auto& mesh = *mesh_dxr.base;
@@ -704,17 +705,17 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<ref_ptr<MeshInstanc
     TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: building TLAS begin");
 
     if (!needs_build_tlas)
-        needs_build_tlas = rd.mesh_instances != rd.mesh_instances_prev;
+        needs_build_tlas = rd.geometries != rd.geometries_prev;
 
     // build top level acceleration structure
     if (needs_build_tlas) {
-        size_t instance_count = rd.mesh_instances.size();
+        size_t geometry_count = rd.geometries.size();
 
         // get the size of the TLAS buffers
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
         inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
         inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-        inputs.NumDescs = (UINT)instance_count;
+        inputs.NumDescs = (UINT)geometry_count;
         inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 
         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
@@ -750,22 +751,23 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<ref_ptr<MeshInstanc
         // instance desc buffer
         if (rd.instance_desc) {
             auto capacity = rd.instance_desc->GetDesc().Width;
-            if (capacity < instance_count * sizeof(D3D12_RAYTRACING_INSTANCE_DESC))
+            if (capacity < geometry_count * sizeof(D3D12_RAYTRACING_INSTANCE_DESC))
                 rd.instance_desc = nullptr;
         }
         if (!rd.instance_desc) {
             size_t capacity = 1024;
-            while (capacity < instance_count)
+            while (capacity < geometry_count)
                 capacity *= 2;
             rd.instance_desc = createBuffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
         }
 
         // create instance desc
-        if (instance_count > 0) {
+        if (geometry_count > 0) {
             D3D12_RAYTRACING_INSTANCE_DESC *instance_descs;
             rd.instance_desc->Map(0, nullptr, (void**)&instance_descs);
-            for (size_t i = 0; i < instance_count; i++) {
-                auto& inst_dxr = *rd.mesh_instances[i];
+            for (size_t i = 0; i < geometry_count; i++) {
+                auto& geom_dxr = rd.geometries[i];
+                auto& inst_dxr = *geom_dxr.inst;
                 bool skinned = inst_dxr.base->bones.size() > 0;
                 bool deformed = gpu_skinning && inst_dxr.deformed_vertices;
                 auto& blas = deformed ? inst_dxr.blas_deformed : inst_dxr.mesh->blas;
@@ -773,7 +775,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<ref_ptr<MeshInstanc
                 D3D12_RAYTRACING_INSTANCE_DESC tmp{};
                 (float3x4&)tmp.Transform = to_float3x4(skinned ? float4x4::identity() : inst_dxr.base->transform);
                 tmp.InstanceID = i; // This value will be exposed to the shader via InstanceID()
-                tmp.InstanceMask = 0xFF;
+                tmp.InstanceMask = geom_dxr.hit_mask;
                 tmp.InstanceContributionToHitGroupIndex = i;
                 tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
                 tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
@@ -1010,7 +1012,7 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
     shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
     shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, shader_record_size);
 
-    size_t instance_count = rd.mesh_instances.size();
+    size_t instance_count = rd.geometries.size();
 
     // setup shader table
     {
@@ -1136,8 +1138,8 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
 #endif // rthsEnableRenderTargetValidation
     }
 
-    std::swap(rd.mesh_instances, rd.mesh_instances_prev);
-    rd.mesh_instances.clear();
+    std::swap(rd.geometries, rd.geometries_prev);
+    rd.geometries.clear();
 
     TimestampPrint(rd.timestamp, m_cmd_queue_direct);
 }

@@ -15,6 +15,13 @@ enum RENDER_FLAG
     RF_KEEP_SELF_DROP_SHADOW= 0x0004,
 };
 
+enum HIT_MASK
+{
+    HM_RECEIVER = 0x0001,
+    HM_CASTER   = 0x0002,
+    HM_ALL      = 0x0004,
+};
+
 struct CameraData
 {
     float4x4 view;
@@ -28,8 +35,8 @@ struct CameraData
 
 struct LightData
 {
-    int light_type;
-    int3 pad1;
+    uint light_type;
+    uint3 pad1;
 
     float3 position;
     float range;
@@ -41,9 +48,9 @@ struct SceneData
 {
     CameraData camera;
 
-    int render_flags;
-    int light_count;
-    int2 pad1;
+    uint render_flags;
+    uint light_count;
+    uint2 pad1;
 
     float shadow_ray_offset;
     float self_shadow_threshold;

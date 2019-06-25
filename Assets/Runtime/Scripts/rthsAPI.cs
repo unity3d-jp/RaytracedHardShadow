@@ -8,6 +8,9 @@ using Unity.Collections;
 
 namespace UTJ.RaytracedHardShadow
 {
+// Object.Equals(object o) & Object.GetHashCode()
+#pragma warning disable CS0660, CS0661
+
     public static class Misc
     {
         public static string CString(IntPtr ptr)
@@ -70,6 +73,13 @@ namespace UTJ.RaytracedHardShadow
         ClampBlendShapeWights   = 0x0200,
     }
 
+    public enum rthsHitMask
+    {
+        Rceiver = 0x0001,
+        Caster  = 0x0002,
+        All = Rceiver | Caster,
+    }
+
     public struct rthsMeshData
     {
         #region internal
@@ -82,12 +92,12 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsMeshSetSkinWeights4(IntPtr self, BoneWeight[] w4, int nw4);
         [DllImport("rths")] static extern void rthsMeshSetBlendshapeCount(IntPtr self, int num_bs);
         [DllImport("rths")] static extern void rthsMeshAddBlendshapeFrame(IntPtr self, int bs_index, Vector3[] delta, float weight);
-
         #endregion
 
         public static implicit operator bool(rthsMeshData v) { return v.self != IntPtr.Zero; }
         public static bool operator ==(rthsMeshData a, rthsMeshData b) { return a.self == b.self; }
         public static bool operator !=(rthsMeshData a, rthsMeshData b) { return a.self != b.self; }
+
 
         public static rthsMeshData Create()
         {
@@ -166,12 +176,12 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsMeshInstanceSetTransform(IntPtr self, Matrix4x4 transform);
         [DllImport("rths")] static extern void rthsMeshInstanceSetBones(IntPtr self, Matrix4x4[] bones, int num_bones);
         [DllImport("rths")] static extern void rthsMeshInstanceSetBlendshapeWeights(IntPtr self, float[] bsw, int num_bsw);
-
         #endregion
 
         public static implicit operator bool(rthsMeshInstanceData v) { return v.self != IntPtr.Zero; }
         public static bool operator ==(rthsMeshInstanceData a, rthsMeshInstanceData b) { return a.self == b.self; }
         public static bool operator !=(rthsMeshInstanceData a, rthsMeshInstanceData b) { return a.self != b.self; }
+
 
         public static rthsMeshInstanceData Create(rthsMeshData mesh)
         {
@@ -272,17 +282,21 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
         [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans, float range);
         [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
-        [DllImport("rths")] static extern void rthsAddMesh(IntPtr self, rthsMeshInstanceData mesh);
+        [DllImport("rths")] static extern void rthsAddGeometry(IntPtr self, rthsMeshInstanceData mesh, byte hitMask);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
+
+        public static implicit operator bool(rthsRenderer v) { return v.self != IntPtr.Zero; }
+        public static bool operator ==(rthsRenderer a, rthsRenderer b) { return a.self == b.self; }
+        public static bool operator !=(rthsRenderer a, rthsRenderer b) { return a.self != b.self; }
+
 
         public static string errorLog
         {
             get { return Misc.CString(rthsGetErrorLog()); }
         }
 
-        public static implicit operator bool(rthsRenderer v) { return v.self != IntPtr.Zero; }
         public static rthsRenderer Create()
         {
             // rthsCreateRenderer() will return null if DXR is not supported
@@ -368,9 +382,9 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void AddMesh(rthsMeshInstanceData mesh)
+        public void AddGeometry(rthsMeshInstanceData mesh, byte hitMask = 0xff)
         {
-            rthsAddMesh(self, mesh);
+            rthsAddGeometry(self, mesh, hitMask);
         }
 
         public static void IssueRender()
@@ -382,4 +396,6 @@ namespace UTJ.RaytracedHardShadow
             cb.IssuePluginEvent(rthsGetRenderAll(), 0);
         }
     }
+
+#pragma warning restore CS0660, CS0661 
 }

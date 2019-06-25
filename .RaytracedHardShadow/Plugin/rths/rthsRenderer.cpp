@@ -45,14 +45,39 @@ void RendererBase::beginScene()
 {
     m_scene_data.render_flags = 0;
     m_scene_data.light_count = 0;
-    m_mesh_instance_data.clear();
+    m_geometries.clear();
 }
 
 void RendererBase::endScene()
 {
+    if (!m_geometries.empty()) {
+        // filter duplicated instances with merging hit masks
+
+        std::sort(m_geometries.begin(), m_geometries.end(),
+            [](const auto& a, const auto& b) { return *a.instance < *b.instance; });
+        m_geometries_tmp.clear();
+        m_geometries_tmp.reserve(m_geometries.size());
+
+        GeometryData prev{ nullptr, 0 };
+        for (auto& geom : m_geometries) {
+            if (!prev.instance) {
+                prev = geom;
+            }
+            else if (*prev.instance == *geom.instance) {
+                // duplicated instance. just merge hit mask.
+                prev.hit_mask |= geom.hit_mask;
+            }
+            else {
+                m_geometries_tmp.push_back(prev);
+                prev = geom;
+            }
+        }
+        m_geometries_tmp.push_back(prev);
+        std::swap(m_geometries, m_geometries_tmp);
+    }
 }
 
-void RendererBase::setRaytraceFlags(int flags)
+void RendererBase::setRaytraceFlags(uint32_t flags)
 {
     m_scene_data.render_flags = flags;
 }
@@ -131,15 +156,15 @@ void RendererBase::addReversePointLight(const float4x4& trans, float range)
     dst.range = range;
 }
 
-void RendererBase::addMesh(MeshInstanceData *mesh)
+void RendererBase::addGeometry(GeometryData geom)
 {
-    if (mesh && mesh->valid())
-        m_mesh_instance_data.emplace_back(mesh);
+    if (geom.valid())
+        m_geometries.push_back(geom);
 }
 
 void RendererBase::clearMeshInstances()
 {
-    m_mesh_instance_data.clear();
+    m_geometries.clear();
 }
 
 } // namespace rths

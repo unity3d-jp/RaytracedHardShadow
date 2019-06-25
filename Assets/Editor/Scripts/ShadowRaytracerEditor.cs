@@ -47,11 +47,45 @@ namespace UTJ.RaytracedHardShadowEditor
                 EditorGUILayout.PropertyField(so.FindProperty("m_lightObjects"), true);
             EditorGUILayout.Space();
 
-            EditorGUILayout.PropertyField(so.FindProperty("m_geometryScope"));
-            if (t.geometryScope == ShadowRaytracer.ObjectScope.SelectedScenes)
-                EditorGUILayout.PropertyField(so.FindProperty("m_geometryScenes"), true);
-            else if (t.geometryScope == ShadowRaytracer.ObjectScope.SelectedObjects)
-                EditorGUILayout.PropertyField(so.FindProperty("m_geometryObjects"), true);
+            EditorGUILayout.PropertyField(so.FindProperty("m_separateCastersAndReceivers"));
+            if (t.separateCastersAndReceivers)
+            {
+                EditorGUILayout.PropertyField(so.FindProperty("m_receiverScope"));
+                switch (t.receiverScope)
+                {
+                    case ShadowRaytracer.ObjectScope.SelectedScenes:
+                        EditorGUILayout.PropertyField(so.FindProperty("m_receiverScenes"), true);
+                        break;
+                    case ShadowRaytracer.ObjectScope.SelectedObjects:
+                        EditorGUILayout.PropertyField(so.FindProperty("m_receiverObjects"), true);
+                        break;
+                }
+
+                EditorGUILayout.PropertyField(so.FindProperty("m_casterScope"));
+                switch (t.casterScope)
+                {
+                    case ShadowRaytracer.ObjectScope.SelectedScenes:
+                        EditorGUILayout.PropertyField(so.FindProperty("m_casterScenes"), true);
+                        break;
+                    case ShadowRaytracer.ObjectScope.SelectedObjects:
+                        EditorGUILayout.PropertyField(so.FindProperty("m_casterObjects"), true);
+                        break;
+                }
+            }
+            else
+            {
+                EditorGUILayout.PropertyField(so.FindProperty("m_geometryScope"));
+                switch (t.geometryScope)
+                {
+                    case ShadowRaytracer.ObjectScope.SelectedScenes:
+                        EditorGUILayout.PropertyField(so.FindProperty("m_geometryScenes"), true);
+                        break;
+                    case ShadowRaytracer.ObjectScope.SelectedObjects:
+                        EditorGUILayout.PropertyField(so.FindProperty("m_geometryObjects"), true);
+                        break;
+                }
+            }
+
             EditorGUILayout.Space();
 
             EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFace"));

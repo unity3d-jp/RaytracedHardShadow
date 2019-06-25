@@ -187,7 +187,7 @@ rthsAPI void rthsEndScene(IRenderer *self)
     self->endScene();
 }
 
-rthsAPI void rthsSetRenderFlags(IRenderer *self, int v)
+rthsAPI void rthsSetRenderFlags(IRenderer *self, uint32_t v)
 {
     if (!self)
         return;
@@ -241,11 +241,11 @@ rthsAPI void rthsAddReversePointLight(IRenderer *self, float4x4 transform, float
     self->addReversePointLight(transform, range);
 }
 
-rthsAPI void rthsAddMesh(IRenderer *self, rths::MeshInstanceData *mesh)
+rthsAPI void rthsAddGeometry(IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask)
 {
     if (!self)
         return;
-    self->addMesh(mesh);
+    self->addGeometry({ mesh, mask });
 }
 
 rthsAPI void rthsRender(IRenderer *self)

@@ -124,6 +124,9 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_cullBackFace = true;
         [SerializeField] bool m_GPUSkinning = true;
 
+        // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
+        [SerializeField] bool m_clampBlendshapeWeights = false;
+
         [Tooltip("Light scope for shadow geometries.")]
         [SerializeField] ObjectScope m_lightScope;
 #if UNITY_EDITOR
@@ -132,11 +135,18 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] GameObject[] m_lightObjects;
 
         [Tooltip("Geometry scope for shadow geometries.")]
+        [SerializeField] bool m_separateCastersAndReceivers;
         [SerializeField] ObjectScope m_geometryScope;
+        [SerializeField] ObjectScope m_receiverScope;
+        [SerializeField] ObjectScope m_casterScope;
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_geometryScenes;
+        [SerializeField] SceneAsset[] m_receiverScenes;
+        [SerializeField] SceneAsset[] m_casterScenes;
 #endif
         [SerializeField] GameObject[] m_geometryObjects;
+        [SerializeField] GameObject[] m_receiverObjects;
+        [SerializeField] GameObject[] m_casterObjects;
 
         rthsRenderer m_renderer;
 
@@ -210,10 +220,25 @@ namespace UTJ.RaytracedHardShadow
         }
 
 
+        public bool separateCastersAndReceivers
+        {
+            get { return m_separateCastersAndReceivers; }
+            set { m_separateCastersAndReceivers = value; }
+        }
         public ObjectScope geometryScope
         {
             get { return m_geometryScope; }
             set { m_geometryScope = value; }
+        }
+        public ObjectScope receiverScope
+        {
+            get { return m_receiverScope; }
+            set { m_receiverScope = value; }
+        }
+        public ObjectScope casterScope
+        {
+            get { return m_casterScope; }
+            set { m_casterScope = value; }
         }
 #if UNITY_EDITOR
         public SceneAsset[] geometryScenes
@@ -221,11 +246,31 @@ namespace UTJ.RaytracedHardShadow
             get { return m_geometryScenes; }
             set { m_geometryScenes = value; }
         }
+        public SceneAsset[] receiverScenes
+        {
+            get { return m_receiverScenes; }
+            set { m_receiverScenes = value; }
+        }
+        public SceneAsset[] casterScenes
+        {
+            get { return m_casterScenes; }
+            set { m_casterScenes = value; }
+        }
 #endif
         public GameObject[] geometryObjects
         {
             get { return m_geometryObjects; }
             set { m_geometryObjects = value; }
+        }
+        public GameObject[] receiverObjects
+        {
+            get { return m_receiverObjects; }
+            set { m_receiverObjects = value; }
+        }
+        public GameObject[] casterObjects
+        {
+            get { return m_casterObjects; }
+            set { m_casterObjects = value; }
         }
         #endregion
 
@@ -436,66 +481,86 @@ namespace UTJ.RaytracedHardShadow
             return rec.instData;
         }
 
-        public void EnumerateMeshRenderers(Action<MeshRenderer> bodyMR, Action<SkinnedMeshRenderer> bodySMR)
+        public void EnumerateMeshRenderers(Action<MeshRenderer, byte> bodyMR, Action<SkinnedMeshRenderer, byte> bodySMR)
         {
-            if (m_geometryScope == ObjectScope.EntireScene)
+            // C# 7.0 supports function in function but we stick to the old way for compatibility
+
+            Action<GameObject[], byte> processGOs = (gos, mask) =>
             {
-                foreach (var mr in FindObjectsOfType<MeshRenderer>())
-                    if (mr.enabled)
-                        bodyMR.Invoke(mr);
-                foreach (var smr in FindObjectsOfType<SkinnedMeshRenderer>())
-                    if (smr.enabled)
-                        bodySMR.Invoke(smr);
-            }
-            else if (m_geometryScope == ObjectScope.SelectedScenes)
-            {
-#if UNITY_EDITOR
-                int numScenes = SceneManager.sceneCount;
-                for (int si = 0; si < numScenes; ++si)
+                foreach (var go in gos)
                 {
-                    var scene = SceneManager.GetSceneAt(si);
-                    if (!scene.isLoaded)
-                        continue;
-
-                    foreach (var sceneAsset in m_geometryScenes)
-                    {
-                        if (sceneAsset == null)
-                            continue;
-
-                        var path = AssetDatabase.GetAssetPath(sceneAsset);
-                        if (scene.path == path)
-                        {
-                            foreach (var go in scene.GetRootGameObjects())
-                            {
-                                if (!go.activeInHierarchy)
-                                    continue;
-
-                                foreach (var mr in go.GetComponentsInChildren<MeshRenderer>())
-                                    if (mr.enabled)
-                                        bodyMR.Invoke(mr);
-                                foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
-                                    if (smr.enabled)
-                                        bodySMR.Invoke(smr);
-                            }
-                            break;
-                        }
-                    }
-                }
-#endif
-            }
-            else if (m_geometryScope == ObjectScope.SelectedObjects)
-            {
-                foreach (var go in m_geometryObjects)
-                {
-                    if (go == null || !go.activeInHierarchy)
+                    if (!go.activeInHierarchy)
                         continue;
 
                     foreach (var mr in go.GetComponentsInChildren<MeshRenderer>())
                         if (mr.enabled)
-                            bodyMR.Invoke(mr);
+                            bodyMR.Invoke(mr, mask);
                     foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
                         if (smr.enabled)
-                            bodySMR.Invoke(smr);
+                            bodySMR.Invoke(smr, mask);
+                }
+            };
+
+#if UNITY_EDITOR
+            Action<SceneAsset[], byte> processScene = (sceneAssets, mask) => {
+                foreach (var sceneAsset in sceneAssets)
+                {
+                    if (sceneAsset == null)
+                        return;
+
+                    var path = AssetDatabase.GetAssetPath(sceneAsset);
+                    int numScenes = SceneManager.sceneCount;
+                    for (int si = 0; si < numScenes; ++si)
+                    {
+                        var scene = SceneManager.GetSceneAt(si);
+                        if (scene.isLoaded && scene.path == path)
+                        {
+                            processGOs(scene.GetRootGameObjects(), mask);
+                            break;
+                        }
+                    }
+                }
+            };
+#endif
+
+            Action<byte> processEntireScene = (mask) =>
+            {
+                foreach (var mr in FindObjectsOfType<MeshRenderer>())
+                    if (mr.enabled)
+                        bodyMR.Invoke(mr, mask);
+                foreach (var smr in FindObjectsOfType<SkinnedMeshRenderer>())
+                    if (smr.enabled)
+                        bodySMR.Invoke(smr, mask);
+            };
+
+            if (m_separateCastersAndReceivers)
+            {
+                switch(m_receiverScope)
+                {
+                    case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.Rceiver); break;
+#if UNITY_EDITOR
+                    case ObjectScope.SelectedScenes: processScene(m_receiverScenes, (byte)rthsHitMask.Rceiver); break;
+#endif
+                    case ObjectScope.SelectedObjects: processGOs(m_receiverObjects, (byte)rthsHitMask.Rceiver); break;
+                }
+                switch (m_casterScope)
+                {
+                    case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.Caster); break;
+#if UNITY_EDITOR
+                    case ObjectScope.SelectedScenes: processScene(m_casterScenes, (byte)rthsHitMask.Caster); break;
+#endif
+                    case ObjectScope.SelectedObjects: processGOs(m_casterObjects, (byte)rthsHitMask.Caster); break;
+                }
+            }
+            else
+            {
+                switch (m_geometryScope)
+                {
+                    case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.All); break;
+#if UNITY_EDITOR
+                    case ObjectScope.SelectedScenes: processScene(m_geometryScenes, (byte)rthsHitMask.All); break;
+#endif
+                    case ObjectScope.SelectedObjects: processGOs(m_geometryObjects, (byte)rthsHitMask.All); break;
                 }
             }
         }
@@ -559,6 +624,9 @@ namespace UTJ.RaytracedHardShadow
 
         void Update()
         {
+#if UNITY_EDITOR
+            m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
+#endif
             InitializeRenderer();
             if (!m_renderer)
                 return;
@@ -632,7 +700,7 @@ namespace UTJ.RaytracedHardShadow
                     flags |= (int)rthsRenderFlag.KeepSelfDropShadow;
                 if (m_GPUSkinning)
                     flags |= (int)rthsRenderFlag.GPUSkinning;
-                if (PlayerSettings.legacyClampBlendShapeWeights)
+                if (m_clampBlendshapeWeights)
                     flags |= (int)rthsRenderFlag.ClampBlendShapeWights;
 
                 m_renderer.BeginScene();
@@ -646,8 +714,8 @@ namespace UTJ.RaytracedHardShadow
                     scl => { m_renderer.AddLight(scl); }
                     );
                 EnumerateMeshRenderers(
-                    mr => { m_renderer.AddMesh(GetMeshInstanceData(mr)); },
-                    smr => { m_renderer.AddMesh(GetMeshInstanceData(smr)); }
+                    (mr, mask) => { m_renderer.AddGeometry(GetMeshInstanceData(mr), mask); },
+                    (smr, mask) => { m_renderer.AddGeometry(GetMeshInstanceData(smr), mask); }
                     );
                 m_renderer.EndScene();
             }

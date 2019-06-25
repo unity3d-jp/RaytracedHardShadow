@@ -181,6 +181,16 @@ public:
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 
+class GeometryDataDXR
+{
+public:
+    MeshInstanceDataDXRPtr inst;
+    uint8_t hit_mask;
+
+    bool operator==(const GeometryDataDXR& v) const;
+    bool operator!=(const GeometryDataDXR& v) const;
+};
+
 class TimestampDXR
 {
 public:
@@ -234,7 +244,7 @@ public:
     DescriptorHandleDXR scene_data_handle;
     DescriptorHandleDXR render_target_handle;
 
-    std::vector<MeshInstanceDataDXRPtr> mesh_instances, mesh_instances_prev;
+    std::vector<GeometryDataDXR> geometries, geometries_prev;
     SceneData scene_data_prev{};
     ID3D12ResourcePtr instance_desc;
     ID3D12ResourcePtr tlas_scratch;
