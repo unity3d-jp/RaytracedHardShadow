@@ -117,7 +117,7 @@ rthsAPI void rthsMeshInstanceSetTransform(MeshInstanceData *self, float4x4 trans
 }
 rthsAPI void rthsMeshInstanceSetBones(MeshInstanceData *self, const float4x4 *bones, int num_bones)
 {
-    if (!self)
+    if (!self || !self->mesh->skin.valid())
         return;
 
     if (self->bones.size() != num_bones)
@@ -134,7 +134,7 @@ rthsAPI void rthsMeshInstanceSetBones(MeshInstanceData *self, const float4x4 *bo
 }
 rthsAPI void rthsMeshInstanceSetBlendshapeWeights(MeshInstanceData *self, const float *bsw, int num_bsw)
 {
-    if (!self)
+    if (!self || self->mesh->blendshapes.empty())
         return;
 
     if (self->blendshape_weights.size() != num_bsw)

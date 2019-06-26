@@ -94,8 +94,20 @@ namespace UTJ.RaytracedHardShadow
 
             public void Update(rthsMeshData md, SkinnedMeshRenderer smr)
             {
-                Update(md, smr.localToWorldMatrix);
-                instData.SetBones(smr);
+                var bones = smr.bones;
+                if (bones.Length > 0)
+                {
+                    // skinned
+                    var rootBone = smr.rootBone;
+                    var rootMatrix = rootBone != null ? rootBone.localToWorldMatrix : Matrix4x4.identity;
+                    Update(md, rootMatrix);
+                    instData.SetBones(bones);
+                }
+                else
+                {
+                    // non-skinned
+                    Update(md, smr.localToWorldMatrix);
+                }
                 instData.SetBlendshapeWeights(smr);
             }
 
@@ -502,7 +514,7 @@ namespace UTJ.RaytracedHardShadow
             };
 
 #if UNITY_EDITOR
-            Action<SceneAsset[], byte> processScene = (sceneAssets, mask) => {
+            Action<SceneAsset[], byte> processScenes = (sceneAssets, mask) => {
                 foreach (var sceneAsset in sceneAssets)
                 {
                     if (sceneAsset == null)
@@ -539,7 +551,7 @@ namespace UTJ.RaytracedHardShadow
                 {
                     case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.Rceiver); break;
 #if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScene(m_receiverScenes, (byte)rthsHitMask.Rceiver); break;
+                    case ObjectScope.SelectedScenes: processScenes(m_receiverScenes, (byte)rthsHitMask.Rceiver); break;
 #endif
                     case ObjectScope.SelectedObjects: processGOs(m_receiverObjects, (byte)rthsHitMask.Rceiver); break;
                 }
@@ -547,7 +559,7 @@ namespace UTJ.RaytracedHardShadow
                 {
                     case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.Caster); break;
 #if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScene(m_casterScenes, (byte)rthsHitMask.Caster); break;
+                    case ObjectScope.SelectedScenes: processScenes(m_casterScenes, (byte)rthsHitMask.Caster); break;
 #endif
                     case ObjectScope.SelectedObjects: processGOs(m_casterObjects, (byte)rthsHitMask.Caster); break;
                 }
@@ -558,7 +570,7 @@ namespace UTJ.RaytracedHardShadow
                 {
                     case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.All); break;
 #if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScene(m_geometryScenes, (byte)rthsHitMask.All); break;
+                    case ObjectScope.SelectedScenes: processScenes(m_geometryScenes, (byte)rthsHitMask.All); break;
 #endif
                     case ObjectScope.SelectedObjects: processGOs(m_geometryObjects, (byte)rthsHitMask.All); break;
                 }
@@ -590,7 +602,8 @@ namespace UTJ.RaytracedHardShadow
             }
             else
             {
-                Debug.Log("ShadowRenderer: " + rthsRenderer.errorLog);
+                Debug.LogWarning("ShadowRaytracer: " + rthsRenderer.errorLog);
+                this.enabled = false;
             }
         }
         #endregion

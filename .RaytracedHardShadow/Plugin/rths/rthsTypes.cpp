@@ -106,6 +106,11 @@ float4x4 invert(const float4x4& x)
 }
 
 
+bool SkinData::valid() const
+{
+    return !bindposes.empty() && !bone_counts.empty() && !weights.empty();
+}
+
 void CallOnMeshDelete(MeshData *mesh);
 void CallOnMeshInstanceDelete(MeshInstanceData *inst);
 

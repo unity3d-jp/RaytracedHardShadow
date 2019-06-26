@@ -201,14 +201,14 @@ namespace UTJ.RaytracedHardShadow
 
         public void SetBones(Matrix4x4[] bones)
         {
-            if (bones == null)
+            if (bones == null || bones.Length == 0)
                 rthsMeshInstanceSetBones(self, null, 0);
             else
                 rthsMeshInstanceSetBones(self, bones, bones.Length);
         }
         public void SetBones(Transform[] bones)
         {
-            if (bones == null)
+            if (bones == null || bones.Length == 0)
             {
                 rthsMeshInstanceSetBones(self, null, 0);
             }
@@ -223,11 +223,6 @@ namespace UTJ.RaytracedHardShadow
                 }
                 SetBones(transforms);
             }
-        }
-        public void SetBones(SkinnedMeshRenderer smr)
-        {
-            if (smr.rootBone != null)
-                SetBones(smr.bones);
         }
 
         public void SetBlendshapeWeights(float[] bsw)

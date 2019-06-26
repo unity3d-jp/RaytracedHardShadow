@@ -221,6 +221,8 @@ struct SkinData
     std::vector<float4x4>    bindposes;
     std::vector<uint8_t>     bone_counts;
     std::vector<BoneWeight1> weights;
+
+    bool valid() const;
 };
 
 struct BlendshapeFrameData

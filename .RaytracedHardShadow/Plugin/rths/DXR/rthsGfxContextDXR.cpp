@@ -249,9 +249,9 @@ bool GfxContextDXR::initializeDevice()
     // local root signature
     {
         D3D12_DESCRIPTOR_RANGE ranges[] = {
-            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 },
-            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 1 },
-            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 2 },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
         D3D12_ROOT_PARAMETER param{};
         param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -769,12 +769,11 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             for (size_t i = 0; i < geometry_count; i++) {
                 auto& geom_dxr = rd.geometries[i];
                 auto& inst_dxr = *geom_dxr.inst;
-                bool skinned = inst_dxr.base->bones.size() > 0;
                 bool deformed = gpu_skinning && inst_dxr.deformed_vertices;
                 auto& blas = deformed ? inst_dxr.blas_deformed : inst_dxr.mesh->blas;
 
                 D3D12_RAYTRACING_INSTANCE_DESC tmp{};
-                (float3x4&)tmp.Transform = to_float3x4(skinned ? float4x4::identity() : inst_dxr.base->transform);
+                (float3x4&)tmp.Transform = to_float3x4(inst_dxr.base->transform);
                 tmp.InstanceID = i; // This value will be exposed to the shader via InstanceID()
                 tmp.InstanceMask = geom_dxr.hit_mask;
                 tmp.InstanceContributionToHitGroupIndex = 0;
@@ -1132,7 +1131,7 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
 
 void GfxContextDXR::frameEnd()
 {
-    // erase unused texture / buffer / mesh data
+    // erase unused texture / buffer resources
     auto erase_unused_records = [](auto& records, const char *message) {
         int num_erased = 0;
         for (auto it = records.begin(); it != records.end(); /**/) {

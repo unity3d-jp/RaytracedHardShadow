@@ -52,9 +52,9 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
 {
     {
         const D3D12_DESCRIPTOR_RANGE ranges[] = {
-            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 },
-            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, 1 },
-            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 9 },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
         D3D12_ROOT_PARAMETER param{};
         param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -276,8 +276,15 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
             // update on every frame
             writeBuffer(inst_dxr.bone_matrices, [&](void *dst_) {
                 auto dst = (float4x4*)dst_;
+
+                // note:
+                // object space skinning is recommended for better BLAS building. ( http://intro-to-dxr.cwyman.org/presentations/IntroDXR_RaytracingAPI.pdf )
+                // so, try to convert bone matrices to root bone space.
+                // on skinned meshes, inst.transform is root bone's transform or identity if root bone is not assigned.
+                // both cases work, but identity matrix means world space skinning that is not optimal.
+                auto iroot = invert(inst.transform);
                 for (int bi = 0; bi < bone_count; ++bi)
-                    *dst++ = mesh.skin.bindposes[bi] * inst.bones[bi];
+                    *dst++ = mesh.skin.bindposes[bi] * inst.bones[bi] * iroot;
             });
         }
 
