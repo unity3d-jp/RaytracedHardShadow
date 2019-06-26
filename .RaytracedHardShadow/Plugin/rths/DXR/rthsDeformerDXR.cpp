@@ -52,22 +52,19 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
 {
     {
         const D3D12_DESCRIPTOR_RANGE ranges[] = {
-                { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 },
-                { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, 0 },
-                { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 0 },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, 1 },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 9 },
         };
-        D3D12_ROOT_PARAMETER params[_countof(ranges)]{};
-        for (int i = 0; i < _countof(ranges); i++) {
-            auto& param = params[i];
-            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-            param.DescriptorTable.NumDescriptorRanges = 1;
-            param.DescriptorTable.pDescriptorRanges = &ranges[i];
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        }
+        D3D12_ROOT_PARAMETER param{};
+        param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        param.DescriptorTable.NumDescriptorRanges = _countof(ranges);
+        param.DescriptorTable.pDescriptorRanges = ranges;
+        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         D3D12_ROOT_SIGNATURE_DESC desc{};
-        desc.NumParameters = _countof(params);
-        desc.pParameters = params;
+        desc.NumParameters = 1;
+        desc.pParameters = &param;
 
         ID3DBlobPtr sig_blob;
         ID3DBlobPtr error_blob;
@@ -315,8 +312,6 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
         ID3D12DescriptorHeap* heaps[] = { inst_dxr.srvuav_heap };
         cl->SetDescriptorHeaps(_countof(heaps), heaps);
         cl->SetComputeRootDescriptorTable(0, hdst_vertices.hgpu);
-        cl->SetComputeRootDescriptorTable(1, hbase_vertices.hgpu);
-        cl->SetComputeRootDescriptorTable(2, hmesh_info.hgpu);
         cl->Dispatch(mesh.vertex_count, 1, 1);
     }
 
