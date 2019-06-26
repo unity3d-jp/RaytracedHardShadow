@@ -253,19 +253,15 @@ bool GfxContextDXR::initializeDevice()
             { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 1 },
             { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 2 },
         };
-
-        D3D12_ROOT_PARAMETER params[_countof(ranges)]{};
-        for (int i = 0; i < _countof(ranges); i++) {
-            auto& param = params[i];
-            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-            param.DescriptorTable.NumDescriptorRanges = 1;
-            param.DescriptorTable.pDescriptorRanges = &ranges[i];
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        }
+        D3D12_ROOT_PARAMETER param{};
+        param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        param.DescriptorTable.NumDescriptorRanges = _countof(ranges);
+        param.DescriptorTable.pDescriptorRanges = ranges;
+        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         D3D12_ROOT_SIGNATURE_DESC desc{};
-        desc.NumParameters = _countof(params);
-        desc.pParameters = params;
+        desc.NumParameters = 1;
+        desc.pParameters = &param;
         desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
 
         ID3DBlobPtr sig_blob;
@@ -282,7 +278,7 @@ bool GfxContextDXR::initializeDevice()
         }
     }
 
-    // global root signature (empty for now)
+    // global root signature
     {
         D3D12_ROOT_SIGNATURE_DESC desc{};
         desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
@@ -351,21 +347,15 @@ bool GfxContextDXR::initializeDevice()
         rt_shader_desc.MaxAttributeSizeInBytes = sizeof(float) * 2; // size of BuiltInTriangleIntersectionAttributes
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &rt_shader_desc);
 
-        ID3D12RootSignature *local_rootsig = m_local_rootsig.GetInterfacePtr();
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local_rootsig);
-
-        D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION ass_desc{};
-        ass_desc.pSubobjectToAssociate = &subobjects.back();
-        ass_desc.NumExports = _countof(exports);
-        ass_desc.pExports = exports;
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, &ass_desc);
-
-        ID3D12RootSignature *global_rootsig = m_global_rootsig.GetInterfacePtr();
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
-
         D3D12_RAYTRACING_PIPELINE_CONFIG rt_pipeline_desc{};
         rt_pipeline_desc.MaxTraceRecursionDepth = rthsMaxBounce;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &rt_pipeline_desc);
+
+        ID3D12RootSignature *local_rootsig = m_local_rootsig.GetInterfacePtr();
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local_rootsig);
+
+        ID3D12RootSignature *global_rootsig = m_global_rootsig.GetInterfacePtr();
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
 
         D3D12_STATE_OBJECT_DESC pso_desc{};
         pso_desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
@@ -1023,8 +1013,6 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
     shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
     shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, shader_record_size);
 
-    size_t geometry_count = rd.geometries.size();
-
     // setup shader table
     if (!rd.shader_table) {
         size_t capacity = 32;
@@ -1088,12 +1076,12 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
         dr_desc.HitGroupTable.SizeInBytes = shader_record_size * 2;
         addr += shader_record_size * 2;
 
+        // bind root signature and shader resources
+        rd.cmd_list_direct->SetComputeRootSignature(m_global_rootsig);
+
         // descriptor heaps
         ID3D12DescriptorHeap *desc_heaps[] = { rd.desc_heap };
         rd.cmd_list_direct->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
-
-        // bind root signature and shader resources
-        rd.cmd_list_direct->SetComputeRootSignature(m_global_rootsig);
 
         // dispatch
         rd.cmd_list_direct->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
