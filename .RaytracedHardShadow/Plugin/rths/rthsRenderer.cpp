@@ -18,6 +18,12 @@ void CallOnMeshInstanceDelete(MeshInstanceData *inst)
         cb->onMeshInstanceDelete(inst);
 }
 
+void CallOnRenderTargetDelete(RenderTargetData *rt)
+{
+    for (auto& cb : g_scene_callbacks)
+        cb->onRenderTargetDelete(rt);
+}
+
 ISceneCallback::ISceneCallback()
 {
     g_scene_callbacks.push_back(this);

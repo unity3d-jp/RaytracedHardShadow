@@ -43,4 +43,23 @@ private:
     T *m_ptr = nullptr;
 };
 
+template<class T>
+class RefCount
+{
+public:
+    void addref()
+    {
+        ++ref_count;
+    }
+
+    void release()
+    {
+        if (--ref_count == 0)
+            delete (T*)this;
+    }
+
+private:
+    std::atomic_int ref_count = 1;
+};
+
 } // namespace rths

@@ -1175,6 +1175,14 @@ void GfxContextDXR::frameEnd()
     erase_unused_records(m_buffer_records, "GfxContextDXR::releaseUnusedResources(): erased %d buffer records\n");
 }
 
+bool GfxContextDXR::readbackRenderTarget(RenderDataDXR& rd, void *dst)
+{
+    if (!rd.render_target->resource)
+        return false;
+    auto format = rd.render_target->resource->GetDesc().Format;
+    return readbackTexture(rd, dst, rd.render_target->resource, rd.render_target->width, rd.render_target->height, SizeOfElement(format));
+}
+
 void GfxContextDXR::onMeshDelete(MeshData *mesh)
 {
     m_mesh_records.erase(mesh);
@@ -1183,6 +1191,11 @@ void GfxContextDXR::onMeshDelete(MeshData *mesh)
 void GfxContextDXR::onMeshInstanceDelete(MeshInstanceData *mesh)
 {
     m_meshinstance_records.erase(mesh);
+}
+
+void GfxContextDXR::onRenderTargetDelete(RenderTargetData *rt)
+{
+    m_rendertarget_records.erase(rt);
 }
 
 } // namespace rths

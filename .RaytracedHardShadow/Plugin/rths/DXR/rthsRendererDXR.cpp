@@ -16,6 +16,8 @@ public:
     void render() override; // called from render thread
     void finish() override; // called from render thread
 
+    bool readbackRenderTarget(void *dst) override;
+
 private:
     RenderDataDXR m_render_data;
 };
@@ -60,6 +62,15 @@ void RendererDXR::finish()
     auto ctx = GfxContextDXR::getInstance();
     ctx->finish(m_render_data);
     clearMeshInstances();
+}
+
+bool RendererDXR::readbackRenderTarget(void *dst)
+{
+    if (!valid())
+        return false;
+
+    auto ctx = GfxContextDXR::getInstance();
+    return ctx->readbackRenderTarget(m_render_data, dst);
 }
 
 IRenderer* CreateRendererDXR()

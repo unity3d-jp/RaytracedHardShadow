@@ -191,6 +191,15 @@ public:
     bool operator!=(const GeometryDataDXR& v) const;
 };
 
+class RenderTargetDataDXR
+{
+public:
+    RenderTargetData *base = nullptr;
+    TextureDataDXR texture;
+};
+using RenderTargetDataDXRPtr = std::shared_ptr<RenderTargetDataDXR>;
+
+
 class TimestampDXR
 {
 public:
@@ -296,6 +305,7 @@ extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
 extern const D3D12_HEAP_PROPERTIES kReadbackHeapProps;
 
+size_t SizeOfElement(DXGI_FORMAT rtf);
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
 std::string ToString(ID3DBlob *blob);
 

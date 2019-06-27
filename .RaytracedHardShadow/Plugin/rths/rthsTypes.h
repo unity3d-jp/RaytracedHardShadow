@@ -51,6 +51,20 @@ enum class UpdateFlag : uint32_t
     Bone = 4,
 };
 
+enum class RenderTargetFormat : uint32_t
+{
+    Unknown = 0,
+    Ru8,
+    RGu8,
+    RGBAu8,
+    Rf16,
+    RGf16,
+    RGBAf16,
+    Rf32,
+    RGf32,
+    RGBAf32,
+};
+
 struct LightData
 {
     LightType light_type{};
@@ -88,6 +102,27 @@ using GPUResourcePtr = void*;
 using TextureData = GPUResourcePtr;
 using BufferData = GPUResourcePtr;
 
+
+// resource type exposed to plugin user
+template<class T>
+class SharedResource : public RefCount<T>
+{
+public:
+    bool operator==(const SharedResource& v) const { return id == v.id; }
+    bool operator!=(const SharedResource& v) const { return id != v.id; }
+    bool operator<(const SharedResource& v) const { return id < v.id; }
+
+protected:
+    static uint64_t newID()
+    {
+        static uint64_t s_id;
+        return ++s_id;
+    }
+
+    uint64_t id = newID();
+};
+
+
 struct BoneWeight1
 {
     float weight = 0.0f;
@@ -118,10 +153,7 @@ struct BlendshapeData
 };
 
 
-class MeshData;
-using MeshDataCallback = std::function<void(MeshData*)>;
-
-class MeshData
+class MeshData : public SharedResource<MeshData>
 {
 public:
     GPUResourcePtr gpu_vertex_buffer = nullptr; // host
@@ -139,24 +171,12 @@ public:
 
     MeshData();
     ~MeshData();
-    void addref();
-    void release();
     bool valid() const;
-    bool operator==(const MeshData& v) const;
-    bool operator!=(const MeshData& v) const;
-    bool operator<(const MeshData& v) const;
-
-private:
-    uint64_t id = 0;
-    std::atomic_int ref_count = 1;
 };
 using MeshDataPtr = ref_ptr<MeshData>;
 
 
-class MeshInstanceData;
-using MeshInstanceDataCallback = std::function<void(MeshInstanceData*)>;
-
-class MeshInstanceData
+class MeshInstanceData : public SharedResource<MeshInstanceData>
 {
 public:
     MeshDataPtr mesh;
@@ -167,16 +187,7 @@ public:
 
     MeshInstanceData();
     ~MeshInstanceData();
-    void addref();
-    void release();
     bool valid() const;
-    bool operator==(const MeshInstanceData& v) const;
-    bool operator!=(const MeshInstanceData& v) const;
-    bool operator<(const MeshInstanceData& v) const;
-
-private:
-    uint64_t id = 0;
-    std::atomic_int ref_count = 1;
 };
 using MeshInstanceDataPtr = ref_ptr<MeshInstanceData>;
 
@@ -192,5 +203,19 @@ public:
 
     bool valid() const;
 };
+
+
+class RenderTargetData : public SharedResource<RenderTargetData>
+{
+public:
+    GPUResourcePtr gpu_texture = nullptr;
+    int width = 0;
+    int height = 0;
+    RenderTargetFormat format = RenderTargetFormat::Unknown;
+
+    RenderTargetData();
+    ~RenderTargetData();
+};
+using RenderTargetDataPtr = ref_ptr<RenderTargetData>;
 
 } // namespace rths

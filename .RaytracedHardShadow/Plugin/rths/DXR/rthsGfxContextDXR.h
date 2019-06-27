@@ -30,8 +30,12 @@ public:
     void finish(RenderDataDXR& rd);
     void frameEnd() override;
 
+    bool readbackRenderTarget(RenderDataDXR& rd, void *dst);
+
     void onMeshDelete(MeshData *mesh) override;
     void onMeshInstanceDelete(MeshInstanceData *inst) override;
+    void onRenderTargetDelete(RenderTargetData *rt) override;
+
 
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     ID3D12ResourcePtr createTexture(int width, int height, DXGI_FORMAT format);
@@ -66,11 +70,7 @@ private:
     std::map<void*, BufferDataDXRPtr> m_buffer_records;
     std::map<MeshData*, MeshDataDXRPtr> m_mesh_records;
     std::map<MeshInstanceData*, MeshInstanceDataDXRPtr> m_meshinstance_records;
-
-    FrameBeginCallback m_on_frame_begin;
-    FrameEndCallback m_on_frame_end;
-    MeshDataCallback m_on_mesh_delete;
-    MeshInstanceDataCallback m_on_meshinstance_delete;
+    std::map<RenderTargetData*, RenderTargetDataDXRPtr> m_rendertarget_records;
 };
 
 } // namespace rths

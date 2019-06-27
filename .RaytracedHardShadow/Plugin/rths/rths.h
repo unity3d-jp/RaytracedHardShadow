@@ -31,6 +31,20 @@ enum class HitMask : uint8_t
     All = Receiver | Caster,
 };
 
+enum class RenderTargetFormat : uint32_t
+{
+    Unknown = 0,
+    Ru8,
+    RGu8,
+    RGBAu8,
+    Rf16,
+    RGf16,
+    RGBAf16,
+    Rf32,
+    RGf32,
+    RGBAf32,
+};
+
 struct BoneWeight1
 {
     float weight;
@@ -42,16 +56,19 @@ struct BoneWeight4
     int index[4];
 };
 #else // rthsImpl
+struct float2;
 struct float3;
 struct float4;
 struct float4x4;
 struct BoneWeight1;
 struct BoneWeight4;
+enum class RenderTargetFormat : uint32_t;
 #endif // rthsImpl
 
 using GPUResourcePtr = void*;
 class MeshData;
 class MeshInstanceData;
+class RenderTargetData;
 class IRenderer;
 
 } // namespace rths
@@ -81,6 +98,13 @@ rthsAPI void rthsMeshInstanceSetTransform(rths::MeshInstanceData *self, rths::fl
 rthsAPI void rthsMeshInstanceSetBones(rths::MeshInstanceData *self, const rths::float4x4 *bones, int num_bones);
 rthsAPI void rthsMeshInstanceSetBlendshapeWeights(rths::MeshInstanceData *self, const float *bsw, int num_bsw);
 
+// render target interface
+rthsAPI rths::RenderTargetData* rthsRenderTargetCreate();
+rthsAPI void rthsRenderTargetRelease(rths::RenderTargetData *self);
+rthsAPI void rthsRenderTargetSetName(rths::RenderTargetData *self, const char *name);
+rthsAPI void rthsRenderTargetSetGPUTexture(rths::RenderTargetData *self, rths::GPUResourcePtr tex);
+rthsAPI void rthsRenderTargetSetup(rths::RenderTargetData *self, int width, int height, rths::RenderTargetFormat format);
+
 // renderer interface
 rthsAPI rths::IRenderer* rthsRendererCreate();
 rthsAPI void rthsRendererRelease(rths::IRenderer *self);
@@ -99,10 +123,11 @@ rthsAPI void rthsRendererAddReversePointLight(rths::IRenderer *self, rths::float
 rthsAPI void rthsRendererAddGeometry(rths::IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask = 0xff); // mask: combination of HitMask
 rthsAPI void rthsRendererStartRender(rths::IRenderer *self);
 rthsAPI void rthsRendererFinishRender(rths::IRenderer *self);
+rthsAPI bool rthsRendererReadbackRenderTarget(rths::IRenderer *self, void *dst);
 
 rthsAPI void rthsMarkFrameBegin();
 rthsAPI void rthsMarkFrameEnd();
-// no need to call rthsMarkFrameBegin/End when use this
+// no need to call rthsMarkFrameBegin/End when use rthsRenderAll()
 rthsAPI void rthsRenderAll();
 
 #ifdef _WIN32

@@ -170,6 +170,32 @@ rthsAPI void rthsMeshInstanceSetBlendshapeWeights(MeshInstanceData *self, const 
 }
 
 
+rthsAPI RenderTargetData* rthsRenderTargetCreate()
+{
+    return new RenderTargetData();
+}
+rthsAPI void rthsRenderTargetRelease(RenderTargetData *self)
+{
+    if (!self)
+        return;
+    self->release();
+}
+rthsAPI void rthsRenderTargetSetGPUTexture(RenderTargetData *self, GPUResourcePtr tex)
+{
+    if (!self)
+        return;
+    self->gpu_texture = tex;
+}
+rthsAPI void rthsRenderTargetSetup(RenderTargetData *self, int width, int height, RenderTargetFormat format)
+{
+    if (!self)
+        return;
+    self->width = width;
+    self->height = height;
+    self->format = format;
+}
+
+
 rthsAPI IRenderer* rthsRendererCreate()
 {
     return CreateRendererDXR();
@@ -274,6 +300,13 @@ rthsAPI void rthsRendererFinishRender(IRenderer *self)
     if (!self)
         return;
     self->finish();
+}
+
+rthsAPI bool rthsRendererReadbackRenderTarget(rths::IRenderer *self, void *dst)
+{
+    if (!self)
+        return false;
+    return self->readbackRenderTarget(dst);
 }
 
 rthsAPI void rthsMarkFrameBegin()
