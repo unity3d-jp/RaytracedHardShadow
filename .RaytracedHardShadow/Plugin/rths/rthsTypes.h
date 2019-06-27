@@ -152,6 +152,7 @@ private:
 };
 using MeshDataPtr = ref_ptr<MeshData>;
 
+
 class MeshInstanceData;
 using MeshInstanceDataCallback = std::function<void(MeshInstanceData*)>;
 
@@ -179,6 +180,7 @@ private:
 };
 using MeshInstanceDataPtr = ref_ptr<MeshInstanceData>;
 
+
 // one instance may be rendered multiple times with different hit mask in one frame.
 // (e.g. one renderer render the object as a receiver, another one render it as a caster)
 // so, hit mask must be separated from MeshInstanceData.
@@ -190,22 +192,5 @@ public:
 
     bool valid() const;
 };
-
-
-template<class StdFuncT>
-static inline void add_callback(std::vector<StdFuncT>& funcs, const StdFuncT& to_add)
-{
-    funcs.push_back(to_add);
-}
-
-template<class StdFuncT>
-static inline void erase_callback(std::vector<StdFuncT>& funcs, const StdFuncT& to_erase)
-{
-    auto it = std::find_if(funcs.begin(), funcs.end(),
-        [&to_erase](auto& a) { return a.target<void*>() == to_erase.target<void*>(); });
-    if (it != funcs.end())
-        funcs.erase(it);
-}
-
 
 } // namespace rths

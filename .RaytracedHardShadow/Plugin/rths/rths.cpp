@@ -5,6 +5,11 @@
 
 using namespace rths;
 
+rthsAPI const char* rthsGetErrorLog()
+{
+    return GetErrorLog().c_str();
+}
+
 
 rthsAPI MeshData* rthsMeshCreate()
 {
@@ -165,111 +170,106 @@ rthsAPI void rthsMeshInstanceSetBlendshapeWeights(MeshInstanceData *self, const 
 }
 
 
-rthsAPI const char* rthsGetErrorLog()
-{
-    return GetErrorLog().c_str();
-}
-
-rthsAPI IRenderer* rthsCreateRenderer()
+rthsAPI IRenderer* rthsRendererCreate()
 {
     return CreateRendererDXR();
 }
 
-rthsAPI void rthsReleaseRenderer(IRenderer *self)
+rthsAPI void rthsRendererRelease(IRenderer *self)
 {
     delete self;
 }
 
-rthsAPI void rthsSetRenderTarget(IRenderer *self, void *render_target)
+rthsAPI void rthsRendererSetRenderTarget(IRenderer *self, void *render_target)
 {
     if (!self || !render_target)
         return;
     self->setRenderTarget(render_target);
 }
 
-rthsAPI void rthsBeginScene(IRenderer *self)
+rthsAPI void rthsRendererBeginScene(IRenderer *self)
 {
     if (!self)
         return;
     self->beginScene();
 }
 
-rthsAPI void rthsEndScene(IRenderer *self)
+rthsAPI void rthsRendererEndScene(IRenderer *self)
 {
     if (!self)
         return;
     self->endScene();
 }
 
-rthsAPI void rthsSetRenderFlags(IRenderer *self, uint32_t v)
+rthsAPI void rthsRendererSetRenderFlags(IRenderer *self, uint32_t v)
 {
     if (!self)
         return;
     self->setRaytraceFlags(v);
 }
-rthsAPI void rthsSetShadowRayOffset(IRenderer *self, float v)
+rthsAPI void rthsRendererSetShadowRayOffset(IRenderer *self, float v)
 {
     if (!self)
         return;
     self->setShadowRayOffset(v);
 }
-rthsAPI void rthsSetSelfShadowThreshold(IRenderer *self, float v)
+rthsAPI void rthsRendererSetSelfShadowThreshold(IRenderer *self, float v)
 {
     if (!self)
         return;
     self->setSelfShadowThreshold(v);
 }
 
-rthsAPI void rthsSetCamera(IRenderer *self, float4x4 transform, float4x4 view, float4x4 proj, float near_plane, float far_plane, float fov)
+rthsAPI void rthsRendererSetCamera(IRenderer *self, float4x4 transform, float4x4 view, float4x4 proj, float near_plane, float far_plane, float fov)
 {
     if (!self)
         return;
     self->setCamera(transform, view, proj, near_plane, far_plane, fov);
 }
 
-rthsAPI void rthsAddDirectionalLight(IRenderer *self, float4x4 transform)
+rthsAPI void rthsRendererAddDirectionalLight(IRenderer *self, float4x4 transform)
 {
     if (!self)
         return;
     self->addDirectionalLight(transform);
 }
 
-rthsAPI void rthsAddSpotLight(IRenderer *self, float4x4 transform, float range, float spot_angle)
+rthsAPI void rthsRendererAddSpotLight(IRenderer *self, float4x4 transform, float range, float spot_angle)
 {
     if (!self)
         return;
     self->addSpotLight(transform, range, spot_angle);
 }
 
-rthsAPI void rthsAddPointLight(IRenderer *self, float4x4 transform, float range)
+rthsAPI void rthsRendererAddPointLight(IRenderer *self, float4x4 transform, float range)
 {
     if (!self)
         return;
     self->addPointLight(transform, range);
 }
 
-rthsAPI void rthsAddReversePointLight(IRenderer *self, float4x4 transform, float range)
+rthsAPI void rthsRendererAddReversePointLight(IRenderer *self, float4x4 transform, float range)
 {
     if (!self)
         return;
     self->addReversePointLight(transform, range);
 }
 
-rthsAPI void rthsAddGeometry(IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask)
+rthsAPI void rthsRendererAddGeometry(IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask)
 {
     if (!self)
         return;
     self->addGeometry({ mesh, mask });
 }
 
-rthsAPI void rthsRender(IRenderer *self)
+rthsAPI void rthsRendererStartRender(IRenderer *self)
 {
     if (!self)
         return;
     self->render();
 }
 
-rthsAPI void rthsFinish(IRenderer *self)
+rthsAPI void rthsRendererFinishRender(IRenderer *self)
 {
     if (!self)
         return;

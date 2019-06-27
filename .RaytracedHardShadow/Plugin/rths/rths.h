@@ -56,8 +56,13 @@ class IRenderer;
 
 } // namespace rths
 
+
+rthsAPI const char* rthsGetErrorLog();
+
+// mesh interface
 rthsAPI rths::MeshData* rthsMeshCreate();
 rthsAPI void rthsMeshRelease(rths::MeshData *self);
+rthsAPI void rthsMeshSetName(rths::MeshData *self, const char *name);
 rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData *self, void *vb, void *ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset);
 rthsAPI void rthsMeshSetGPUBuffers(rths::MeshData *self, rths::GPUResourcePtr vb, rths::GPUResourcePtr ib,
@@ -68,29 +73,32 @@ rthsAPI void rthsMeshSetSkinWeights4(rths::MeshData *self, const rths::BoneWeigh
 rthsAPI void rthsMeshSetBlendshapeCount(rths::MeshData *self, int num_bs);
 rthsAPI void rthsMeshAddBlendshapeFrame(rths::MeshData *self, int bs_index, const rths::float3 *delta, float weight);
 
+// mesh instance interface
 rthsAPI rths::MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh);
 rthsAPI void rthsMeshInstanceRelease(rths::MeshInstanceData *self);
+rthsAPI void rthsMeshInstanceSetName(rths::MeshInstanceData *self, const char *name);
 rthsAPI void rthsMeshInstanceSetTransform(rths::MeshInstanceData *self, rths::float4x4 transform);
 rthsAPI void rthsMeshInstanceSetBones(rths::MeshInstanceData *self, const rths::float4x4 *bones, int num_bones);
 rthsAPI void rthsMeshInstanceSetBlendshapeWeights(rths::MeshInstanceData *self, const float *bsw, int num_bsw);
 
-rthsAPI const char* rthsGetErrorLog();
-rthsAPI rths::IRenderer* rthsCreateRenderer();
-rthsAPI void rthsReleaseRenderer(rths::IRenderer *self);
-rthsAPI void rthsSetRenderTarget(rths::IRenderer *self, void *render_target);
-rthsAPI void rthsBeginScene(rths::IRenderer *self);
-rthsAPI void rthsEndScene(rths::IRenderer *self);
-rthsAPI void rthsSetRenderFlags(rths::IRenderer *self, uint32_t flag); // flag: combination of RenderFlag
-rthsAPI void rthsSetShadowRayOffset(rths::IRenderer *self, float v);
-rthsAPI void rthsSetSelfShadowThreshold(rths::IRenderer *self, float v);
-rthsAPI void rthsSetCamera(rths::IRenderer *self, rths::float4x4 transform, rths::float4x4 view, rths::float4x4 proj, float near_plane, float far_plane, float fov);
-rthsAPI void rthsAddDirectionalLight(rths::IRenderer *self, rths::float4x4 transform);
-rthsAPI void rthsAddSpotLight(rths::IRenderer *self, rths::float4x4 transform, float range, float spot_angle);
-rthsAPI void rthsAddPointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
-rthsAPI void rthsAddReversePointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
-rthsAPI void rthsAddGeometry(rths::IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask = 0xff); // mask: combination of HitMask
-rthsAPI void rthsRender(rths::IRenderer *self);
-rthsAPI void rthsFinish(rths::IRenderer *self);
+// renderer interface
+rthsAPI rths::IRenderer* rthsRendererCreate();
+rthsAPI void rthsRendererRelease(rths::IRenderer *self);
+rthsAPI void rthsRendererSetName(rths::IRenderer *self, const char *name);
+rthsAPI void rthsRendererSetRenderTarget(rths::IRenderer *self, void *render_target);
+rthsAPI void rthsRendererBeginScene(rths::IRenderer *self);
+rthsAPI void rthsRendererEndScene(rths::IRenderer *self);
+rthsAPI void rthsRendererSetRenderFlags(rths::IRenderer *self, uint32_t flag); // flag: combination of RenderFlag
+rthsAPI void rthsRendererSetShadowRayOffset(rths::IRenderer *self, float v);
+rthsAPI void rthsRendererSetSelfShadowThreshold(rths::IRenderer *self, float v);
+rthsAPI void rthsRendererSetCamera(rths::IRenderer *self, rths::float4x4 transform, rths::float4x4 view, rths::float4x4 proj, float near_plane, float far_plane, float fov);
+rthsAPI void rthsRendererAddDirectionalLight(rths::IRenderer *self, rths::float4x4 transform);
+rthsAPI void rthsRendererAddSpotLight(rths::IRenderer *self, rths::float4x4 transform, float range, float spot_angle);
+rthsAPI void rthsRendererAddPointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
+rthsAPI void rthsRendererAddReversePointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
+rthsAPI void rthsRendererAddGeometry(rths::IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask = 0xff); // mask: combination of HitMask
+rthsAPI void rthsRendererStartRender(rths::IRenderer *self);
+rthsAPI void rthsRendererFinishRender(rths::IRenderer *self);
 
 rthsAPI void rthsMarkFrameBegin();
 rthsAPI void rthsMarkFrameEnd();

@@ -5,7 +5,7 @@ namespace rths {
 template<class T> void addref(T *v) { v->addref(); }
 template<class T> void release(T *v) { v->release(); }
 
-// simplified boost::intrusive_ptr equibalent
+// simplified boost::intrusive_ptr equivalent
 template<class T>
 class ref_ptr
 {
