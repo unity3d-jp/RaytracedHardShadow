@@ -5,6 +5,10 @@ VisualStudioVersion = 15.0.28307.572
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rths", "rths.vcxproj", "{66397903-6FF2-46C6-B51E-B323FD248FAD}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{4412C698-700E-45E6-A927-0569C1E99E53}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test", "Test\Test.vcxproj", "{11990C37-1C63-418F-9AB1-74076C470584}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -15,9 +19,16 @@ Global
 		{66397903-6FF2-46C6-B51E-B323FD248FAD}.Debug|x64.Build.0 = Debug|x64
 		{66397903-6FF2-46C6-B51E-B323FD248FAD}.Release|x64.ActiveCfg = Release|x64
 		{66397903-6FF2-46C6-B51E-B323FD248FAD}.Release|x64.Build.0 = Release|x64
+		{11990C37-1C63-418F-9AB1-74076C470584}.Debug|x64.ActiveCfg = Debug|x64
+		{11990C37-1C63-418F-9AB1-74076C470584}.Debug|x64.Build.0 = Debug|x64
+		{11990C37-1C63-418F-9AB1-74076C470584}.Release|x64.ActiveCfg = Release|x64
+		{11990C37-1C63-418F-9AB1-74076C470584}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{11990C37-1C63-418F-9AB1-74076C470584} = {4412C698-700E-45E6-A927-0569C1E99E53}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {16A08EA7-4A75-49A1-9C80-17160F8BD906}

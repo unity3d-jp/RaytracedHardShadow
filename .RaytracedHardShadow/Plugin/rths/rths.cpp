@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "rths.h"
-#include "rthsLog.h"
+#include "Foundation/rthsLog.h"
 #include "rthsRenderer.h"
 
 using namespace rths;

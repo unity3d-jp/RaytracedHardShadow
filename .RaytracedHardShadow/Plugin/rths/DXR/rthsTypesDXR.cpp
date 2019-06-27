@@ -1,6 +1,6 @@
 #include "pch.h"
 #ifdef _WIN32
-#include "rthsLog.h"
+#include "Foundation/rthsLog.h"
 #include "rthsTypesDXR.h"
 
 namespace rths {

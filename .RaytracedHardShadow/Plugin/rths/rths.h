@@ -10,6 +10,7 @@
 namespace rths {
 #ifndef rthsImpl
 
+struct float2 { float x, y; };
 struct float3 { float x, y, z; };
 struct float4 { float x, y, z, w; };
 struct float4x4 { float4 v[4]; };
@@ -90,9 +91,9 @@ rthsAPI void rthsAddReversePointLight(rths::IRenderer *self, rths::float4x4 tran
 rthsAPI void rthsAddGeometry(rths::IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask = 0xff); // mask: combination of HitMask
 rthsAPI void rthsRender(rths::IRenderer *self);
 rthsAPI void rthsFinish(rths::IRenderer *self);
+
 rthsAPI void rthsMarkFrameBegin();
 rthsAPI void rthsMarkFrameEnd();
-
 // no need to call rthsMarkFrameBegin/End when use this
 rthsAPI void rthsRenderAll();
 

@@ -1,7 +1,7 @@
 #include "pch.h"
 #ifdef _WIN32
-#include "rthsLog.h"
-#include "rthsMisc.h"
+#include "Foundation/rthsLog.h"
+#include "Foundation/rthsMisc.h"
 #include "rthsGfxContextDXR.h"
 #include "rthsResourceTranslatorDXR.h"
 

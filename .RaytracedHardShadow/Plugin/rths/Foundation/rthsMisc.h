@@ -4,6 +4,7 @@ namespace rths {
 
 using nanosec = uint64_t;
 nanosec Now();
+inline float NS2MS(nanosec ns) { return float((double)ns / 1000000.0); }
 
 std::string ToUTF8(const char *src);
 std::string ToUTF8(const std::string& src);
