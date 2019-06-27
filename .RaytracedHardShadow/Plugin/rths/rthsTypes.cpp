@@ -139,7 +139,9 @@ void MeshData::release()
 
 bool MeshData::valid() const
 {
-    return vertex_buffer != nullptr && index_buffer != nullptr;
+    return
+        (gpu_vertex_buffer != nullptr && gpu_index_buffer != nullptr) ||
+        (cpu_vertex_buffer != nullptr && cpu_index_buffer != nullptr);
 }
 
 bool MeshData::operator==(const MeshData & v) const

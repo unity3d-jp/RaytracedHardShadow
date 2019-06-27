@@ -281,8 +281,10 @@ using MeshDataCallback = std::function<void(MeshData*)>;
 class MeshData
 {
 public:
-    GPUResourcePtr vertex_buffer = nullptr; // host
-    GPUResourcePtr index_buffer = nullptr; // host
+    GPUResourcePtr gpu_vertex_buffer = nullptr; // host
+    GPUResourcePtr gpu_index_buffer = nullptr; // host
+    void *cpu_vertex_buffer = nullptr;
+    void *cpu_index_buffer = nullptr;
     int vertex_stride = 0; // if 0, treated as size_of_vertex_buffer / vertex_count
     int vertex_count = 0;
     int vertex_offset = 0; // in byte

@@ -487,10 +487,26 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, TextureData& rt)
 
 void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geoms)
 {
-    auto translate_buffer = [this](void *buffer) {
+    auto translate_gpu_buffer = [this](void *buffer) {
         auto& data = m_buffer_records[buffer];
         if (!data)
             data = m_resource_translator->translateBuffer(buffer);
+        return data;
+    };
+
+    auto upload_cpu_buffer = [this](void *buffer, int size) {
+        auto& data = m_buffer_records[buffer];
+        if (!data)
+        {
+            data = std::make_shared<BufferDataDXR>();
+            data->resource = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            data->size = size;
+
+            void *dst;
+            data->resource->Map(0, nullptr, &dst);
+            std::memcpy(dst, buffer, size);
+            data->resource->Unmap(0, nullptr);
+        }
         return data;
     };
 
@@ -514,7 +530,11 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         }
 
         if (!mesh_dxr->vertex_buffer) {
-            mesh_dxr->vertex_buffer = translate_buffer(mesh->vertex_buffer);
+            if (mesh->gpu_vertex_buffer)
+                mesh_dxr->vertex_buffer = translate_gpu_buffer(mesh->gpu_vertex_buffer);
+            else if (mesh->cpu_vertex_buffer)
+                mesh_dxr->vertex_buffer = upload_cpu_buffer(mesh->cpu_vertex_buffer, mesh->vertex_count * mesh->vertex_stride);
+
             if (!mesh_dxr->vertex_buffer->resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate vertex buffer\n");
                 continue;
@@ -534,7 +554,11 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 #endif // rthsEnableBufferValidation
         }
         if (!mesh_dxr->index_buffer) {
-            mesh_dxr->index_buffer = translate_buffer(mesh->index_buffer);
+            if (mesh->gpu_index_buffer)
+                mesh_dxr->index_buffer = translate_gpu_buffer(mesh->gpu_index_buffer);
+            else if (mesh->cpu_index_buffer)
+                mesh_dxr->index_buffer = upload_cpu_buffer(mesh->cpu_index_buffer, mesh->index_count * mesh->index_stride);
+
             if (!mesh_dxr->index_buffer->resource) {
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate index buffer\n");
                 continue;

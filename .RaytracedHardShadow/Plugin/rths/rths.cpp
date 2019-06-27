@@ -17,13 +17,27 @@ rthsAPI void rthsMeshRelease(MeshData *self)
     self->release();
 }
 
+rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData * self, void *vb, void *ib, int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
+{
+    if (!self)
+        return;
+    self->cpu_vertex_buffer = vb;
+    self->cpu_index_buffer = ib;
+    self->vertex_stride = vertex_stride;
+    self->vertex_count = vertex_count;
+    self->vertex_offset = vertex_offset;
+    self->index_stride = index_stride;
+    self->index_count = index_count;
+    self->index_offset = index_offset;
+}
+
 rthsAPI void rthsMeshSetGPUBuffers(MeshData *self, GPUResourcePtr vb, GPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
 {
     if (!self)
         return;
-    self->vertex_buffer = vb;
-    self->index_buffer = ib;
+    self->gpu_vertex_buffer = vb;
+    self->gpu_index_buffer = ib;
     self->vertex_stride = vertex_stride;
     self->vertex_count = vertex_count;
     self->vertex_offset = vertex_offset;

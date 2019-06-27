@@ -57,6 +57,8 @@ class IRenderer;
 
 rthsAPI rths::MeshData* rthsMeshCreate();
 rthsAPI void rthsMeshRelease(rths::MeshData *self);
+rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData *self, void *vb, void *ib,
+    int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset);
 rthsAPI void rthsMeshSetGPUBuffers(rths::MeshData *self, rths::GPUResourcePtr vb, rths::GPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset);
 rthsAPI void rthsMeshSetSkinBindposes(rths::MeshData *self, const rths::float4x4 *bindposes, int num_bindposes);
