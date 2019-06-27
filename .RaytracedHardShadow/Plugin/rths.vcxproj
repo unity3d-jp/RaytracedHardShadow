@@ -12,13 +12,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="rths\DXR\rthsDeformerDXR.cpp" />
+    <ClCompile Include="rths\Foundation\rthsLog.cpp" />
+    <ClCompile Include="rths\Foundation\rthsMath.cpp" />
+    <ClCompile Include="rths\Foundation\rthsMisc.cpp" />
     <ClCompile Include="rths\rths.cpp" />
     <ClCompile Include="rths\pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="rths\DXR\rthsGfxContextDXR.cpp" />
-    <ClCompile Include="rths\rthsLog.cpp" />
-    <ClCompile Include="rths\rthsMisc.cpp" />
     <ClCompile Include="rths\rthsRenderer.cpp" />
     <ClCompile Include="rths\DXR\rthsRendererDXR.cpp" />
     <ClCompile Include="rths\DXR\rthsResourceTranslatorDXR.cpp" />
@@ -27,11 +28,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\DXR\rthsDeformerDXR.h" />
+    <ClInclude Include="rths\Foundation\rthsHalf.h" />
+    <ClInclude Include="rths\Foundation\rthsLog.h" />
+    <ClInclude Include="rths\Foundation\rthsMath.h" />
+    <ClInclude Include="rths\Foundation\rthsMisc.h" />
+    <ClInclude Include="rths\Foundation\rthsRefPtr.h" />
     <ClInclude Include="rths\rths.h" />
     <ClInclude Include="rths\pch.h" />
     <ClInclude Include="rths\DXR\rthsGfxContextDXR.h" />
-    <ClInclude Include="rths\rthsLog.h" />
-    <ClInclude Include="rths\rthsMisc.h" />
     <ClInclude Include="rths\rthsRenderer.h" />
     <ClInclude Include="rths\DXR\rthsResourceTranslatorDXR.h" />
     <ClInclude Include="rths\rthsTypes.h" />

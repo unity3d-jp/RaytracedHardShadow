@@ -10,18 +10,15 @@
     <Filter Include="rths\DXR\Shaders">
       <UniqueIdentifier>{d212cab3-57af-4731-88ac-949a03f61c5c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="rths\Foundation">
+      <UniqueIdentifier>{785a4734-4a3e-4ed6-85fc-ebc17133ac6e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="rths\pch.cpp">
       <Filter>rths</Filter>
     </ClCompile>
     <ClCompile Include="rths\rths.cpp">
-      <Filter>rths</Filter>
-    </ClCompile>
-    <ClCompile Include="rths\rthsLog.cpp">
-      <Filter>rths</Filter>
-    </ClCompile>
-    <ClCompile Include="rths\rthsMisc.cpp">
       <Filter>rths</Filter>
     </ClCompile>
     <ClCompile Include="rths\rthsRenderer.cpp">
@@ -45,6 +42,15 @@
     <ClCompile Include="rths\DXR\rthsDeformerDXR.cpp">
       <Filter>rths\DXR</Filter>
     </ClCompile>
+    <ClCompile Include="rths\Foundation\rthsMath.cpp">
+      <Filter>rths\Foundation</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\Foundation\rthsMisc.cpp">
+      <Filter>rths\Foundation</Filter>
+    </ClCompile>
+    <ClCompile Include="rths\Foundation\rthsLog.cpp">
+      <Filter>rths\Foundation</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\pch.h">
@@ -57,12 +63,6 @@
       <Filter>rths</Filter>
     </ClInclude>
     <ClInclude Include="rths\rthsRenderer.h">
-      <Filter>rths</Filter>
-    </ClInclude>
-    <ClInclude Include="rths\rthsLog.h">
-      <Filter>rths</Filter>
-    </ClInclude>
-    <ClInclude Include="rths\rthsMisc.h">
       <Filter>rths</Filter>
     </ClInclude>
     <ClInclude Include="rths\DXR\rthsGfxContextDXR.h">
@@ -79,6 +79,21 @@
     </ClInclude>
     <ClInclude Include="rths\DXR\rthsDeformerDXR.h">
       <Filter>rths\DXR</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\Foundation\rthsMath.h">
+      <Filter>rths\Foundation</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\Foundation\rthsRefPtr.h">
+      <Filter>rths\Foundation</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\Foundation\rthsHalf.h">
+      <Filter>rths\Foundation</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\Foundation\rthsMisc.h">
+      <Filter>rths\Foundation</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\Foundation\rthsLog.h">
+      <Filter>rths\Foundation</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

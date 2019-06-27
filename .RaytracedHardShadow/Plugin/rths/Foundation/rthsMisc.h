@@ -1,7 +1,5 @@
 #pragma once
 
-#define align_to(_alignment, _val) (((_val + _alignment - 1) / _alignment) * _alignment)
-
 namespace rths {
 
 using nanosec = uint64_t;
