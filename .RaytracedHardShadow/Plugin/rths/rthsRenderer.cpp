@@ -98,7 +98,7 @@ void RendererBase::setSelfShadowThreshold(float v)
     m_scene_data.self_shadow_threshold = v;
 }
 
-void RendererBase::setRenderTarget(rths::RenderTargetData *rt)
+void RendererBase::setRenderTarget(RenderTargetData *rt)
 {
     m_render_target = rt;
 }
@@ -173,14 +173,6 @@ void RendererBase::clearMeshInstances()
     m_geometries.clear();
 }
 
-} // namespace rths
-
-
-#ifdef _WIN32
-    #include "DXR/rthsGfxContextDXR.h"
-#endif
-
-namespace rths {
 
 void MarkFrameBegin()
 {

@@ -30,7 +30,7 @@ public:
     virtual void setShadowRayOffset(float v) = 0;
     virtual void setSelfShadowThreshold(float v) = 0;
 
-    virtual void setRenderTarget(rths::RenderTargetData *rt) = 0;
+    virtual void setRenderTarget(RenderTargetData *rt) = 0;
     virtual void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) = 0;
     virtual void addDirectionalLight(const float4x4& trans) = 0;
     virtual void addSpotLight(const float4x4& trans, float range, float spot_angle) = 0;
@@ -42,6 +42,7 @@ public:
     virtual void finish() = 0; // called from render thread
 
     virtual bool readbackRenderTarget(void *dst) = 0;
+    virtual void* getRenderTexturePtr() = 0;
 };
 
 
@@ -58,7 +59,7 @@ public:
     void setShadowRayOffset(float v) override;
     void setSelfShadowThreshold(float v) override;
 
-    void setRenderTarget(rths::RenderTargetData *rt) override;
+    void setRenderTarget(RenderTargetData *rt) override;
     void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) override;
     void addDirectionalLight(const float4x4& trans) override;
     void addSpotLight(const float4x4& trans, float range, float spot_angle) override;

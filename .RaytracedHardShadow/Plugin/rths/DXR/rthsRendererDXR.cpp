@@ -17,6 +17,7 @@ public:
     void finish() override; // called from render thread
 
     bool readbackRenderTarget(void *dst) override;
+    void* getRenderTexturePtr() override;
 
 private:
     RenderDataDXR m_render_data;
@@ -71,6 +72,13 @@ bool RendererDXR::readbackRenderTarget(void *dst)
 
     auto ctx = GfxContextDXR::getInstance();
     return ctx->readbackRenderTarget(m_render_data, dst);
+}
+
+void* RendererDXR::getRenderTexturePtr()
+{
+    if (m_render_data.render_target)
+        return m_render_data.render_target->texture->resource.GetInterfacePtr();
+    return nullptr;
 }
 
 IRenderer* CreateRendererDXR()

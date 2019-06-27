@@ -124,6 +124,7 @@ rthsAPI void rthsRendererAddGeometry(rths::IRenderer *self, rths::MeshInstanceDa
 rthsAPI void rthsRendererStartRender(rths::IRenderer *self);
 rthsAPI void rthsRendererFinishRender(rths::IRenderer *self);
 rthsAPI bool rthsRendererReadbackRenderTarget(rths::IRenderer *self, void *dst);
+rthsAPI rths::GPUResourcePtr rthsRendererGetRenderTexturePtr(rths::IRenderer *self); // return raw texture ptr (ID3D12Resouce* etc)
 
 rthsAPI void rthsMarkFrameBegin();
 rthsAPI void rthsMarkFrameEnd();

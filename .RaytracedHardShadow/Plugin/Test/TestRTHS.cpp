@@ -7,6 +7,7 @@
 
 TestCase(TestRender)
 {
+    // create renderer
     auto renderer = rthsRendererCreate();
     if (!renderer) {
         Print("rthsCreateRenderer() retruned null: %s\n", rthsGetErrorLog());
@@ -26,6 +27,7 @@ TestCase(TestRender)
 
     }
 
+    // render!
     rthsMarkFrameBegin();
     {
         rthsRendererBeginScene(renderer);

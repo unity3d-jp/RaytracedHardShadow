@@ -99,9 +99,6 @@ struct SceneData
 
 using GPUResourcePtr = void*;
 
-using TextureData = GPUResourcePtr;
-using BufferData = GPUResourcePtr;
-
 
 // resource type exposed to plugin user
 template<class T>

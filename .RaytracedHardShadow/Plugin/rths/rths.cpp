@@ -206,7 +206,7 @@ rthsAPI void rthsRendererRelease(IRenderer *self)
     delete self;
 }
 
-rthsAPI void rthsRendererSetRenderTarget(IRenderer *self, rths::RenderTargetData *render_target)
+rthsAPI void rthsRendererSetRenderTarget(IRenderer *self, RenderTargetData *render_target)
 {
     if (!self || !render_target)
         return;
@@ -307,6 +307,13 @@ rthsAPI bool rthsRendererReadbackRenderTarget(rths::IRenderer *self, void *dst)
     if (!self)
         return false;
     return self->readbackRenderTarget(dst);
+}
+
+rthsAPI GPUResourcePtr rthsRendererGetRenderTexturePtr(rths::IRenderer *self)
+{
+    if (!self)
+        return nullptr;
+    return self->getRenderTexturePtr();
 }
 
 rthsAPI void rthsMarkFrameBegin()

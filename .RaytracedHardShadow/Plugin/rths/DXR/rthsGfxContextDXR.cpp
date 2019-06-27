@@ -448,6 +448,11 @@ void GfxContextDXR::setSceneData(RenderDataDXR& rd, SceneData& data)
 
 void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 {
+    if (!rt) {
+        rd.render_target = nullptr;
+        return;
+    }
+
     auto& data = m_rendertarget_records[rt];
     if (!data) {
         data = std::make_shared<RenderTargetDataDXR>();
@@ -1196,8 +1201,8 @@ bool GfxContextDXR::readbackRenderTarget(RenderDataDXR& rd, void *dst)
         return false;
 
     auto& rtex = rd.render_target->texture;
-    auto format = rtex->resource->GetDesc().Format;
-    return readbackTexture(rd, dst, rtex->resource, rtex->width, rtex->height, SizeOfElement(format));
+    auto desc = rtex->resource->GetDesc();
+    return readbackTexture(rd, dst, rtex->resource, desc.Width, desc.Height, SizeOfElement(desc.Format));
 }
 
 void GfxContextDXR::onMeshDelete(MeshData *mesh)

@@ -80,6 +80,21 @@ namespace UTJ.RaytracedHardShadow
         All = Rceiver | Caster,
     }
 
+    public enum rthsRenderTargetFormat
+    {
+        Unknown = 0,
+        Ru8,
+        RGu8,
+        RGBAu8,
+        Rf16,
+        RGf16,
+        RGBAf16,
+        Rf32,
+        RGf32,
+        RGBAf32,
+    }
+
+
     public struct rthsMeshData
     {
         #region internal
@@ -257,7 +272,42 @@ namespace UTJ.RaytracedHardShadow
         }
     }
 
+    public struct rthsRenderTarget
+    {
+        #region internal
+        public IntPtr self;
+        [DllImport("rths")] static extern IntPtr rthsRenderTargetCreate();
+        [DllImport("rths")] static extern void rthsRenderTargetRelease(IntPtr self);
+        [DllImport("rths")] static extern void rthsRenderTargetSetGPUTexture(IntPtr self, IntPtr tex);
+        [DllImport("rths")] static extern void rthsRenderTargetSetup(IntPtr self, int width, int height, rthsRenderTargetFormat format);
+        #endregion
 
+        public static implicit operator bool(rthsRenderTarget v) { return v.self != IntPtr.Zero; }
+        public static bool operator ==(rthsRenderTarget a, rthsRenderTarget b) { return a.self == b.self; }
+        public static bool operator !=(rthsRenderTarget a, rthsRenderTarget b) { return a.self != b.self; }
+
+        public static rthsRenderTarget Create()
+        {
+            // rthsCreateRenderer() will return null if DXR is not supported
+            return new rthsRenderTarget { self = rthsRenderTargetCreate() };
+        }
+
+        public void Release()
+        {
+            rthsRenderTargetRelease(self);
+            self = IntPtr.Zero;
+        }
+
+        public void Setup(IntPtr GPUTexture)
+        {
+            rthsRenderTargetSetGPUTexture(self, GPUTexture);
+        }
+
+        public void Setup(int width, int height, rthsRenderTargetFormat format)
+        {
+            rthsRenderTargetSetup(self, width, height, format);
+        }
+    }
 
     public struct rthsRenderer
     {
@@ -272,7 +322,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRendererSetRenderFlags(IntPtr self, int flags);
         [DllImport("rths")] static extern void rthsRendererSetShadowRayOffset(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsRendererSetSelfShadowThreshold(IntPtr self, float v);
-        [DllImport("rths")] static extern void rthsRendererSetRenderTarget(IntPtr self, IntPtr rt);
+        [DllImport("rths")] static extern void rthsRendererSetRenderTarget(IntPtr self, rthsRenderTarget rt);
         [DllImport("rths")] static extern void rthsRendererSetCamera(IntPtr self, Matrix4x4 trans, Matrix4x4 view, Matrix4x4 proj, float near, float far, float fov);
         [DllImport("rths")] static extern void rthsRendererAddDirectionalLight(IntPtr self, Matrix4x4 trans);
         [DllImport("rths")] static extern void rthsRendererAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
@@ -305,9 +355,9 @@ namespace UTJ.RaytracedHardShadow
             self = IntPtr.Zero;
         }
 
-        public void SetRenderTarget(RenderTexture rt)
+        public void SetRenderTarget(rthsRenderTarget rt)
         {
-            rthsRendererSetRenderTarget(self, rt.GetNativeTexturePtr());
+            rthsRendererSetRenderTarget(self, rt);
         }
 
         public void BeginScene()

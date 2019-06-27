@@ -114,7 +114,31 @@ namespace UTJ.RaytracedHardShadow
             public void Release()
             {
                 instData.Release();
-                meshData = default(rthsMeshData);
+                meshData = default(rthsMeshData); // Release() should not be called here
+                useCount = 0;
+            }
+        }
+
+        public class RenderTargetRecord
+        {
+            public rthsRenderTarget rtData;
+            public int useCount;
+
+            public void Update(RenderTexture rtex)
+            {
+                if (!rtex.IsCreated())
+                    rtex.Create();
+
+                if (!rtData)
+                {
+                    rtData = rthsRenderTarget.Create();
+                    rtData.Setup(rtex.GetNativeTexturePtr());
+                }
+            }
+
+            public void Release()
+            {
+                rtData.Release();
                 useCount = 0;
             }
         }
@@ -166,6 +190,7 @@ namespace UTJ.RaytracedHardShadow
         static Dictionary<Mesh, MeshRecord> s_meshDataCache;
         static Dictionary<Component, MeshRecord> s_bakedMeshDataCache;
         static Dictionary<Component, MeshInstanceRecord> s_meshInstDataCache;
+        static Dictionary<RenderTexture, RenderTargetRecord> s_renderTargetCache;
         #endregion
 
 
@@ -359,7 +384,7 @@ namespace UTJ.RaytracedHardShadow
         // 2. prevent unexpected GC
         //    without cache, temporary meshes created by SkinnedMeshRenderer.Bake() may be GCed and can cause error or crash in render thread.
 
-        static void ClearAllMeshRecords()
+        static void ClearAllCacheRecords()
         {
             ClearBakedMeshRecords();
 
@@ -370,6 +395,10 @@ namespace UTJ.RaytracedHardShadow
             foreach (var rec in s_meshInstDataCache)
                 rec.Value.instData.Release();
             s_meshInstDataCache.Clear();
+
+            foreach (var rec in s_renderTargetCache)
+                rec.Value.rtData.Release();
+            s_renderTargetCache.Clear();
         }
 
         static void ClearBakedMeshRecords()
@@ -381,9 +410,11 @@ namespace UTJ.RaytracedHardShadow
 
         static List<Mesh> s_meshesToErase;
         static List<Component> s_instToErase;
+        static List<RenderTexture> s_rtToErase;
 
         static void EraseUnusedMeshRecords()
         {
+            // mesh data
             {
                 if (s_meshesToErase == null)
                     s_meshesToErase = new List<Mesh>();
@@ -401,6 +432,8 @@ namespace UTJ.RaytracedHardShadow
                 }
                 s_meshesToErase.Clear();
             }
+
+            // mesh instance data
             {
                 if (s_instToErase == null)
                     s_instToErase = new List<Component>();
@@ -417,6 +450,25 @@ namespace UTJ.RaytracedHardShadow
                     s_meshInstDataCache.Remove(k);
                 }
                 s_instToErase.Clear();
+            }
+
+            // render target data
+            {
+                if (s_rtToErase == null)
+                    s_rtToErase = new List<RenderTexture>();
+                foreach (var rec in s_renderTargetCache)
+                {
+                    if (rec.Value.useCount == 0)
+                        s_rtToErase.Add(rec.Key);
+                    rec.Value.useCount = 0;
+                }
+                foreach (var k in s_rtToErase)
+                {
+                    var rec = s_renderTargetCache[k];
+                    rec.Release();
+                    s_renderTargetCache.Remove(k);
+                }
+                s_rtToErase.Clear();
             }
         }
 
@@ -491,6 +543,22 @@ namespace UTJ.RaytracedHardShadow
                 rec.Update(GetMeshData(smr.sharedMesh), smr);
             }
             return rec.instData;
+        }
+
+        static rthsRenderTarget GetRenderTargetData(RenderTexture rt)
+        {
+            if (rt == null)
+                return default(rthsRenderTarget);
+
+            RenderTargetRecord rec;
+            if (!s_renderTargetCache.TryGetValue(rt, out rec))
+            {
+                rec = new RenderTargetRecord();
+                rec.Update(rt);
+                s_renderTargetCache.Add(rt, rec);
+            }
+            rec.useCount++;
+            return rec.rtData;
         }
 
         public void EnumerateMeshRenderers(Action<MeshRenderer, byte> bodyMR, Action<SkinnedMeshRenderer, byte> bodySMR)
@@ -598,6 +666,7 @@ namespace UTJ.RaytracedHardShadow
                     s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
                     s_bakedMeshDataCache = new Dictionary<Component, MeshRecord>();
                     s_meshInstDataCache = new Dictionary<Component, MeshInstanceRecord>();
+                    s_renderTargetCache = new Dictionary<RenderTexture, RenderTargetRecord>();
                 }
             }
             else
@@ -631,7 +700,7 @@ namespace UTJ.RaytracedHardShadow
                 --s_instanceCount;
 
                 if (s_instanceCount==0)
-                    ClearAllMeshRecords();
+                    ClearAllCacheRecords();
             }
         }
 
@@ -720,7 +789,7 @@ namespace UTJ.RaytracedHardShadow
                 m_renderer.SetRaytraceFlags(flags);
                 m_renderer.SetShadowRayOffset(m_shadowRayOffset);
                 m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
-                m_renderer.SetRenderTarget(m_shadowBuffer);
+                m_renderer.SetRenderTarget(GetRenderTargetData(m_shadowBuffer));
                 m_renderer.SetCamera(m_camera);
                 EnumerateLights(
                     l => { m_renderer.AddLight(l); },
