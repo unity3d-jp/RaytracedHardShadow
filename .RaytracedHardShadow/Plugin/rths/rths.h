@@ -109,7 +109,7 @@ rthsAPI void rthsRenderTargetSetup(rths::RenderTargetData *self, int width, int 
 rthsAPI rths::IRenderer* rthsRendererCreate();
 rthsAPI void rthsRendererRelease(rths::IRenderer *self);
 rthsAPI void rthsRendererSetName(rths::IRenderer *self, const char *name);
-rthsAPI void rthsRendererSetRenderTarget(rths::IRenderer *self, void *render_target);
+rthsAPI void rthsRendererSetRenderTarget(rths::IRenderer *self, rths::RenderTargetData *render_target);
 rthsAPI void rthsRendererBeginScene(rths::IRenderer *self);
 rthsAPI void rthsRendererEndScene(rths::IRenderer *self);
 rthsAPI void rthsRendererSetRenderFlags(rths::IRenderer *self, uint32_t flag); // flag: combination of RenderFlag

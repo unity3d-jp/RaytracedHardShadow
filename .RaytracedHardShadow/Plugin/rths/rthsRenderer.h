@@ -30,7 +30,7 @@ public:
     virtual void setShadowRayOffset(float v) = 0;
     virtual void setSelfShadowThreshold(float v) = 0;
 
-    virtual void setRenderTarget(void *rt) = 0;
+    virtual void setRenderTarget(rths::RenderTargetData *rt) = 0;
     virtual void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) = 0;
     virtual void addDirectionalLight(const float4x4& trans) = 0;
     virtual void addSpotLight(const float4x4& trans, float range, float spot_angle) = 0;
@@ -58,7 +58,7 @@ public:
     void setShadowRayOffset(float v) override;
     void setSelfShadowThreshold(float v) override;
 
-    void setRenderTarget(void *rt) override;
+    void setRenderTarget(rths::RenderTargetData *rt) override;
     void setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov) override;
     void addDirectionalLight(const float4x4& trans) override;
     void addSpotLight(const float4x4& trans, float range, float spot_angle) override;
@@ -69,8 +69,8 @@ public:
 protected:
     void clearMeshInstances();
 
-    TextureData m_render_target;
     SceneData m_scene_data;
+    RenderTargetDataPtr m_render_target;
     std::vector<GeometryData> m_geometries;
 
 private:

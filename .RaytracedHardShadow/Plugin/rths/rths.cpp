@@ -206,7 +206,7 @@ rthsAPI void rthsRendererRelease(IRenderer *self)
     delete self;
 }
 
-rthsAPI void rthsRendererSetRenderTarget(IRenderer *self, void *render_target)
+rthsAPI void rthsRendererSetRenderTarget(IRenderer *self, rths::RenderTargetData *render_target)
 {
     if (!self || !render_target)
         return;

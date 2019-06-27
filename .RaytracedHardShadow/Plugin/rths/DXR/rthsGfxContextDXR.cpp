@@ -218,11 +218,12 @@ bool GfxContextDXR::initializeDevice()
 
     // resource translator
     m_resource_translator = CreateResourceTranslator();
-    if (!m_resource_translator)
-        return false;
-
     // fence
-    m_fence = m_resource_translator->getFence(m_device);
+    if (m_resource_translator)
+        m_fence = m_resource_translator->getFence(m_device);
+    else
+        m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
+
 
     // deformer
     m_deformer = std::make_shared<DeformerDXR>(m_device);
@@ -445,12 +446,25 @@ void GfxContextDXR::setSceneData(RenderDataDXR& rd, SceneData& data)
     rd.scene_data_prev = data;
 }
 
-void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, TextureData& rt)
+void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 {
-    auto& data = m_texture_records[rt];
+    auto& data = m_rendertarget_records[rt];
     if (!data) {
-        data = m_resource_translator->createTemporaryTexture(rt);
-        if (!data->resource) {
+        data = std::make_shared<RenderTargetDataDXR>();
+        data->base = rt;
+        if (rt->gpu_texture && m_resource_translator) {
+            data->texture = m_resource_translator->createTemporaryTexture(rt->gpu_texture);
+        }
+        else {
+            auto dxgifmt = GetDXGIFormat(rt->format);
+            if (rt->width > 0 && rt->height > 0 && dxgifmt != DXGI_FORMAT_UNKNOWN) {
+                auto tex = std::make_shared<TextureDataDXR>();
+                data->texture = tex;
+                tex->resource = createTexture(rt->width, rt->height, dxgifmt);
+            }
+        }
+
+        if (!data->texture) {
             DebugPrint("GfxContextDXR::setRenderTarget(): failed to translate texture\n");
             return;
         }
@@ -462,10 +476,10 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, TextureData& rt)
         if (rd.render_target) {
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
             uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-            uav_desc.Format = GetTypedFormatDXR(rd.render_target->format); // typeless is not allowed for unordered access view
+            uav_desc.Format = GetTypedFormatDXR(rd.render_target->texture->format); // typeless is not allowed for unordered access view
             uav_desc.Texture2D.MipSlice = 0;
             uav_desc.Texture2D.PlaneSlice = 0;
-            m_device->CreateUnorderedAccessView(rd.render_target->resource, nullptr, &uav_desc, rd.render_target_handle.hcpu);
+            m_device->CreateUnorderedAccessView(rd.render_target->texture->resource, nullptr, &uav_desc, rd.render_target_handle.hcpu);
         }
     }
 
@@ -530,7 +544,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         }
 
         if (!mesh_dxr->vertex_buffer) {
-            if (mesh->gpu_vertex_buffer)
+            if (mesh->gpu_vertex_buffer && m_resource_translator)
                 mesh_dxr->vertex_buffer = translate_gpu_buffer(mesh->gpu_vertex_buffer);
             else if (mesh->cpu_vertex_buffer)
                 mesh_dxr->vertex_buffer = upload_cpu_buffer(mesh->cpu_vertex_buffer, mesh->vertex_count * mesh->vertex_stride);
@@ -1021,7 +1035,7 @@ void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd)
 
 uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
 {
-    if (!rd.render_target->resource) {
+    if (!rd.render_target || !rd.render_target->texture->resource) {
         SetErrorLog("GfxContext::flush(): render target is null\n");
         return 0;
     }
@@ -1029,6 +1043,7 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
         SetErrorLog("GfxContext::flush(): called before finish()\n");
         return 0;
     }
+    auto& rtex = rd.render_target->texture;
 
     TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace begin");
 
@@ -1072,13 +1087,13 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
     }
 
     D3D12_RESOURCE_STATES prev_state = D3D12_RESOURCE_STATE_COMMON;
-    addResourceBarrier(rd.cmd_list_direct, rd.render_target->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    addResourceBarrier(rd.cmd_list_direct, rtex->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // dispatch rays
     {
         D3D12_DISPATCH_RAYS_DESC dr_desc{};
-        dr_desc.Width = rd.render_target->width;
-        dr_desc.Height = rd.render_target->height;
+        dr_desc.Width = rtex->width;
+        dr_desc.Height = rtex->height;
         dr_desc.Depth = 1;
 
         auto addr = rd.shader_table->GetGPUVirtualAddress();
@@ -1111,7 +1126,7 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
         rd.cmd_list_direct->DispatchRays(&dr_desc);
     }
 
-    addResourceBarrier(rd.cmd_list_direct, rd.render_target->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
+    addResourceBarrier(rd.cmd_list_direct, rd.render_target->texture->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
 
     TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: raytrace end");
     TimestampResolve(rd.timestamp, rd.cmd_list_direct);
@@ -1119,7 +1134,7 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
     rd.fence_value = submitCommandList(rd.cmd_list_direct, true);
     if (rd.fence_value && rd.render_target) {
         // copy render target to Unity side
-        auto fv = m_resource_translator->syncTexture(*rd.render_target, rd.fence_value);
+        auto fv = m_resource_translator->syncTexture(*rtex, rd.fence_value);
         if (fv) {
             m_cmd_queue_direct->Wait(m_fence, fv);
             m_cmd_queue_direct->Signal(m_fence, ++fv);
@@ -1177,10 +1192,12 @@ void GfxContextDXR::frameEnd()
 
 bool GfxContextDXR::readbackRenderTarget(RenderDataDXR& rd, void *dst)
 {
-    if (!rd.render_target->resource)
+    if (!rd.render_target || !rd.render_target->texture->resource)
         return false;
-    auto format = rd.render_target->resource->GetDesc().Format;
-    return readbackTexture(rd, dst, rd.render_target->resource, rd.render_target->width, rd.render_target->height, SizeOfElement(format));
+
+    auto& rtex = rd.render_target->texture;
+    auto format = rtex->resource->GetDesc().Format;
+    return readbackTexture(rd, dst, rtex->resource, rtex->width, rtex->height, SizeOfElement(format));
 }
 
 void GfxContextDXR::onMeshDelete(MeshData *mesh)

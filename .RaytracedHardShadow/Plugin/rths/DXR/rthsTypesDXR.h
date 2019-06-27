@@ -195,7 +195,7 @@ class RenderTargetDataDXR
 {
 public:
     RenderTargetData *base = nullptr;
-    TextureDataDXR texture;
+    TextureDataDXRPtr texture;
 };
 using RenderTargetDataDXRPtr = std::shared_ptr<RenderTargetDataDXR>;
 
@@ -259,7 +259,7 @@ public:
     ID3D12ResourcePtr tlas_scratch;
     ID3D12ResourcePtr tlas;
     ID3D12ResourcePtr scene_data;
-    TextureDataDXRPtr render_target;
+    RenderTargetDataDXRPtr render_target;
 
     ID3D12ResourcePtr shader_table;
 
@@ -306,6 +306,7 @@ extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
 extern const D3D12_HEAP_PROPERTIES kReadbackHeapProps;
 
 size_t SizeOfElement(DXGI_FORMAT rtf);
+DXGI_FORMAT GetDXGIFormat(RenderTargetFormat format);
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
 std::string ToString(ID3DBlob *blob);
 

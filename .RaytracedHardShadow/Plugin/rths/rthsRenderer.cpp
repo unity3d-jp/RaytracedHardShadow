@@ -98,7 +98,7 @@ void RendererBase::setSelfShadowThreshold(float v)
     m_scene_data.self_shadow_threshold = v;
 }
 
-void RendererBase::setRenderTarget(void *rt)
+void RendererBase::setRenderTarget(rths::RenderTargetData *rt)
 {
     m_render_target = rt;
 }
