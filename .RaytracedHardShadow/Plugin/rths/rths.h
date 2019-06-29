@@ -65,7 +65,8 @@ struct BoneWeight4;
 enum class RenderTargetFormat : uint32_t;
 #endif // rthsImpl
 
-using GPUResourcePtr = void*;
+using GPUResourcePtr = const void*;
+using CPUResourcePtr = const void*;
 class MeshData;
 class MeshInstanceData;
 class RenderTargetData;
@@ -80,7 +81,7 @@ rthsAPI const char* rthsGetErrorLog();
 rthsAPI rths::MeshData* rthsMeshCreate();
 rthsAPI void rthsMeshRelease(rths::MeshData *self);
 rthsAPI void rthsMeshSetName(rths::MeshData *self, const char *name);
-rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData *self, void *vb, void *ib,
+rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData *self, rths::CPUResourcePtr vb, rths::CPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset);
 rthsAPI void rthsMeshSetGPUBuffers(rths::MeshData *self, rths::GPUResourcePtr vb, rths::GPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset);

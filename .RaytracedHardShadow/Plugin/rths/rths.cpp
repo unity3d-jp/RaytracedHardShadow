@@ -22,7 +22,8 @@ rthsAPI void rthsMeshRelease(MeshData *self)
     self->release();
 }
 
-rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData * self, void *vb, void *ib, int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
+rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData * self, CPUResourcePtr vb, CPUResourcePtr ib,
+    int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
 {
     if (!self)
         return;

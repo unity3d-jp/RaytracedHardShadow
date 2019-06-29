@@ -19,12 +19,10 @@ public:
     ~D3D11ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
-    void setFenceValue(uint64_t v) override;
-    uint64_t inclementFenceValue() override;
 
-    TextureDataDXRPtr createTemporaryTexture(void *ptr) override;
+    TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) override;
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
-    BufferDataDXRPtr translateBuffer(void *ptr) override;
+    BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
 
     uint64_t copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool wait);
 
@@ -46,12 +44,10 @@ public:
     ~D3D12ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
-    void setFenceValue(uint64_t v) override;
-    uint64_t inclementFenceValue() override;
 
-    TextureDataDXRPtr createTemporaryTexture(void *ptr) override;
+    TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) override;
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
-    BufferDataDXRPtr translateBuffer(void *ptr) override;
+    BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
 
     void executeAndWaitCopy();
     void executeAndWaitResourceBarrier(ID3D12Resource *resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
@@ -135,17 +131,8 @@ ID3D12FencePtr D3D11ResourceTranslator::getFence(ID3D12Device *dxr_device)
     return ret;
 }
 
-void D3D11ResourceTranslator::setFenceValue(uint64_t v)
-{
-    m_fence_value = v;
-}
-uint64_t D3D11ResourceTranslator::inclementFenceValue()
-{
-    return ++m_fence_value;
-}
 
-
-TextureDataDXRPtr D3D11ResourceTranslator::createTemporaryTexture(void *ptr)
+TextureDataDXRPtr D3D11ResourceTranslator::createTemporaryTexture(GPUResourcePtr ptr)
 {
     auto ret = std::make_shared<TextureDataDXR>();
 
@@ -208,7 +195,7 @@ uint64_t D3D11ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fenc
     return 0;
 }
 
-BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(void *ptr)
+BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
 {
     auto ret = std::make_shared<BufferDataDXR>();
     ret->buffer = ptr;
@@ -244,7 +231,7 @@ uint64_t D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resour
 {
     m_host_context->CopyResource(dst, src);
 
-    auto fence_value = inclementFenceValue();
+    auto fence_value = GfxContextDXR::getInstance()->incrementFenceValue();
     m_host_context->Signal(m_fence, fence_value);
     if (wait) {
         // wait for completion of CopyResource()
@@ -287,21 +274,12 @@ D3D12ResourceTranslator::~D3D12ResourceTranslator()
 {
 }
 
-ID3D12FencePtr D3D12ResourceTranslator::getFence(ID3D12Device * dxr_device)
+ID3D12FencePtr D3D12ResourceTranslator::getFence(ID3D12Device *dxr_device)
 {
     return m_fence;
 }
 
-void D3D12ResourceTranslator::setFenceValue(uint64_t v)
-{
-    m_fence_value = v;
-}
-uint64_t D3D12ResourceTranslator::inclementFenceValue()
-{
-    return ++m_fence_value;
-}
-
-TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(void *ptr)
+TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(GPUResourcePtr ptr)
 {
     auto ret = std::make_shared<TextureDataDXR>();
 
@@ -340,7 +318,7 @@ uint64_t D3D12ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fenc
     return m_fence_value;
 }
 
-BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(void *ptr)
+BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
 {
     auto ret = std::make_shared<BufferDataDXR>();
 
@@ -358,7 +336,7 @@ void D3D12ResourceTranslator::executeAndWaitCopy()
     ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
     m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
 
-    auto fence_value = inclementFenceValue();
+    auto fence_value = GfxContextDXR::getInstance()->incrementFenceValue();
     m_cmd_queue_copy->Signal(m_fence, fence_value);
     m_fence->SetEventOnCompletion(fence_value, m_fence_event);
     ::WaitForSingleObject(m_fence_event, INFINITE);
@@ -383,7 +361,7 @@ void D3D12ResourceTranslator::executeAndWaitResourceBarrier(ID3D12Resource *reso
     ID3D12CommandList* cmd_list = m_cmd_list.GetInterfacePtr();
     m_cmd_queue->ExecuteCommandLists(1, &cmd_list);
 
-    auto fence_value = inclementFenceValue();
+    auto fence_value = GfxContextDXR::getInstance()->incrementFenceValue();
     m_cmd_queue->Signal(m_fence, fence_value);
     m_fence->SetEventOnCompletion(fence_value, m_fence_event);
     ::WaitForSingleObject(m_fence_event, INFINITE);
@@ -402,7 +380,7 @@ IResourceTranslatorPtr CreateResourceTranslator()
         return std::make_shared<D3D12ResourceTranslator>(g_host_d3d12_device);
     if (g_host_d3d11_device)
         return std::make_shared<D3D11ResourceTranslator>(g_host_d3d11_device);
-    return IResourceTranslatorPtr();
+    return nullptr;
 }
 
 } // namespace rths

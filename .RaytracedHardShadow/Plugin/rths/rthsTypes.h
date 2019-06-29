@@ -97,7 +97,8 @@ struct SceneData
     bool operator!=(SceneData& v) const { return !(*this == v); }
 };
 
-using GPUResourcePtr = void*;
+using GPUResourcePtr = const void*;
+using CPUResourcePtr = const void*;
 
 
 // resource type exposed to plugin user
@@ -153,10 +154,10 @@ struct BlendshapeData
 class MeshData : public SharedResource<MeshData>
 {
 public:
-    GPUResourcePtr gpu_vertex_buffer = nullptr; // host
-    GPUResourcePtr gpu_index_buffer = nullptr; // host
-    void *cpu_vertex_buffer = nullptr;
-    void *cpu_index_buffer = nullptr;
+    GPUResourcePtr gpu_vertex_buffer = nullptr;
+    GPUResourcePtr gpu_index_buffer = nullptr;
+    CPUResourcePtr cpu_vertex_buffer = nullptr;
+    CPUResourcePtr cpu_index_buffer = nullptr;
     int vertex_stride = 0; // if 0, treated as size_of_vertex_buffer / vertex_count
     int vertex_count = 0;
     int vertex_offset = 0; // in byte

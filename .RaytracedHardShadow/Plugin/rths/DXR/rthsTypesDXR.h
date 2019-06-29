@@ -107,7 +107,7 @@ private:
 class TextureDataDXR
 {
 public:
-    void *texture = nullptr; // host
+    GPUResourcePtr texture = nullptr; // host
     int width = 0;
     int height = 0;
 
@@ -125,7 +125,7 @@ using TextureDataDXRPtr = std::shared_ptr<TextureDataDXR>;
 class BufferDataDXR
 {
 public:
-    void *buffer = nullptr; // host
+    GPUResourcePtr buffer = nullptr; // host
     int size = 0;
 
     ID3D12ResourcePtr resource;

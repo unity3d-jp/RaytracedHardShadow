@@ -216,9 +216,12 @@ bool GfxContextDXR::initializeDevice()
         return false;
     }
 
-    // resource translator
+    // resource translator (null if there is no host device)
     m_resource_translator = CreateResourceTranslator();
+
     // fence
+    // creating a sharable fence on d3d12 and share it with d3d11 seems don't work (at least on my machine).
+    // but creating on d3d11 and share with d3d12 works fine. so creating a fence let on the host-device side.
     if (m_resource_translator)
         m_fence = m_resource_translator->getFence(m_device);
     else
@@ -506,14 +509,14 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 
 void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geoms)
 {
-    auto translate_gpu_buffer = [this](void *buffer) {
+    auto translate_gpu_buffer = [this](GPUResourcePtr buffer) {
         auto& data = m_buffer_records[buffer];
         if (!data)
             data = m_resource_translator->translateBuffer(buffer);
         return data;
     };
 
-    auto upload_cpu_buffer = [this](void *buffer, int size) {
+    auto upload_cpu_buffer = [this](const void *buffer, int size) {
         auto& data = m_buffer_records[buffer];
         if (!data)
         {
@@ -619,7 +622,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     if (gpu_skinning) {
         m_deformer->finish(rd);
 
-        auto fence_value = m_resource_translator->inclementFenceValue();
+        auto fence_value = incrementFenceValue();
         auto cl = rd.cmd_list_compute;
 
         ID3D12CommandList* cmd_list[] = { cl.GetInterfacePtr() };
@@ -628,7 +631,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
         // add wait command because building acceleration structure depends on deform
         m_cmd_queue_direct->Wait(m_fence, fence_value);
-        m_resource_translator->setFenceValue(fence_value);
+        setFenceValue(fence_value);
     }
 
     TimestampQuery(rd.timestamp, rd.cmd_list_direct, "GfxContextDXR: building BLAS begin");
@@ -910,7 +913,7 @@ uint64_t GfxContextDXR::submitCommandList(ID3D12GraphicsCommandList4Ptr cl, bool
     m_cmd_queue_direct->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 
     if (add_signal) {
-        auto fence_value = m_resource_translator->inclementFenceValue();
+        auto fence_value = incrementFenceValue();
         m_cmd_queue_direct->Signal(m_fence, fence_value);
         return fence_value;
     }
@@ -1028,13 +1031,23 @@ void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd)
     ID3D12CommandList *cmd_list[]{ command_list.GetInterfacePtr() };
     m_cmd_queue_immediate_copy->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 
-    auto fence_value = m_resource_translator->inclementFenceValue();
+    auto fence_value = incrementFenceValue();
     m_cmd_queue_immediate_copy->Signal(m_fence, fence_value);
     m_fence->SetEventOnCompletion(fence_value, rd.fence_event);
     ::WaitForSingleObject(rd.fence_event, INFINITE);
 
     allocator->Reset();
     command_list->Reset(allocator, nullptr);
+}
+
+uint64_t GfxContextDXR::incrementFenceValue()
+{
+    return ++m_fence_value;
+}
+
+void GfxContextDXR::setFenceValue(uint64_t v)
+{
+    m_fence_value = v;
 }
 
 
@@ -1137,13 +1150,13 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
     TimestampResolve(rd.timestamp, rd.cmd_list_direct);
 
     rd.fence_value = submitCommandList(rd.cmd_list_direct, true);
-    if (rd.fence_value && rd.render_target) {
+    if (rd.fence_value && rd.render_target && m_resource_translator) {
         // copy render target to Unity side
         auto fv = m_resource_translator->syncTexture(*rtex, rd.fence_value);
         if (fv) {
             m_cmd_queue_direct->Wait(m_fence, fv);
             m_cmd_queue_direct->Signal(m_fence, ++fv);
-            m_resource_translator->setFenceValue(fv);
+            setFenceValue(fv);
             rd.fence_value = fv;
         }
     }

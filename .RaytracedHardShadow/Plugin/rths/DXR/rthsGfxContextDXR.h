@@ -48,6 +48,9 @@ public:
     bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride);
     void executeImmediateCopy(RenderDataDXR& rd);
 
+    uint64_t incrementFenceValue();
+    void setFenceValue(uint64_t v);
+
 private:
     friend std::unique_ptr<GfxContextDXR> std::make_unique<GfxContextDXR>();
     friend struct std::default_delete<GfxContextDXR>;
@@ -61,13 +64,14 @@ private:
     ID3D12Device5Ptr m_device;
     ID3D12CommandQueuePtr m_cmd_queue_direct, m_cmd_queue_compute, m_cmd_queue_immediate_copy;
     ID3D12FencePtr m_fence;
+    uint64_t m_fence_value = 0;
 
     ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_global_rootsig;
     ID3D12RootSignaturePtr m_local_rootsig;
 
-    std::map<void*, TextureDataDXRPtr> m_texture_records;
-    std::map<void*, BufferDataDXRPtr> m_buffer_records;
+    std::map<const void*, TextureDataDXRPtr> m_texture_records;
+    std::map<const void*, BufferDataDXRPtr> m_buffer_records;
     std::map<MeshData*, MeshDataDXRPtr> m_mesh_records;
     std::map<MeshInstanceData*, MeshInstanceDataDXRPtr> m_meshinstance_records;
     std::map<RenderTargetData*, RenderTargetDataDXRPtr> m_rendertarget_records;
