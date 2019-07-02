@@ -10,7 +10,8 @@ public:
 
     bool prepare(RenderDataDXR& rd);
     bool deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst);
-    bool finish(RenderDataDXR& rd);
+    bool close(RenderDataDXR& rd);
+    bool reset(RenderDataDXR& rd);
 
 private:
     void createSRV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int num_elements, int stride);

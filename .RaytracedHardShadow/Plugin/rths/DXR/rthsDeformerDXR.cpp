@@ -99,20 +99,15 @@ DeformerDXR::~DeformerDXR()
 
 bool DeformerDXR::prepare(RenderDataDXR& rd)
 {
-    if (!rd.cmd_list_compute) {
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&rd.cmd_allocator_compute));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, rd.cmd_allocator_compute, nullptr, IID_PPV_ARGS(&rd.cmd_list_compute));
-        rd.cmd_list_compute->Close();
+    if (!rd.cl_deform) {
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&rd.ca_deform));
+        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, rd.ca_deform, m_pipeline_state, IID_PPV_ARGS(&rd.cl_deform));
+        DbgSetName(rd.ca_deform, L"CA Deform");
+        DbgSetName(rd.cl_deform, L"CL Deform");
     }
 
-    bool ret = true;
-    if (FAILED(rd.cmd_allocator_compute->Reset()))
-        ret = false;
-    else if (FAILED(rd.cmd_list_compute->Reset(rd.cmd_allocator_compute, m_pipeline_state)))
-        ret = false;
-
-    TimestampQuery(rd.timestamp, rd.cmd_list_compute, "DeformerDXR: begin");
-    return ret;
+    TimestampQuery(rd.timestamp, rd.cl_deform, "DeformerDXR: begin");
+    return true;
 }
 
 bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
@@ -313,7 +308,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
     createCBV(hmesh_info.hcpu, mesh_dxr.mesh_info, mesh_info_size);
 
     {
-        auto cl = rd.cmd_list_compute;
+        auto& cl = rd.cl_deform;
         cl->SetComputeRootSignature(m_rootsig_deform);
 
         ID3D12DescriptorHeap* heaps[] = { inst_dxr.srvuav_heap };
@@ -325,11 +320,22 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
     return true;
 }
 
-bool DeformerDXR::finish(RenderDataDXR& rd)
+bool DeformerDXR::close(RenderDataDXR& rd)
 {
-    auto cl = rd.cmd_list_compute;
-    TimestampQuery(rd.timestamp, cl, "DeformerDXR: end");
-    if (SUCCEEDED(cl->Close())) {
+    if (rd.cl_deform) {
+        TimestampQuery(rd.timestamp, rd.cl_deform, "DeformerDXR: end");
+        if (SUCCEEDED(rd.cl_deform->Close())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool DeformerDXR::reset(RenderDataDXR & rd)
+{
+    if (rd.ca_deform && rd.cl_deform) {
+        rd.ca_deform->Reset();
+        rd.cl_deform->Reset(rd.ca_deform, m_pipeline_state);
         return true;
     }
     return false;

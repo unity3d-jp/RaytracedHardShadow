@@ -245,8 +245,8 @@ using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
 class RenderDataDXR
 {
 public:
-    ID3D12CommandAllocatorPtr cmd_allocator_direct, cmd_allocator_compute, cmd_allocator_immediate_copy;
-    ID3D12GraphicsCommandList4Ptr cmd_list_direct, cmd_list_compute, cmd_list_immediate_copy;
+    ID3D12CommandAllocatorPtr ca_deform, ca_blas, ca_tlas, ca_rays, ca_immediate_copy;
+    ID3D12GraphicsCommandList4Ptr cl_deform, cl_blas, cl_tlas, cl_rays, cl_immediate_copy;
 
     ID3D12DescriptorHeapPtr desc_heap;
     DescriptorHandleDXR tlas_handle;
@@ -263,7 +263,7 @@ public:
 
     ID3D12ResourcePtr shader_table;
 
-    uint64_t fence_value = 0;
+    uint64_t fv_deform = 0, fv_blas = 0, fv_tlas = 0, fv_rays = 0;
     FenceEventDXR fence_event;
     int render_flags = 0;
 
