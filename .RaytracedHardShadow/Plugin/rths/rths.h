@@ -10,10 +10,41 @@
 namespace rths {
 #ifndef rthsImpl
 
-struct float2 { float x, y; };
-struct float3 { float x, y, z; };
-struct float4 { float x, y, z, w; };
-struct float4x4 { float4 v[4]; };
+struct float2
+{
+    float x, y;
+    float& operator[](size_t i) { return ((float*)this)[i]; }
+    const float& operator[](size_t i) const { return ((float*)this)[i]; }
+};
+struct float3
+{
+    float x, y, z;
+    float& operator[](size_t i) { return ((float*)this)[i]; }
+    const float& operator[](size_t i) const { return ((float*)this)[i]; }
+};
+struct float4
+{
+    float x, y, z, w;
+    float& operator[](size_t i) { return ((float*)this)[i]; }
+    const float& operator[](size_t i) const { return ((float*)this)[i]; }
+};
+
+struct float4x4
+{
+    float4 v[4];
+    float4& operator[](size_t i) { return v[i]; }
+    const float4& operator[](size_t i) const { return v[i]; }
+
+    static float4x4 identity()
+    {
+        return{ {
+             { 1, 0, 0, 0 },
+             { 0, 1, 0, 0 },
+             { 0, 0, 1, 0 },
+             { 0, 0, 0, 1 },
+         } };
+    }
+};
 
 enum class RenderFlag : uint32_t
 {

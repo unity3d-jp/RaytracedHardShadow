@@ -44,8 +44,8 @@ public:
     uint64_t submitCommandList(ID3D12GraphicsCommandList4Ptr cl, bool add_signal);
     bool readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t size);
     bool uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t size);
-    bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride);
-    bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride);
+    bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, DXGI_FORMAT format);
+    bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, DXGI_FORMAT format);
     void executeImmediateCopy(RenderDataDXR& rd);
 
     uint64_t incrementFenceValue();

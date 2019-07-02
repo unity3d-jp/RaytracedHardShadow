@@ -3,7 +3,12 @@
 #include "MeshGenerator.h"
 #include "../rths/rths.h"
 
+#define rthsTestImpl
+#include "../rths/Foundation/rthsMath.h"
+
+
 using rths::float3;
+using rths::float4x4;
 
 
 TestCase(TestMinimum)
@@ -19,8 +24,8 @@ TestCase(TestMinimum)
     std::vector<rths::MeshInstanceData*> instances;
     rths::RenderTargetData *render_target = nullptr;
 
-    const int rt_width = 1920;
-    const int rt_height = 1080;
+    const int rt_width = 256;
+    const int rt_height = 256;
     const RenderTargetFormat rt_format = RenderTargetFormat::Ru8;
 
     // create render target
@@ -72,6 +77,25 @@ TestCase(TestMinimum)
     rthsMarkFrameBegin();
     rthsRendererBeginScene(renderer);
     rthsRendererSetRenderTarget(renderer, render_target);
+    {
+        int flags = 0;
+        //flags |= (int)rths::RenderFlag::CullBackFace;
+        //flags |= (int)rths::RenderFlag::IgnoreSelfShadow;
+        //flags |= (int)rths::RenderFlag::KeepSelfDropShadow;
+        flags |= (int)rths::RenderFlag::GPUSkinning;
+        flags |= (int)rths::RenderFlag::ClampBlendShapeWights;
+        rthsRendererSetRenderFlags(renderer, flags);
+
+    }
+    {
+        float3 pos{ 0.0f, 2.5f, -3.5f };
+        auto view = lookat_lh(pos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+        auto proj = perspective(60.0f, 1.0f, 0.1f, 100.0f);
+        rthsRendererSetCamera(renderer, pos, view, proj);
+    }
+    {
+        rthsRendererAddDirectionalLight(renderer, normalize(float3{ -1.0f, -1.0f, 1.0f }));
+    }
     for (auto inst : instances)
         rthsRendererAddGeometry(renderer, inst);
 

@@ -468,6 +468,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
             if (rt->width > 0 && rt->height > 0 && dxgifmt != DXGI_FORMAT_UNKNOWN) {
                 auto tex = std::make_shared<TextureDataDXR>();
                 data->texture = tex;
+                tex->format = dxgifmt;
                 tex->resource = createTexture(rt->width, rt->height, dxgifmt);
             }
         }
@@ -954,8 +955,9 @@ bool GfxContextDXR::uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const v
     return false;
 }
 
-bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride)
+bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, DXGI_FORMAT format)
 {
+    size_t stride = SizeOfElement(format);
     size_t size = width * height * stride;
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
     if (!readback_buf)
@@ -965,7 +967,7 @@ bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource
     dst_loc.pResource = readback_buf;
     dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     dst_loc.PlacedFootprint.Offset = 0;
-    dst_loc.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
+    dst_loc.PlacedFootprint.Footprint.Format = format;
     dst_loc.PlacedFootprint.Footprint.Width = (UINT)width;
     dst_loc.PlacedFootprint.Footprint.Height = (UINT)height;
     dst_loc.PlacedFootprint.Footprint.Depth = 1;
@@ -980,7 +982,8 @@ bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource
     executeImmediateCopy(rd);
 
     float* mapped;
-    if (SUCCEEDED(readback_buf->Map(0, nullptr, (void**)&mapped))) {
+    D3D12_RANGE ragne{ 0, size };
+    if (SUCCEEDED(readback_buf->Map(0, &ragne, (void**)&mapped))) {
         memcpy(dst, mapped, size);
         readback_buf->Unmap(0, nullptr);
         return true;
@@ -988,8 +991,9 @@ bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource
     return false;
 }
 
-bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride)
+bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, DXGI_FORMAT format)
 {
+    size_t stride = SizeOfElement(format);
     size_t size = width * height * stride;
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
     if (!upload_buf)
@@ -1009,7 +1013,7 @@ bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const 
         src_loc.pResource = upload_buf;
         src_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         src_loc.PlacedFootprint.Offset = 0;
-        src_loc.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
+        src_loc.PlacedFootprint.Footprint.Format = format;
         src_loc.PlacedFootprint.Footprint.Width = (UINT)width;
         src_loc.PlacedFootprint.Footprint.Height = (UINT)height;
         src_loc.PlacedFootprint.Footprint.Depth = 1;
@@ -1215,7 +1219,7 @@ bool GfxContextDXR::readbackRenderTarget(RenderDataDXR& rd, void *dst)
 
     auto& rtex = rd.render_target->texture;
     auto desc = rtex->resource->GetDesc();
-    return readbackTexture(rd, dst, rtex->resource, desc.Width, desc.Height, SizeOfElement(desc.Format));
+    return readbackTexture(rd, dst, rtex->resource, desc.Width, desc.Height, desc.Format);
 }
 
 void GfxContextDXR::onMeshDelete(MeshData *mesh)
