@@ -24,6 +24,22 @@ namespace UTJ.RaytracedHardShadow
             SelectedObjects,
         }
 
+        [Serializable]
+        public class Layer
+        {
+#if UNITY_EDITOR
+            public bool fold = true;
+#endif
+            public ObjectScope receiverScope;
+            public ObjectScope casterScope;
+#if UNITY_EDITOR
+            public SceneAsset[] receiverScenes;
+            public SceneAsset[] casterScenes;
+#endif
+            public GameObject[] receiverObjects;
+            public GameObject[] casterObjects;
+        }
+
         public class MeshRecord
         {
             public rthsMeshData meshData;
@@ -149,6 +165,8 @@ namespace UTJ.RaytracedHardShadow
 
 
         #region fields
+        public static readonly int kMaxLayers = 4;
+
         [SerializeField] bool m_generateRenderTexture = true;
         [SerializeField] RenderTexture m_outputTexture;
         [SerializeField] bool m_assignGlobalTexture = true;
@@ -174,16 +192,11 @@ namespace UTJ.RaytracedHardShadow
         [Tooltip("Geometry scope for shadow geometries.")]
         [SerializeField] bool m_separateCastersAndReceivers;
         [SerializeField] ObjectScope m_geometryScope;
-        [SerializeField] ObjectScope m_receiverScope;
-        [SerializeField] ObjectScope m_casterScope;
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_geometryScenes;
-        [SerializeField] SceneAsset[] m_receiverScenes;
-        [SerializeField] SceneAsset[] m_casterScenes;
 #endif
         [SerializeField] GameObject[] m_geometryObjects;
-        [SerializeField] GameObject[] m_receiverObjects;
-        [SerializeField] GameObject[] m_casterObjects;
+        [SerializeField] List<Layer> m_layers = new List<Layer> { new Layer() };
 
         rthsRenderer m_renderer;
 
@@ -267,31 +280,11 @@ namespace UTJ.RaytracedHardShadow
             get { return m_geometryScope; }
             set { m_geometryScope = value; }
         }
-        public ObjectScope receiverScope
-        {
-            get { return m_receiverScope; }
-            set { m_receiverScope = value; }
-        }
-        public ObjectScope casterScope
-        {
-            get { return m_casterScope; }
-            set { m_casterScope = value; }
-        }
 #if UNITY_EDITOR
         public SceneAsset[] geometryScenes
         {
             get { return m_geometryScenes; }
             set { m_geometryScenes = value; }
-        }
-        public SceneAsset[] receiverScenes
-        {
-            get { return m_receiverScenes; }
-            set { m_receiverScenes = value; }
-        }
-        public SceneAsset[] casterScenes
-        {
-            get { return m_casterScenes; }
-            set { m_casterScenes = value; }
         }
 #endif
         public GameObject[] geometryObjects
@@ -299,15 +292,21 @@ namespace UTJ.RaytracedHardShadow
             get { return m_geometryObjects; }
             set { m_geometryObjects = value; }
         }
-        public GameObject[] receiverObjects
+
+        public int layerCount
         {
-            get { return m_receiverObjects; }
-            set { m_receiverObjects = value; }
+            get { return m_layers.Count; }
         }
-        public GameObject[] casterObjects
+        public Layer GetLayer(int i) { return m_layers[i]; }
+        public Layer AddLayer()
         {
-            get { return m_casterObjects; }
-            set { m_casterObjects = value; }
+            var ret = new Layer();
+            m_layers.Add(ret);
+            return ret;
+        }
+        public void RemoveLayer(Layer l)
+        {
+            m_layers.Remove(l);
         }
         #endregion
 
@@ -615,32 +614,40 @@ namespace UTJ.RaytracedHardShadow
 
             if (m_separateCastersAndReceivers)
             {
-                switch(m_receiverScope)
+                int shift = 0;
+                foreach (var layer in m_layers)
                 {
-                    case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.Rceiver); break;
+                    byte receiverMask = (byte)((uint)rthsHitMask.Rceiver << shift);
+                    byte casterMask = (byte)((uint)rthsHitMask.Caster << shift);
+                    switch (layer.receiverScope)
+                    {
+                        case ObjectScope.EntireScene: processEntireScene(receiverMask); break;
 #if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScenes(m_receiverScenes, (byte)rthsHitMask.Rceiver); break;
+                        case ObjectScope.SelectedScenes: processScenes(layer.receiverScenes, receiverMask); break;
 #endif
-                    case ObjectScope.SelectedObjects: processGOs(m_receiverObjects, (byte)rthsHitMask.Rceiver); break;
-                }
-                switch (m_casterScope)
-                {
-                    case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.Caster); break;
+                        case ObjectScope.SelectedObjects: processGOs(layer.receiverObjects, receiverMask); break;
+                    }
+                    switch (layer.casterScope)
+                    {
+                        case ObjectScope.EntireScene: processEntireScene(casterMask); break;
 #if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScenes(m_casterScenes, (byte)rthsHitMask.Caster); break;
+                        case ObjectScope.SelectedScenes: processScenes(layer.casterScenes, casterMask); break;
 #endif
-                    case ObjectScope.SelectedObjects: processGOs(m_casterObjects, (byte)rthsHitMask.Caster); break;
+                        case ObjectScope.SelectedObjects: processGOs(layer.casterObjects, casterMask); break;
+                    }
+                    shift += 2;
                 }
             }
             else
             {
+                byte mask = (byte)rthsHitMask.Both;
                 switch (m_geometryScope)
                 {
-                    case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.All); break;
+                    case ObjectScope.EntireScene: processEntireScene(mask); break;
 #if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScenes(m_geometryScenes, (byte)rthsHitMask.All); break;
+                    case ObjectScope.SelectedScenes: processScenes(m_geometryScenes, mask); break;
 #endif
-                    case ObjectScope.SelectedObjects: processGOs(m_geometryObjects, (byte)rthsHitMask.All); break;
+                    case ObjectScope.SelectedObjects: processGOs(m_geometryObjects, mask); break;
                 }
             }
         }

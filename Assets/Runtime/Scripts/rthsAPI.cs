@@ -75,9 +75,9 @@ namespace UTJ.RaytracedHardShadow
 
     public enum rthsHitMask
     {
-        Rceiver = 0x0001,
-        Caster  = 0x0002,
-        All = Rceiver | Caster,
+        Rceiver = 0x01,
+        Caster  = 0x02,
+        Both    = Rceiver | Caster,
     }
 
     public enum rthsRenderTargetFormat

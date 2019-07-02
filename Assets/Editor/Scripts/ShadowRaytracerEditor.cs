@@ -7,6 +7,8 @@ namespace UTJ.RaytracedHardShadowEditor
     [CustomEditor(typeof(UTJ.RaytracedHardShadow.ShadowRaytracer))]
     public class ShadowRaytracerEditor : Editor
     {
+        static readonly int indentSize = 16;
+
         public override void OnInspectorGUI()
         {
             //DrawDefaultInspector();
@@ -52,26 +54,82 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.PropertyField(so.FindProperty("m_separateCastersAndReceivers"));
             if (t.separateCastersAndReceivers)
             {
-                EditorGUILayout.PropertyField(so.FindProperty("m_receiverScope"));
-                switch (t.receiverScope)
+                int layerToRemove = -1;
+
+                var spLayers = so.FindProperty("m_layers");
+                int layerCount = spLayers.arraySize;
+                for (int li = 0; li < layerCount; ++li)
                 {
-                    case ShadowRaytracer.ObjectScope.SelectedScenes:
-                        EditorGUILayout.PropertyField(so.FindProperty("m_receiverScenes"), true);
-                        break;
-                    case ShadowRaytracer.ObjectScope.SelectedObjects:
-                        EditorGUILayout.PropertyField(so.FindProperty("m_receiverObjects"), true);
-                        break;
+                    var spLayer = spLayers.GetArrayElementAtIndex(li);
+                    var fold = spLayer.FindPropertyRelative("fold");
+
+                    GUILayout.BeginHorizontal();
+                    GUILayout.BeginVertical("Box");
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Space(indentSize);
+                    fold.boolValue = EditorGUILayout.Foldout(fold.boolValue, "Layer " + (li + 1));
+                    if (GUILayout.Button("-", GUILayout.Width(20)))
+                        layerToRemove = li;
+                    GUILayout.EndHorizontal();
+                    EditorGUILayout.Space();
+
+                    if (fold.boolValue)
+                    {
+                        var spReceiverScope = spLayer.FindPropertyRelative("receiverScope");
+                        var spCasterScope = spLayer.FindPropertyRelative("casterScope");
+
+                        EditorGUI.indentLevel++;
+                        EditorGUILayout.PropertyField(spReceiverScope);
+                        EditorGUI.indentLevel++;
+                        switch ((ShadowRaytracer.ObjectScope)spReceiverScope.intValue)
+                        {
+                            case ShadowRaytracer.ObjectScope.SelectedScenes:
+                                EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("receiverScenes"), true);
+                                break;
+                            case ShadowRaytracer.ObjectScope.SelectedObjects:
+                                EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("receiverObjects"), true);
+                                break;
+                        }
+                        EditorGUI.indentLevel--;
+                        EditorGUILayout.Space();
+
+                        EditorGUILayout.PropertyField(spCasterScope);
+                        EditorGUI.indentLevel++;
+                        switch ((ShadowRaytracer.ObjectScope)spCasterScope.intValue)
+                        {
+                            case ShadowRaytracer.ObjectScope.SelectedScenes:
+                                EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("casterScenes"), true);
+                                break;
+                            case ShadowRaytracer.ObjectScope.SelectedObjects:
+                                EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("casterObjects"), true);
+                                break;
+                        }
+                        EditorGUI.indentLevel--;
+                        EditorGUI.indentLevel--;
+                    }
+
+                    GUILayout.EndVertical();
+                    GUILayout.EndHorizontal();
+
+                }
+                if (layerToRemove != -1)
+                {
+                    spLayers.DeleteArrayElementAtIndex(layerToRemove);
                 }
 
-                EditorGUILayout.PropertyField(so.FindProperty("m_casterScope"));
-                switch (t.casterScope)
+                if (layerCount < ShadowRaytracer.kMaxLayers)
                 {
-                    case ShadowRaytracer.ObjectScope.SelectedScenes:
-                        EditorGUILayout.PropertyField(so.FindProperty("m_casterScenes"), true);
-                        break;
-                    case ShadowRaytracer.ObjectScope.SelectedObjects:
-                        EditorGUILayout.PropertyField(so.FindProperty("m_casterObjects"), true);
-                        break;
+                    GUILayout.BeginHorizontal();
+                    GUILayout.BeginHorizontal("Box");
+                    GUILayout.Space(indentSize);
+                    GUILayout.FlexibleSpace();
+                    if (GUILayout.Button("+", GUILayout.Width(20)))
+                    {
+                        Undo.RecordObject(t, "ShadowRaytracer");
+                        t.AddLayer();
+                    }
+                    GUILayout.EndHorizontal();
+                    GUILayout.EndHorizontal();
                 }
             }
             else
