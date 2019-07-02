@@ -149,11 +149,10 @@ namespace UTJ.RaytracedHardShadow
 
 
         #region fields
-        [SerializeField] RenderTexture m_shadowBuffer;
+        [SerializeField] bool m_generateRenderTexture = true;
+        [SerializeField] RenderTexture m_outputTexture;
+        [SerializeField] bool m_assignGlobalTexture = true;
         [SerializeField] string m_globalTextureName = "_RaytracedHardShadow";
-        [SerializeField] bool m_generateShadowBuffer = true;
-
-        [SerializeField] Camera m_camera;
 
         [SerializeField] bool m_ignoreSelfShadow = false;
         [SerializeField] bool m_keepSelfDropShadow = false;
@@ -197,26 +196,25 @@ namespace UTJ.RaytracedHardShadow
 
 
         #region properties
-        public RenderTexture shadowBuffer
+        public bool generateRenderTexture
         {
-            get { return m_shadowBuffer; }
-            set { m_shadowBuffer = value; }
+            get { return m_generateRenderTexture; }
+            set { m_generateRenderTexture = value; }
+        }
+        public RenderTexture outputTexture
+        {
+            get { return m_outputTexture; }
+            set { m_outputTexture = value; }
+        }
+        public bool assignGlobalTexture
+        {
+            get { return m_assignGlobalTexture; }
+            set { m_assignGlobalTexture = value; }
         }
         public string globalTextureName
         {
             get { return m_globalTextureName; }
             set { m_globalTextureName = value; }
-        }
-        public bool autoGenerateShadowBuffer
-        {
-            get { return m_generateShadowBuffer; }
-            set { m_generateShadowBuffer = value; }
-        }
-
-        public new Camera camera
-        {
-            get { return m_camera; }
-            set { m_camera = value; }
         }
 
         public bool ignoreSelfShadow
@@ -683,9 +681,6 @@ namespace UTJ.RaytracedHardShadow
 #if UNITY_EDITOR
         void Reset()
         {
-            m_camera = GetComponent<Camera>();
-            if (m_camera == null)
-                m_camera = Camera.main;
         }
 #endif
 
@@ -729,51 +724,47 @@ namespace UTJ.RaytracedHardShadow
             if (!m_renderer)
                 return;
 
-            if (m_camera == null)
-            {
-                m_camera = Camera.main;
-                if (m_camera == null)
-                {
-                    Debug.LogWarning("ShadowRaytracer: camera is null");
-                }
-            }
+            var cam = GetComponent<Camera>();
+            if (cam == null)
+                return;
 
+            bool updateGlobalTexture = false;
 #if UNITY_EDITOR
-            if (m_shadowBuffer != null && AssetDatabase.Contains(m_shadowBuffer))
+            if (m_outputTexture != null && AssetDatabase.Contains(m_outputTexture))
             {
-                if (!m_shadowBuffer.IsCreated())
-                    m_shadowBuffer.Create();
-                if (m_globalTextureName != null && m_globalTextureName.Length != 0)
-                    Shader.SetGlobalTexture(m_globalTextureName, m_shadowBuffer);
+                if (!m_outputTexture.IsCreated())
+                    m_outputTexture.Create();
+                if (m_assignGlobalTexture)
+                    updateGlobalTexture = true;
             }
             else
 #endif
-            if (m_generateShadowBuffer)
+            if (m_generateRenderTexture)
             {
                 // create output buffer if not assigned. fit its size to camera resolution if already assigned.
 
-                var resolution = new Vector2Int(m_camera.pixelWidth, m_camera.pixelHeight);
-                if (m_shadowBuffer != null && (m_shadowBuffer.width != resolution.x || m_shadowBuffer.height != resolution.y))
+                var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
+                if (m_outputTexture != null && (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y))
                 {
-                    m_shadowBuffer.Release();
-                    m_shadowBuffer = null;
+                    m_outputTexture.Release();
+                    m_outputTexture = null;
                 }
-                if (m_shadowBuffer == null)
+                if (m_outputTexture == null)
                 {
-                    m_shadowBuffer = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RHalf);
-                    m_shadowBuffer.name = "RaytracedHardShadow";
-                    m_shadowBuffer.enableRandomWrite = true; // enable unordered access
-                    m_shadowBuffer.Create();
-                    if (m_globalTextureName != null && m_globalTextureName.Length != 0)
-                        Shader.SetGlobalTexture(m_globalTextureName, m_shadowBuffer);
+                    m_outputTexture = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RHalf);
+                    m_outputTexture.name = "RaytracedHardShadow";
+                    m_outputTexture.enableRandomWrite = true; // enable unordered access
+                    m_outputTexture.Create();
+                    if (m_assignGlobalTexture)
+                        updateGlobalTexture = true;
                 }
-            }
-            if (m_shadowBuffer == null)
-            {
-                Debug.LogWarning("ShadowRaytracer: output ShadowBuffer is null");
             }
 
-            if (m_camera != null && m_shadowBuffer != null)
+            if (m_outputTexture == null)
+                return;
+            if (updateGlobalTexture)
+                Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+
             {
                 int flags = 0;
                 if (m_cullBackFace)
@@ -791,8 +782,8 @@ namespace UTJ.RaytracedHardShadow
                 m_renderer.SetRaytraceFlags(flags);
                 m_renderer.SetShadowRayOffset(m_shadowRayOffset);
                 m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
-                m_renderer.SetRenderTarget(GetRenderTargetData(m_shadowBuffer));
-                m_renderer.SetCamera(m_camera);
+                m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
+                m_renderer.SetCamera(cam);
                 EnumerateLights(
                     l => { m_renderer.AddLight(l); },
                     scl => { m_renderer.AddLight(scl); }

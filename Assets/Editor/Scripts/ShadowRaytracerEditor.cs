@@ -14,12 +14,23 @@ namespace UTJ.RaytracedHardShadowEditor
             var t = target as ShadowRaytracer;
             var so = serializedObject;
 
-            EditorGUILayout.PropertyField(so.FindProperty("m_shadowBuffer"));
-            EditorGUILayout.PropertyField(so.FindProperty("m_globalTextureName"));
-            EditorGUILayout.PropertyField(so.FindProperty("m_generateShadowBuffer"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_generateRenderTexture"));
+            if (!t.generateRenderTexture)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(so.FindProperty("m_outputTexture"));
+                EditorGUI.indentLevel--;
+            }
+
+            EditorGUILayout.PropertyField(so.FindProperty("m_assignGlobalTexture"));
+            if (t.assignGlobalTexture)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(so.FindProperty("m_globalTextureName"));
+                EditorGUI.indentLevel--;
+            }
             EditorGUILayout.Space();
 
-            EditorGUILayout.PropertyField(so.FindProperty("m_camera"));
             EditorGUILayout.PropertyField(so.FindProperty("m_ignoreSelfShadow"));
             if (t.ignoreSelfShadow)
             {
