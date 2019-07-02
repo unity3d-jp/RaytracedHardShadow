@@ -12,6 +12,8 @@ using Unity.Collections;
 namespace UTJ.RaytracedHardShadow
 {
     [ExecuteInEditMode]
+    [RequireComponent(typeof(Camera))]
+    [AddComponentMenu("UTJ/Raytraced Hard Shadow/Shadow Raytracer")]
     public class ShadowRaytracer : MonoBehaviour
     {
         #region types
