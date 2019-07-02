@@ -599,7 +599,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             if (m_deformer->deform(rd, *inst_dxr))
                 ++deform_count;
         }
-        rd.geometries.push_back({ inst_dxr, geom.hit_mask });
+        rd.geometries.push_back({ inst_dxr, geom.receive_mask, geom.cast_mask });
     }
 
     size_t geometry_count = rd.geometries.size();
@@ -808,7 +808,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 D3D12_RAYTRACING_INSTANCE_DESC tmp{};
                 (float3x4&)tmp.Transform = to_float3x4(inst_dxr.base->transform);
                 tmp.InstanceID = i; // This value will be exposed to the shader via InstanceID()
-                tmp.InstanceMask = geom_dxr.hit_mask;
+                tmp.InstanceMask = (geom_dxr.receive_mask & (uint8_t)HitMask::Receiver) | geom_dxr.cast_mask;
                 tmp.InstanceContributionToHitGroupIndex = 0;
                 tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
                 tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
@@ -872,7 +872,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         if (SUCCEEDED(rd.instance_data->Map(0, nullptr, (void**)&dst))) {
             for (auto& geom_dxr : rd.geometries) {
                 InstanceData tmp{};
-                tmp.related_caster_mask = (geom_dxr.hit_mask << 1) & (uint8_t)HitMask::AllCaster;
+                tmp.related_caster_mask = geom_dxr.receive_mask & (uint8_t)HitMask::AllCaster;
                 *dst++ = tmp;
             }
             rd.instance_data->Unmap(0, nullptr);

@@ -70,8 +70,9 @@ void RendererBase::endScene()
                 prev = geom;
             }
             else if (*prev.instance == *geom.instance) {
-                // duplicated instance. just merge hit mask.
-                prev.hit_mask |= geom.hit_mask;
+                // duplicated instance. just merge hit masks.
+                prev.receive_mask |= geom.receive_mask;
+                prev.cast_mask |= geom.cast_mask;
             }
             else {
                 m_geometries_tmp.push_back(prev);

@@ -41,8 +41,7 @@ enum class HitMask : uint8_t
     Caster      = 0x02,
     Both        = Receiver | Caster,
 
-    AllReceiver = 0x01 | 0x04 | 0x10 | 0x40,
-    AllCaster   = 0x02 | 0x08 | 0x20 | 0x80,
+    AllCaster   = 0xfe,
     ALl         = 0xff,
 };
 
@@ -200,7 +199,8 @@ class GeometryData
 {
 public:
     MeshInstanceDataPtr instance;
-    uint8_t hit_mask; // combination of HitMask
+    uint8_t receive_mask;
+    uint8_t cast_mask;
 
     bool valid() const;
 };

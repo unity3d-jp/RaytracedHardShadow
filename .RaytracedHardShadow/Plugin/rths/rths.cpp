@@ -282,11 +282,11 @@ rthsAPI void rthsRendererAddReversePointLight(IRenderer *self, float3 pos, float
     self->addReversePointLight(pos, range);
 }
 
-rthsAPI void rthsRendererAddGeometry(IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask)
+rthsAPI void rthsRendererAddGeometry(IRenderer *self, rths::MeshInstanceData *mesh, uint8_t rmask, uint8_t cmask)
 {
     if (!self)
         return;
-    self->addGeometry({ mesh, mask });
+    self->addGeometry({ mesh, rmask, cmask });
 }
 
 rthsAPI void rthsRendererStartRender(IRenderer *self)

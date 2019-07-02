@@ -34,7 +34,7 @@ void RayGen()
     if (render_flags & RF_CULL_BACK_FACE)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
-    TraceRay(gRtScene, ray_flags, HM_ALL_RECEIVER, 0, 0, 0, ray, payload);
+    TraceRay(gRtScene, ray_flags, HM_RECEIVER, 0, 0, 0, ray, payload);
     gOutput[screen_idx.xy] = payload.shadow;
 }
 

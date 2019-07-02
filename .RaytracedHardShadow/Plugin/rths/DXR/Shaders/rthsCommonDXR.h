@@ -20,8 +20,6 @@ enum HIT_MASK
     HM_RECEIVER = 0x01,
     HM_CASTER   = 0x02,
     HM_BOTH     = HM_RECEIVER | HM_CASTER,
-    HM_ALL_RECEIVER = 0x01 | 0x04 | 0x10 | 0x40,
-    HM_ALL_CASTER   = 0x02 | 0x08 | 0x20 | 0x80,
 };
 
 struct CameraData

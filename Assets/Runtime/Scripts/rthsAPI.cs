@@ -328,7 +328,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRendererAddSpotLight(IntPtr self, Vector3 pos, Vector3 dir, float range, float spotAngle);
         [DllImport("rths")] static extern void rthsRendererAddPointLight(IntPtr self, Vector3 pos, float range);
         [DllImport("rths")] static extern void rthsRendererAddReversePointLight(IntPtr self, Vector3 pos, float range);
-        [DllImport("rths")] static extern void rthsRendererAddGeometry(IntPtr self, rthsMeshInstanceData mesh, byte hitMask);
+        [DllImport("rths")] static extern void rthsRendererAddGeometry(IntPtr self, rthsMeshInstanceData mesh, byte rmask, byte cmask);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
@@ -430,9 +430,9 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void AddGeometry(rthsMeshInstanceData mesh, byte hitMask = 0xff)
+        public void AddGeometry(rthsMeshInstanceData mesh, byte rmask, byte cmask)
         {
-            rthsRendererAddGeometry(self, mesh, hitMask);
+            rthsRendererAddGeometry(self, mesh, rmask, cmask);
         }
 
         public static void IssueRender()

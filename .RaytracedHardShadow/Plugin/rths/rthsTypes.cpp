@@ -47,7 +47,7 @@ bool MeshInstanceData::valid() const
 
 bool GeometryData::valid() const
 {
-    return hit_mask != 0 && instance && instance->valid();
+    return (receive_mask | cast_mask) != 0 && instance && instance->valid();
 }
 
 

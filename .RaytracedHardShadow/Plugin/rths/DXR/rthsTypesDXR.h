@@ -185,7 +185,8 @@ class GeometryDataDXR
 {
 public:
     MeshInstanceDataDXRPtr inst;
-    uint8_t hit_mask;
+    uint8_t receive_mask;
+    uint8_t cast_mask;
 
     bool operator==(const GeometryDataDXR& v) const;
     bool operator!=(const GeometryDataDXR& v) const;

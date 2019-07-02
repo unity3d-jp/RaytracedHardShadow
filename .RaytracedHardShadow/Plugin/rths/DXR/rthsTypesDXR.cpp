@@ -85,7 +85,7 @@ DescriptorHandleDXR DescriptorHeapAllocatorDXR::allocate()
 
 bool GeometryDataDXR::operator==(const GeometryDataDXR& v) const
 {
-    return inst == v.inst && hit_mask == v.hit_mask;
+    return inst == v.inst && receive_mask == v.receive_mask && cast_mask == v.cast_mask;
 }
 
 bool GeometryDataDXR::operator!=(const GeometryDataDXR& v) const

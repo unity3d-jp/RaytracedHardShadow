@@ -156,7 +156,7 @@ rthsAPI void rthsRendererAddDirectionalLight(rths::IRenderer *self, rths::float3
 rthsAPI void rthsRendererAddSpotLight(rths::IRenderer *self, rths::float3 pos, rths::float3 dir, float range, float spot_angle);
 rthsAPI void rthsRendererAddPointLight(rths::IRenderer *self, rths::float3 pos, float range);
 rthsAPI void rthsRendererAddReversePointLight(rths::IRenderer *self, rths::float3 pos, float range);
-rthsAPI void rthsRendererAddGeometry(rths::IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask = 0xff); // mask: combination of HitMask
+rthsAPI void rthsRendererAddGeometry(rths::IRenderer *self, rths::MeshInstanceData *mesh, uint8_t rmask = 0xff, uint8_t cmask = 0xff);
 rthsAPI void rthsRendererStartRender(rths::IRenderer *self);
 rthsAPI void rthsRendererFinishRender(rths::IRenderer *self);
 rthsAPI bool rthsRendererReadbackRenderTarget(rths::IRenderer *self, void *dst);
