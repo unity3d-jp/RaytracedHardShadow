@@ -17,9 +17,11 @@ enum RENDER_FLAG
 
 enum HIT_MASK
 {
-    HM_RECEIVER = 0x0001,
-    HM_CASTER   = 0x0002,
-    HM_ALL      = 0x0004,
+    HM_RECEIVER = 0x01,
+    HM_CASTER   = 0x02,
+    HM_BOTH     = HM_RECEIVER | HM_CASTER,
+    HM_ALL_RECEIVER = 0x01 | 0x04 | 0x10 | 0x40,
+    HM_ALL_CASTER   = 0x02 | 0x08 | 0x20 | 0x80,
 };
 
 struct CameraData
@@ -58,9 +60,15 @@ struct SceneData
     LightData lights[kMaxLights];
 };
 
+struct InstanceData
+{
+    uint related_caster_mask;
+};
+
 
 RWTexture2D<float> gOutput : register(u0);
 RaytracingAccelerationStructure gRtScene : register(t0);
+StructuredBuffer<InstanceData> gGeomData : register(t1);
 ConstantBuffer<SceneData> gScene : register(b0);
 
 float3 CameraPosition() { return gScene.camera.position.xyz; }
@@ -79,6 +87,7 @@ int LightCount() { return gScene.light_count; }
 LightData GetLight(int i) { return gScene.lights[i]; }
 
 float3 HitPosition() { return WorldRayOrigin() + WorldRayDirection() * (RayTCurrent() - ShadowRayOffset()); }
+uint RelatedCasterMask() { return gGeomData[InstanceID()].related_caster_mask; }
 
 // a & b must be normalized
 float angle_between(float3 a, float3 b) { return acos(clamp(dot(a, b), 0, 1)); }

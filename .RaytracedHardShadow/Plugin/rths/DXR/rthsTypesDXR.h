@@ -249,9 +249,10 @@ public:
     ID3D12GraphicsCommandList4Ptr cl_deform, cl_blas, cl_tlas, cl_rays, cl_immediate_copy;
 
     ID3D12DescriptorHeapPtr desc_heap;
-    DescriptorHandleDXR tlas_handle;
-    DescriptorHandleDXR scene_data_handle;
     DescriptorHandleDXR render_target_handle;
+    DescriptorHandleDXR tlas_handle;
+    DescriptorHandleDXR instance_data_handle;
+    DescriptorHandleDXR scene_data_handle;
 
     std::vector<GeometryDataDXR> geometries, geometries_prev;
     SceneData scene_data_prev{};
@@ -259,6 +260,7 @@ public:
     ID3D12ResourcePtr tlas_scratch;
     ID3D12ResourcePtr tlas;
     ID3D12ResourcePtr scene_data;
+    ID3D12ResourcePtr instance_data;
     RenderTargetDataDXRPtr render_target;
 
     ID3D12ResourcePtr shader_table;

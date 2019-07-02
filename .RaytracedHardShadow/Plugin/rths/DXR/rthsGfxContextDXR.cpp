@@ -11,6 +11,11 @@
 
 namespace rths {
 
+struct InstanceData
+{
+    uint32_t related_caster_mask;
+};
+
 extern ID3D12Device *g_host_d3d12_device;
 
 static const WCHAR* kRayGenShader = L"RayGen";
@@ -212,7 +217,7 @@ bool GfxContextDXR::initializeDevice()
     {
         D3D12_DESCRIPTOR_RANGE ranges[] = {
             { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
-            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
             { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
         D3D12_ROOT_PARAMETER param{};
@@ -376,6 +381,7 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
         auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, rd.desc_heap);
         rd.render_target_handle = handle_allocator.allocate();
         rd.tlas_handle = handle_allocator.allocate();
+        rd.instance_data_handle = handle_allocator.allocate();
         rd.scene_data_handle = handle_allocator.allocate();
     }
 
@@ -596,6 +602,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         rd.geometries.push_back({ inst_dxr, geom.hit_mask });
     }
 
+    size_t geometry_count = rd.geometries.size();
     if (gpu_skinning) {
         m_deformer->close(rd);
 
@@ -738,8 +745,6 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     // build TLAS
     TimestampQuery(rd.timestamp, rd.cl_tlas, "GfxContextDXR: building TLAS begin");
     if (needs_build_tlas) {
-        size_t geometry_count = rd.geometries.size();
-
         // get the size of the TLAS buffers
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
         inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
@@ -752,8 +757,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
         // scratch buffer
         if (rd.tlas_scratch) {
-            auto capacity = rd.tlas_scratch->GetDesc().Width;
-            if (capacity < info.ScratchDataSizeInBytes)
+            auto capacity_in_bytes = rd.tlas_scratch->GetDesc().Width;
+            if (capacity_in_bytes < info.ScratchDataSizeInBytes)
                 rd.tlas_scratch = nullptr;
         }
         if (!rd.tlas_scratch) {
@@ -762,8 +767,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
         // TLAS buffer
         if(rd.tlas) {
-            auto capacity = rd.tlas->GetDesc().Width;
-            if (capacity < info.ScratchDataSizeInBytes)
+            auto capacity_in_bytes = rd.tlas->GetDesc().Width;
+            if (capacity_in_bytes < info.ScratchDataSizeInBytes)
                 rd.tlas = nullptr;
         }
         if (!rd.tlas) {
@@ -836,6 +841,43 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     }
     TimestampQuery(rd.timestamp, rd.cl_tlas, "GfxContextDXR: building TLAS end");
     rd.fv_tlas = submitCommandList(rd.cl_tlas, rd.ca_tlas, rd.fv_blas);
+
+
+    // setup per-instance data
+    if (needs_build_tlas) {
+        int stride = sizeof(InstanceData);
+        if (rd.instance_data) {
+            auto capacity_in_bytes = rd.instance_data->GetDesc().Width;
+            if (capacity_in_bytes < geometry_count * stride)
+                rd.instance_data = nullptr;
+        }
+        if (!rd.instance_data) {
+            int capacity = 1024;
+            while (capacity < geometry_count)
+                capacity *= 2;
+            rd.instance_data = createBuffer(capacity * stride, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+
+            D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+            desc.Format = DXGI_FORMAT_UNKNOWN;
+            desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            desc.Buffer.FirstElement = 0;
+            desc.Buffer.NumElements = capacity;
+            desc.Buffer.StructureByteStride = stride;
+            desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+            m_device->CreateShaderResourceView(rd.instance_data, &desc, rd.instance_data_handle.hcpu);
+        }
+
+        InstanceData *dst;
+        if (SUCCEEDED(rd.instance_data->Map(0, nullptr, (void**)&dst))) {
+            for (auto& geom_dxr : rd.geometries) {
+                InstanceData tmp{};
+                tmp.related_caster_mask = (geom_dxr.hit_mask << 1) & (uint8_t)HitMask::AllCaster;
+                *dst++ = tmp;
+            }
+            rd.instance_data->Unmap(0, nullptr);
+        }
+    }
 }
 
 uint64_t GfxContextDXR::flush(RenderDataDXR& rd)

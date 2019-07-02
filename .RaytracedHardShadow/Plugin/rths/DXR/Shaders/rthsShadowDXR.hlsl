@@ -34,7 +34,7 @@ void RayGen()
     if (render_flags & RF_CULL_BACK_FACE)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
-    TraceRay(gRtScene, ray_flags, HM_RECEIVER, 0, 0, 0, ray, payload);
+    TraceRay(gRtScene, ray_flags, HM_ALL_RECEIVER, 0, 0, 0, ray, payload);
     gOutput[screen_idx.xy] = payload.shadow;
 }
 
@@ -78,7 +78,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
             ray.Direction = -light.direction.xyz;
             ray.TMin = 0.0f;
             ray.TMax = CameraFarPlane();
-            TraceRay(gRtScene, ray_flags, HM_CASTER, 1, 0, 1, ray, payload);
+            TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
         }
         else if (light.light_type == LT_SPOT) {
             // spot light
@@ -91,7 +91,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(gRtScene, ray_flags, HM_CASTER, 1, 0, 1, ray, payload);
+                TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_POINT) {
@@ -106,7 +106,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(gRtScene, ray_flags, HM_CASTER, 1, 0, 1, ray, payload);
+                TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_REVERSE_POINT) {
@@ -121,7 +121,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = -dir;
                 ray.TMin = 0.0f;
                 ray.TMax = light.range - distance;
-                TraceRay(gRtScene, ray_flags, HM_CASTER, 1, 0, 1, ray, payload);
+                TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
             }
         }
     }

@@ -37,9 +37,13 @@ enum class LightType : uint32_t
 
 enum class HitMask : uint8_t
 {
-    Receiver    = 0x0001,
-    Caster      = 0x0002,
-    All = Receiver | Caster,
+    Receiver    = 0x01,
+    Caster      = 0x02,
+    Both        = Receiver | Caster,
+
+    AllReceiver = 0x01 | 0x04 | 0x10 | 0x40,
+    AllCaster   = 0x02 | 0x08 | 0x20 | 0x80,
+    ALl         = 0xff,
 };
 
 enum class UpdateFlag : uint32_t
