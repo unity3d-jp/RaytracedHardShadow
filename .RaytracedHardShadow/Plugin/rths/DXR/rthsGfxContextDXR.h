@@ -16,10 +16,6 @@ public:
     static void finalizeInstance();
     static GfxContextDXR* getInstance();
 
-    bool valid() const;
-    bool validateDevice();
-    ID3D12Device5Ptr getDevice();
-
     bool initializeDevice();
     void frameBegin() override;
     void prepare(RenderDataDXR& rd);
@@ -37,19 +33,24 @@ public:
     void onRenderTargetDelete(RenderTargetData *rt) override;
 
 
+    bool valid() const;
+    bool validateDevice();
+    ID3D12Device5Ptr getDevice();
+
+    uint64_t incrementFenceValue();
+    void setFenceValue(uint64_t v);
+
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     ID3D12ResourcePtr createTexture(int width, int height, DXGI_FORMAT format);
 
     void addResourceBarrier(ID3D12GraphicsCommandList4Ptr cl, ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
     uint64_t submitCommandList(ID3D12GraphicsCommandList4Ptr cl, ID3D12CommandAllocatorPtr ca, uint64_t preceding_fv = 0, bool emit_signal = true);
+
     bool readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t size);
     bool uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t size);
     bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, DXGI_FORMAT format);
     bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, DXGI_FORMAT format);
     void executeImmediateCopy(RenderDataDXR& rd);
-
-    uint64_t incrementFenceValue();
-    void setFenceValue(uint64_t v);
 
 private:
     friend std::unique_ptr<GfxContextDXR> std::make_unique<GfxContextDXR>();
