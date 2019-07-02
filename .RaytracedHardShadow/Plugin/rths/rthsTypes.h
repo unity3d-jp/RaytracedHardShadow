@@ -15,8 +15,7 @@ struct CameraData
     };
     float near_plane;
     float far_plane;
-    float fov;
-    float pad1;
+    float2 pad1;
 };
 
 enum class RenderFlag : uint32_t

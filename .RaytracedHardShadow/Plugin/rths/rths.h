@@ -116,11 +116,11 @@ rthsAPI void rthsRendererEndScene(rths::IRenderer *self);
 rthsAPI void rthsRendererSetRenderFlags(rths::IRenderer *self, uint32_t flag); // flag: combination of RenderFlag
 rthsAPI void rthsRendererSetShadowRayOffset(rths::IRenderer *self, float v);
 rthsAPI void rthsRendererSetSelfShadowThreshold(rths::IRenderer *self, float v);
-rthsAPI void rthsRendererSetCamera(rths::IRenderer *self, rths::float4x4 transform, rths::float4x4 view, rths::float4x4 proj, float near_plane, float far_plane, float fov);
-rthsAPI void rthsRendererAddDirectionalLight(rths::IRenderer *self, rths::float4x4 transform);
-rthsAPI void rthsRendererAddSpotLight(rths::IRenderer *self, rths::float4x4 transform, float range, float spot_angle);
-rthsAPI void rthsRendererAddPointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
-rthsAPI void rthsRendererAddReversePointLight(rths::IRenderer *self, rths::float4x4 transform, float range);
+rthsAPI void rthsRendererSetCamera(rths::IRenderer *self, rths::float3 pos, rths::float4x4 view, rths::float4x4 proj);
+rthsAPI void rthsRendererAddDirectionalLight(rths::IRenderer *self, rths::float3 dir);
+rthsAPI void rthsRendererAddSpotLight(rths::IRenderer *self, rths::float3 pos, rths::float3 dir, float range, float spot_angle);
+rthsAPI void rthsRendererAddPointLight(rths::IRenderer *self, rths::float3 pos, float range);
+rthsAPI void rthsRendererAddReversePointLight(rths::IRenderer *self, rths::float3 pos, float range);
 rthsAPI void rthsRendererAddGeometry(rths::IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask = 0xff); // mask: combination of HitMask
 rthsAPI void rthsRendererStartRender(rths::IRenderer *self);
 rthsAPI void rthsRendererFinishRender(rths::IRenderer *self);

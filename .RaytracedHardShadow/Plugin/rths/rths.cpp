@@ -247,39 +247,39 @@ rthsAPI void rthsRendererSetSelfShadowThreshold(IRenderer *self, float v)
     self->setSelfShadowThreshold(v);
 }
 
-rthsAPI void rthsRendererSetCamera(IRenderer *self, float4x4 transform, float4x4 view, float4x4 proj, float near_plane, float far_plane, float fov)
+rthsAPI void rthsRendererSetCamera(IRenderer *self, float3 pos, float4x4 view, float4x4 proj)
 {
     if (!self)
         return;
-    self->setCamera(transform, view, proj, near_plane, far_plane, fov);
+    self->setCamera(pos, view, proj);
 }
 
-rthsAPI void rthsRendererAddDirectionalLight(IRenderer *self, float4x4 transform)
+rthsAPI void rthsRendererAddDirectionalLight(IRenderer *self, float3 dir)
 {
     if (!self)
         return;
-    self->addDirectionalLight(transform);
+    self->addDirectionalLight(dir);
 }
 
-rthsAPI void rthsRendererAddSpotLight(IRenderer *self, float4x4 transform, float range, float spot_angle)
+rthsAPI void rthsRendererAddSpotLight(IRenderer *self, float3 pos, float3 dir, float range, float spot_angle)
 {
     if (!self)
         return;
-    self->addSpotLight(transform, range, spot_angle);
+    self->addSpotLight(pos, dir, range, spot_angle);
 }
 
-rthsAPI void rthsRendererAddPointLight(IRenderer *self, float4x4 transform, float range)
+rthsAPI void rthsRendererAddPointLight(IRenderer *self, float3 pos, float range)
 {
     if (!self)
         return;
-    self->addPointLight(transform, range);
+    self->addPointLight(pos, range);
 }
 
-rthsAPI void rthsRendererAddReversePointLight(IRenderer *self, float4x4 transform, float range)
+rthsAPI void rthsRendererAddReversePointLight(IRenderer *self, float3 pos, float range)
 {
     if (!self)
         return;
-    self->addReversePointLight(transform, range);
+    self->addReversePointLight(pos, range);
 }
 
 rthsAPI void rthsRendererAddGeometry(IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask)

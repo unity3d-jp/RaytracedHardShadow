@@ -323,11 +323,11 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRendererSetShadowRayOffset(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsRendererSetSelfShadowThreshold(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsRendererSetRenderTarget(IntPtr self, rthsRenderTarget rt);
-        [DllImport("rths")] static extern void rthsRendererSetCamera(IntPtr self, Matrix4x4 trans, Matrix4x4 view, Matrix4x4 proj, float near, float far, float fov);
-        [DllImport("rths")] static extern void rthsRendererAddDirectionalLight(IntPtr self, Matrix4x4 trans);
-        [DllImport("rths")] static extern void rthsRendererAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
-        [DllImport("rths")] static extern void rthsRendererAddPointLight(IntPtr self, Matrix4x4 trans, float range);
-        [DllImport("rths")] static extern void rthsRendererAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
+        [DllImport("rths")] static extern void rthsRendererSetCamera(IntPtr self, Vector3 pos, Matrix4x4 view, Matrix4x4 proj);
+        [DllImport("rths")] static extern void rthsRendererAddDirectionalLight(IntPtr self, Vector3 dir);
+        [DllImport("rths")] static extern void rthsRendererAddSpotLight(IntPtr self, Vector3 pos, Vector3 dir, float range, float spotAngle);
+        [DllImport("rths")] static extern void rthsRendererAddPointLight(IntPtr self, Vector3 pos, float range);
+        [DllImport("rths")] static extern void rthsRendererAddReversePointLight(IntPtr self, Vector3 pos, float range);
         [DllImport("rths")] static extern void rthsRendererAddGeometry(IntPtr self, rthsMeshInstanceData mesh, byte hitMask);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
@@ -385,21 +385,22 @@ namespace UTJ.RaytracedHardShadow
 
         public void SetCamera(Camera cam)
         {
-            rthsRendererSetCamera(self, cam.transform.localToWorldMatrix, cam.worldToCameraMatrix, cam.projectionMatrix, cam.nearClipPlane, cam.farClipPlane, cam.fieldOfView);
+            rthsRendererSetCamera(self, cam.transform.position, cam.worldToCameraMatrix, cam.projectionMatrix);
         }
 
         public bool AddLight(Light light)
         {
+            var trans = light.transform;
             switch (light.type)
             {
                 case LightType.Directional:
-                    rthsRendererAddDirectionalLight(self, light.transform.localToWorldMatrix);
+                    rthsRendererAddDirectionalLight(self, trans.forward);
                     return true;
                 case LightType.Spot:
-                    rthsRendererAddSpotLight(self, light.transform.localToWorldMatrix, light.range, light.spotAngle);
+                    rthsRendererAddSpotLight(self, trans.position, trans.forward, light.range, light.spotAngle);
                     return true;
                 case LightType.Point:
-                    rthsRendererAddPointLight(self, light.transform.localToWorldMatrix, light.range);
+                    rthsRendererAddPointLight(self, trans.position, light.range);
                     return true;
                 default:
                     Debug.LogWarning("rthsShadowRenderer: " + light.type + " is not supported");
@@ -408,19 +409,20 @@ namespace UTJ.RaytracedHardShadow
         }
         public bool AddLight(ShadowCasterLight light)
         {
+            var trans = light.transform;
             switch (light.lightType)
             {
                 case ShadowCasterLightType.Directional:
-                    rthsRendererAddDirectionalLight(self, light.transform.localToWorldMatrix);
+                    rthsRendererAddDirectionalLight(self, trans.forward);
                     return true;
                 case ShadowCasterLightType.Spot:
-                    rthsRendererAddSpotLight(self, light.transform.localToWorldMatrix, light.range, light.spotAngle);
+                    rthsRendererAddSpotLight(self, trans.position, trans.forward, light.range, light.spotAngle);
                     return true;
                 case ShadowCasterLightType.Point:
-                    rthsRendererAddPointLight(self, light.transform.localToWorldMatrix, light.range);
+                    rthsRendererAddPointLight(self, trans.position, light.range);
                     return true;
                 case ShadowCasterLightType.ReversePoint:
-                    rthsRendererAddReversePointLight(self, light.transform.localToWorldMatrix, light.range);
+                    rthsRendererAddReversePointLight(self, trans.position, light.range);
                     return true;
                 default:
                     Debug.LogWarning("rthsShadowRenderer: " + light.lightType + " is not supported");

@@ -87,6 +87,8 @@ struct float4x4
 
 
 inline float3 operator-(const float3& l) { return{ -l.x, -l.y, -l.z }; }
+inline float3 operator+(const float3& l, const float3& r) { return{ l.x + r.x, l.y + r.y, l.z + r.z }; }
+inline float3 operator-(const float3& l, const float3& r) { return{ l.x - r.x, l.y - r.y, l.z - r.z }; }
 inline float3 operator*(const float3& l, float r) { return{ l.x * r, l.y * r, l.z * r }; }
 inline float3 operator/(const float3& l, float r) { return{ l.x / r, l.y / r, l.z / r }; }
 inline float clamp(float v, float vmin, float vmax) { return std::min<float>(std::max<float>(v, vmin), vmax); }
@@ -96,6 +98,14 @@ inline float dot(const float3& l, const float3& r) { return l.x*r.x + l.y*r.y + 
 inline float length_sq(const float3& v) { return dot(v, v); }
 inline float length(const float3& v) { return sqrt(length_sq(v)); }
 inline float3 normalize(const float3& v) { return v / length(v); }
+inline float3 cross(const float3& l, const float3& r)
+{
+    return{
+        l.y * r.z - l.z * r.y,
+        l.z * r.x - l.x * r.z,
+        l.x * r.y - l.y * r.x
+    };
+}
 
 inline float4 to_float4(const float3& xyz, float w)
 {
