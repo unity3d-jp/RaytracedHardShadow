@@ -343,6 +343,7 @@ void GfxContextDXR::frameBegin()
     for (auto& kvp : m_meshinstance_records) {
         kvp.second->is_updated = false;
     }
+    m_fv_last_rays = 0;
 }
 
 void GfxContextDXR::prepare(RenderDataDXR& rd)
@@ -407,6 +408,12 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
 
     // reset fence values
     rd.fv_deform = rd.fv_blas = rd.fv_tlas = rd.fv_rays = 0;
+
+    if (m_fv_last_rays != 0) {
+        // wait for complete previous renderer's DispatchRays()
+        // because there may be dependencies for the previous renderer. (e.g. building BLAS)
+        m_cmd_queue_direct->Wait(m_fence, m_fv_last_rays);
+    }
 }
 
 void GfxContextDXR::setSceneData(RenderDataDXR& rd, SceneData& data)
@@ -880,15 +887,15 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     }
 }
 
-uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
+void GfxContextDXR::flush(RenderDataDXR& rd)
 {
     if (!rd.render_target || !rd.render_target->texture->resource) {
         SetErrorLog("GfxContext::flush(): render target is null\n");
-        return 0;
+        return;
     }
     if (rd.fv_rays != 0) {
         SetErrorLog("GfxContext::flush(): called before finish()\n");
-        return 0;
+        return;
     }
     auto& rtex = rd.render_target->texture;
 
@@ -989,7 +996,7 @@ uint64_t GfxContextDXR::flush(RenderDataDXR& rd)
             rd.fv_rays = fv;
         }
     }
-    return rd.fv_rays;
+    m_fv_last_rays = rd.fv_rays;
 }
 
 void GfxContextDXR::finish(RenderDataDXR& rd)
@@ -1079,7 +1086,7 @@ bool GfxContextDXR::valid() const
     return m_device != nullptr;
 }
 
-bool GfxContextDXR::validateDevice()
+bool GfxContextDXR::checkError()
 {
     if (!m_device)
         return false;
@@ -1090,21 +1097,29 @@ bool GfxContextDXR::validateDevice()
         {
             ID3D12DeviceRemovedExtendedDataPtr dread;
             if (SUCCEEDED(m_device->QueryInterface(IID_PPV_ARGS(&dread)))) {
-                D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT DredAutoBreadcrumbsOutput;
-                D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
-                dread->GetAutoBreadcrumbsOutput(&DredAutoBreadcrumbsOutput);
-                dread->GetPageFaultAllocationOutput(&DredPageFaultOutput);
-                // todo: get error log
+                D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT breadcrumps;
+                if (SUCCEEDED(dread->GetAutoBreadcrumbsOutput(&breadcrumps))) {
+                    // todo: get error log
+                }
+
+                D3D12_DRED_PAGE_FAULT_OUTPUT pagefault;
+                if (SUCCEEDED(dread->GetPageFaultAllocationOutput(&pagefault))) {
+                    // todo: get error log
+                }
             }
         }
 #endif // rthsEnableD3D12DREAD
 
-        PSTR buf = nullptr;
-        size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-            NULL, reason, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&buf, 0, NULL);
+        {
+            PSTR buf = nullptr;
+            size_t size = ::FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                NULL, reason, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&buf, 0, NULL);
 
-        std::string message(buf, size);
-        SetErrorLog(message.c_str());
+            std::string message(buf, size);
+            SetErrorLog(message.c_str());
+        }
+
+        m_device = nullptr;
         return false;
     }
     return true;

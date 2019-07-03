@@ -52,29 +52,25 @@ namespace UTJ.RaytracedHardShadowEditor
             return null;
         }
 
-        public static bool AddDroppedScenesFromHierarchy(SerializedProperty dst, Rect dropArea)
+        // spScenes: SceneAsset[]
+        public static void DrawScenesField(SerializedProperty spScenes)
         {
-            var sceneAssets = GetDroppedScenesFromHierarchy(dropArea);
+            EditorGUILayout.PropertyField(spScenes, true);
+
+            var sceneAssets = GetDroppedScenesFromHierarchy(GUILayoutUtility.GetLastRect());
             if (sceneAssets != null)
             {
                 foreach (var s in sceneAssets)
                 {
-                    int i = dst.arraySize;
-                    dst.InsertArrayElementAtIndex(i);
-                    dst.GetArrayElementAtIndex(i).objectReferenceValue = s;
+                    int i = spScenes.arraySize;
+                    spScenes.InsertArrayElementAtIndex(i);
+                    spScenes.GetArrayElementAtIndex(i).objectReferenceValue = s;
                 }
-                return true;
             }
-            return false;
         }
+
 
         static readonly int indentSize = 16;
-
-        public static void DrawScenesField(SerializedProperty spScenes)
-        {
-            EditorGUILayout.PropertyField(spScenes, true);
-            AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
-        }
 
         public override void OnInspectorGUI()
         {
@@ -110,11 +106,14 @@ namespace UTJ.RaytracedHardShadowEditor
             if (t.ignoreSelfShadow)
             {
                 EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(so.FindProperty("m_selfShadowThreshold"));
                 EditorGUILayout.PropertyField(so.FindProperty("m_keepSelfDropShadow"));
+                EditorGUILayout.PropertyField(so.FindProperty("m_selfShadowThreshold"));
                 EditorGUI.indentLevel--;
             }
-            EditorGUILayout.PropertyField(so.FindProperty("m_shadowRayOffset"));
+            else
+            {
+                EditorGUILayout.PropertyField(so.FindProperty("m_shadowRayOffset"));
+            }
             EditorGUILayout.Space();
 
             // lights

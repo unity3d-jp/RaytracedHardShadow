@@ -37,7 +37,7 @@ RendererDXR::~RendererDXR()
 bool RendererDXR::valid() const
 {
     auto ctx = GfxContextDXR::getInstance();
-    if (!ctx || !ctx->validateDevice())
+    if (!ctx || !ctx->checkError())
         return false;
     return true;
 }

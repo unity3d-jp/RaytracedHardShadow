@@ -22,7 +22,7 @@ public:
     void setSceneData(RenderDataDXR& rd, SceneData& data);
     void setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt);
     void setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geometries);
-    uint64_t flush(RenderDataDXR& rd);
+    void flush(RenderDataDXR& rd);
     void finish(RenderDataDXR& rd);
     void frameEnd() override;
 
@@ -34,7 +34,7 @@ public:
 
 
     bool valid() const;
-    bool validateDevice();
+    bool checkError();
     ID3D12Device5Ptr getDevice();
 
     uint64_t incrementFenceValue();
@@ -66,6 +66,7 @@ private:
     ID3D12CommandQueuePtr m_cmd_queue_direct, m_cmd_queue_compute, m_cmd_queue_immediate_copy;
     ID3D12FencePtr m_fence;
     uint64_t m_fence_value = 0;
+    uint64_t m_fv_last_rays = 0;
 
     ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_global_rootsig;

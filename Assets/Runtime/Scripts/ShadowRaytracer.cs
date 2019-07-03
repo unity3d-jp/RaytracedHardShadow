@@ -175,11 +175,11 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_assignGlobalTexture = true;
         [SerializeField] string m_globalTextureName = "_RaytracedHardShadow";
 
-        [SerializeField] bool m_cullBackFace = true;
-        [SerializeField] bool m_ignoreSelfShadow = false;
-        [SerializeField] bool m_keepSelfDropShadow = false;
+        [SerializeField] bool m_cullBackFace = false;
+        [SerializeField] bool m_ignoreSelfShadow = true;
+        [SerializeField] bool m_keepSelfDropShadow = true;
+        [SerializeField] float m_selfShadowThreshold = 0.0001f;
         [SerializeField] float m_shadowRayOffset = 0.0001f;
-        [SerializeField] float m_selfShadowThreshold = 0.001f;
 
         [SerializeField] bool m_GPUSkinning = true;
 
@@ -831,7 +831,7 @@ namespace UTJ.RaytracedHardShadow
 
                 m_renderer.BeginScene();
                 m_renderer.SetRaytraceFlags(flags);
-                m_renderer.SetShadowRayOffset(m_shadowRayOffset);
+                m_renderer.SetShadowRayOffset(m_ignoreSelfShadow ? 0.0f : m_shadowRayOffset);
                 m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
                 m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
                 m_renderer.SetCamera(cam);

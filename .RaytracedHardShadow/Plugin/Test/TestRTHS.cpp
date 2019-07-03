@@ -26,7 +26,7 @@ TestCase(TestMinimum)
 
     const int rt_width = 256;
     const int rt_height = 256;
-    const RenderTargetFormat rt_format = RenderTargetFormat::Ru8;
+    const RenderTargetFormat rt_format = RenderTargetFormat::Rf32;
 
     // create render target
     {
@@ -74,42 +74,60 @@ TestCase(TestMinimum)
     }
 
     // render!
-    rthsMarkFrameBegin();
-    rthsRendererBeginScene(renderer);
-    rthsRendererSetRenderTarget(renderer, render_target);
     {
-        int flags = 0;
-        //flags |= (int)rths::RenderFlag::CullBackFace;
-        //flags |= (int)rths::RenderFlag::IgnoreSelfShadow;
-        //flags |= (int)rths::RenderFlag::KeepSelfDropShadow;
-        flags |= (int)rths::RenderFlag::GPUSkinning;
-        flags |= (int)rths::RenderFlag::ClampBlendShapeWights;
-        rthsRendererSetRenderFlags(renderer, flags);
+        rthsMarkFrameBegin();
+        rthsRendererBeginScene(renderer);
+        rthsRendererSetShadowRayOffset(renderer, 0.0001f);
+        rthsRendererSetSelfShadowThreshold(renderer, 0.0001f);
+        rthsRendererSetRenderTarget(renderer, render_target);
+        {
+            int flags = 0;
+            //flags |= (int)rths::RenderFlag::CullBackFace;
+            //flags |= (int)rths::RenderFlag::IgnoreSelfShadow;
+            //flags |= (int)rths::RenderFlag::KeepSelfDropShadow;
+            flags |= (int)rths::RenderFlag::GPUSkinning;
+            flags |= (int)rths::RenderFlag::ClampBlendShapeWights;
+            rthsRendererSetRenderFlags(renderer, flags);
 
-    }
-    {
-        float3 pos{ 0.0f, 2.5f, -3.5f };
-        auto view = lookat_lh(pos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
-        auto proj = perspective(60.0f, 1.0f, 0.1f, 100.0f);
-        rthsRendererSetCamera(renderer, pos, view, proj);
-    }
-    {
-        rthsRendererAddDirectionalLight(renderer, normalize(float3{ -1.0f, -1.0f, 1.0f }));
-    }
-    for (auto inst : instances)
-        rthsRendererAddGeometry(renderer, inst);
+        }
+        {
+            //float3 pos{ 0.0f, 2.5f, -3.5f };
+            //auto view = lookat_lh(pos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+            //auto proj = perspective(60.0f, 1.0f, 0.3f, 100.0f);
 
-    rthsRendererEndScene(renderer);
+            float3 pos{ 0.0f, 2.5f, -3.5f };
+            float4x4 view{ {
+                {1, 0, 0, 0},
+                {0, 0.944813550f, 0.327608585f, 0},
+                {0, 0, 0.327608585f, -0.944813550f},
+                {0, -1.21540380, -4.12586880, 1},
+            } };
+            float4x4 proj{ {
+                {0.513588428f, 0, 0, 0},
+                {0, 1.73205078f, 0, 0},
+                {0, 0, -1.00060010f, -1.0f},
+                {0, 0, -0.600180030f, 0},
+            } };
 
-    rthsRendererStartRender(renderer);
-    rthsRendererFinishRender(renderer);
-    rthsMarkFrameEnd();
+            rthsRendererSetCamera(renderer, pos, view, proj);
+        }
+        {
+            rthsRendererAddDirectionalLight(renderer, normalize(float3{ -1.0f, -1.0f, 1.0f }));
+        }
+        for (auto inst : instances)
+            rthsRendererAddGeometry(renderer, inst);
 
+        rthsRendererEndScene(renderer);
 
-    // read back render target content
-    std::vector<char> rt_buf(rt_width * rt_height);
-    if (rthsRendererReadbackRenderTarget(renderer, rt_buf.data())) {
-        // todo: export to file
+        rthsRendererStartRender(renderer);
+        rthsRendererFinishRender(renderer);
+
+        // read back render target content
+        std::vector<float> rt_buf(rt_width * rt_height);
+        if (rthsRendererReadbackRenderTarget(renderer, rt_buf.data())) {
+            // todo: export to file
+        }
+        rthsMarkFrameEnd();
     }
 
 
