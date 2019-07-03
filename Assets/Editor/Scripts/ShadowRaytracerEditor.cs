@@ -105,11 +105,23 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.PropertyField(so.FindProperty("m_shadowRayOffset"));
             EditorGUILayout.Space();
 
-            EditorGUILayout.PropertyField(so.FindProperty("m_lightScope"));
-            if (t.lightScope == ShadowRaytracer.ObjectScope.Scenes)
-                EditorGUILayout.PropertyField(so.FindProperty("m_lightScenes"), true);
-            else if (t.lightScope == ShadowRaytracer.ObjectScope.Objects)
-                EditorGUILayout.PropertyField(so.FindProperty("m_lightObjects"), true);
+            {
+                var spLightScope = so.FindProperty("m_lightScope");
+                EditorGUILayout.PropertyField(spLightScope);
+                switch ((ShadowRaytracer.ObjectScope)spLightScope.intValue)
+                {
+                    case ShadowRaytracer.ObjectScope.Scenes:
+                        {
+                            var spScenes = so.FindProperty("m_lightScenes");
+                            EditorGUILayout.PropertyField(spScenes, true);
+                            AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
+                        }
+                        break;
+                    case ShadowRaytracer.ObjectScope.Objects:
+                        EditorGUILayout.PropertyField(so.FindProperty("m_lightObjects"), true);
+                        break;
+                }
+            }
             EditorGUILayout.Space();
 
             EditorGUILayout.PropertyField(so.FindProperty("m_separateCastersAndReceivers"));
@@ -182,9 +194,7 @@ namespace UTJ.RaytracedHardShadowEditor
 
                 }
                 if (layerToRemove != -1)
-                {
                     spLayers.DeleteArrayElementAtIndex(layerToRemove);
-                }
 
                 if (layerCount < ShadowRaytracer.kMaxLayers)
                 {

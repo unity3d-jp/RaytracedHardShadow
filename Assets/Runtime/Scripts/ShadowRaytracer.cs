@@ -36,6 +36,9 @@ namespace UTJ.RaytracedHardShadow
             public SceneAsset[] receiverScenes;
             public SceneAsset[] casterScenes;
 #endif
+            // keep scene paths in *ScenePaths fields to handle scene scope at runtime
+            public string[] receiverScenePaths;
+            public string[] casterScenePaths;
             public GameObject[] receiverObjects;
             public GameObject[] casterObjects;
         }
@@ -187,6 +190,7 @@ namespace UTJ.RaytracedHardShadow
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_lightScenes;
 #endif
+        [SerializeField] string[] m_lightScenePaths;
         [SerializeField] GameObject[] m_lightObjects;
 
         [Tooltip("Geometry scope for shadow geometries.")]
@@ -195,6 +199,7 @@ namespace UTJ.RaytracedHardShadow
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_geometryScenes;
 #endif
+        [SerializeField] string[] m_geometryScenePaths;
         [SerializeField] GameObject[] m_geometryObjects;
         [SerializeField] List<Layer> m_layers = new List<Layer> { new Layer() };
 
@@ -260,7 +265,13 @@ namespace UTJ.RaytracedHardShadow
         public SceneAsset[] lightScenes
         {
             get { return m_lightScenes; }
-            set { m_lightScenes = value; }
+            set { m_lightScenes = value; UpdateScenePaths(); }
+        }
+#else
+        public string[] lightScenePaths
+        {
+            get { return m_lightScenePaths; }
+            set { m_lightScenePaths = value; }
         }
 #endif
         public GameObject[] lightObjects
@@ -284,7 +295,13 @@ namespace UTJ.RaytracedHardShadow
         public SceneAsset[] geometryScenes
         {
             get { return m_geometryScenes; }
-            set { m_geometryScenes = value; }
+            set { m_geometryScenes = value; UpdateScenePaths(); }
+        }
+#else
+        public string[] geometryScenePaths
+        {
+            get { return m_geometryScenePaths; }
+            set { m_geometryScenePaths = value; }
         }
 #endif
         public GameObject[] geometryObjects
@@ -297,86 +314,10 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_layers.Count; }
         }
-        public Layer GetLayer(int i) { return m_layers[i]; }
-        public Layer AddLayer()
-        {
-            var ret = new Layer();
-            m_layers.Add(ret);
-            return ret;
-        }
-        public void RemoveLayer(Layer l)
-        {
-            m_layers.Remove(l);
-        }
         #endregion
 
 
         #region impl
-        public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
-        {
-            if (m_lightScope == ObjectScope.EntireScene)
-            {
-                foreach (var light in FindObjectsOfType<Light>())
-                    if (light.enabled)
-                        bodyL.Invoke(light);
-                foreach (var slight in FindObjectsOfType<ShadowCasterLight>())
-                    if (slight.enabled)
-                        bodySCL.Invoke(slight);
-            }
-            else if (m_lightScope == ObjectScope.Scenes)
-            {
-#if UNITY_EDITOR
-                int numScenes = SceneManager.sceneCount;
-                for (int si = 0; si < numScenes; ++si)
-                {
-                    var scene = SceneManager.GetSceneAt(si);
-                    if (!scene.isLoaded)
-                        continue;
-
-                    foreach (var sceneAsset in m_lightScenes)
-                    {
-                        if (sceneAsset == null)
-                            continue;
-
-                        var path = AssetDatabase.GetAssetPath(sceneAsset);
-                        if (scene.path == path)
-                        {
-                            foreach (var go in scene.GetRootGameObjects())
-                            {
-                                if (!go.activeInHierarchy)
-                                    continue;
-
-                                foreach (var light in go.GetComponentsInChildren<Light>())
-                                    if (light.enabled)
-                                        bodyL.Invoke(light);
-                                foreach (var slight in go.GetComponentsInChildren<ShadowCasterLight>())
-                                    if (slight.enabled)
-                                        bodySCL.Invoke(slight);
-                            }
-                            break;
-                        }
-                    }
-                }
-#endif
-            }
-            else if (m_lightScope == ObjectScope.Objects)
-            {
-                foreach (var go in m_lightObjects)
-                {
-                    if (go == null || !go.activeInHierarchy)
-                        continue;
-
-                    foreach (var light in go.GetComponentsInChildren<Light>())
-                        if (light.enabled)
-                            bodyL.Invoke(light);
-                    foreach (var slight in go.GetComponentsInChildren<ShadowCasterLight>())
-                        if (slight.enabled)
-                            bodySCL.Invoke(slight);
-                }
-            }
-        }
-
-
         // mesh cache serves two purposes:
         // 1. prevent multiple SkinnedMeshRenderer.Bake() if there are multiple ShadowRaytracers
         //    this is just for optimization.
@@ -560,6 +501,112 @@ namespace UTJ.RaytracedHardShadow
             return rec.rtData;
         }
 
+
+        // user must call UpdateScenePaths() manually if made changes to layer
+        public Layer GetLayer(int i)
+        {
+            return m_layers[i];
+        }
+
+        // user must call UpdateScenePaths() manually if made changes to layer
+        public Layer AddLayer()
+        {
+            var ret = new Layer();
+            m_layers.Add(ret);
+            return ret;
+        }
+        public void RemoveLayer(Layer l)
+        {
+            m_layers.Remove(l);
+        }
+
+#if UNITY_EDITOR
+        void UpdateScenePaths(ref string[] dst, SceneAsset[] src)
+        {
+            dst = Array.ConvertAll(src, s => s != null ? AssetDatabase.GetAssetPath(s) : null);
+        }
+#endif
+
+        public void UpdateScenePaths()
+        {
+#if UNITY_EDITOR
+            if (m_lightScope == ObjectScope.Scenes)
+                UpdateScenePaths(ref m_lightScenePaths, m_lightScenes);
+
+            if (m_separateCastersAndReceivers)
+            {
+                foreach(var layer in m_layers)
+                {
+                    if (layer.casterScope == ObjectScope.Scenes)
+                        UpdateScenePaths(ref layer.casterScenePaths, layer.casterScenes);
+                    if (layer.receiverScope == ObjectScope.Scenes)
+                        UpdateScenePaths(ref layer.receiverScenePaths, layer.receiverScenes);
+                }
+            }
+            else
+            {
+                if (m_geometryScope == ObjectScope.Scenes)
+                    UpdateScenePaths(ref m_geometryScenePaths, m_geometryScenes);
+            }
+#endif
+        }
+
+        public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
+        {
+            Action<GameObject[]> processGOs = (gos) =>
+            {
+                foreach (var go in gos)
+                {
+                    if (go == null || !go.activeInHierarchy)
+                        continue;
+
+                    foreach (var l in go.GetComponentsInChildren<Light>())
+                        if (l.enabled)
+                            bodyL.Invoke(l);
+                    foreach (var scl in go.GetComponentsInChildren<ShadowCasterLight>())
+                        if (scl.enabled)
+                            bodySCL.Invoke(scl);
+                }
+            };
+
+            Action<string[]> processScenes = (scenePaths) =>
+            {
+                foreach (var scenePath in scenePaths)
+                {
+                    if (scenePath == null || scenePath.Length == 0)
+                        continue;
+
+                    int numScenes = SceneManager.sceneCount;
+                    for (int si = 0; si < numScenes; ++si)
+                    {
+                        var scene = SceneManager.GetSceneAt(si);
+                        if (scene.isLoaded && scene.path == scenePath)
+                        {
+                            processGOs(scene.GetRootGameObjects());
+                            break;
+                        }
+                    }
+                }
+            };
+
+            Action processEntireScene = () =>
+            {
+                foreach (var l in FindObjectsOfType<Light>())
+                    if (l.enabled)
+                        bodyL.Invoke(l);
+                foreach (var scl in FindObjectsOfType<ShadowCasterLight>())
+                    if (scl.enabled)
+                        bodySCL.Invoke(scl);
+            };
+
+            switch (m_lightScope)
+            {
+                case ObjectScope.EntireScene: processEntireScene(); break;
+                case ObjectScope.Scenes: processScenes(m_lightScenePaths); break;
+                case ObjectScope.Objects: processGOs(m_lightObjects); break;
+            }
+        }
+
         public void EnumerateMeshRenderers(Action<MeshRenderer, byte, byte> bodyMR, Action<SkinnedMeshRenderer, byte, byte> bodySMR)
         {
             // C# 7.0 supports function in function but we stick to the old way for compatibility
@@ -580,19 +627,17 @@ namespace UTJ.RaytracedHardShadow
                 }
             };
 
-#if UNITY_EDITOR
-            Action<SceneAsset[], byte, byte> processScenes = (sceneAssets, rmask, cmask) => {
-                foreach (var sceneAsset in sceneAssets)
+            Action<string[], byte, byte> processScenes = (scenePaths, rmask, cmask) => {
+                foreach (var scenePath in scenePaths)
                 {
-                    if (sceneAsset == null)
+                    if (scenePath == null || scenePath.Length == 0)
                         continue;
 
-                    var path = AssetDatabase.GetAssetPath(sceneAsset);
                     int numScenes = SceneManager.sceneCount;
                     for (int si = 0; si < numScenes; ++si)
                     {
                         var scene = SceneManager.GetSceneAt(si);
-                        if (scene.isLoaded && scene.path == path)
+                        if (scene.isLoaded && scene.path == scenePath)
                         {
                             processGOs(scene.GetRootGameObjects(), rmask, cmask);
                             break;
@@ -600,7 +645,6 @@ namespace UTJ.RaytracedHardShadow
                     }
                 }
             };
-#endif
 
             Action<byte, byte> processEntireScene = (rmask, cmask) =>
             {
@@ -622,17 +666,13 @@ namespace UTJ.RaytracedHardShadow
                     switch (layer.receiverScope)
                     {
                         case ObjectScope.EntireScene: processEntireScene(rmask, 0); break;
-#if UNITY_EDITOR
-                        case ObjectScope.Scenes: processScenes(layer.receiverScenes, rmask, 0); break;
-#endif
+                        case ObjectScope.Scenes: processScenes(layer.receiverScenePaths, rmask, 0); break;
                         case ObjectScope.Objects: processGOs(layer.receiverObjects, rmask, 0); break;
                     }
                     switch (layer.casterScope)
                     {
                         case ObjectScope.EntireScene: processEntireScene(0, cmask); break;
-#if UNITY_EDITOR
-                        case ObjectScope.Scenes: processScenes(layer.casterScenes, 0, cmask); break;
-#endif
+                        case ObjectScope.Scenes: processScenes(layer.casterScenePaths, 0, cmask); break;
                         case ObjectScope.Objects: processGOs(layer.casterObjects, 0, cmask); break;
                     }
                     shift += 1;
@@ -644,9 +684,7 @@ namespace UTJ.RaytracedHardShadow
                 switch (m_geometryScope)
                 {
                     case ObjectScope.EntireScene: processEntireScene(mask, mask); break;
-#if UNITY_EDITOR
-                    case ObjectScope.Scenes: processScenes(m_geometryScenes, mask, mask); break;
-#endif
+                    case ObjectScope.Scenes: processScenes(m_geometryScenePaths, mask, mask); break;
                     case ObjectScope.Objects: processGOs(m_geometryObjects, mask, mask); break;
                 }
             }
@@ -688,6 +726,11 @@ namespace UTJ.RaytracedHardShadow
 #if UNITY_EDITOR
         void Reset()
         {
+        }
+
+        void OnValidate()
+        {
+            UpdateScenePaths();
         }
 #endif
 
