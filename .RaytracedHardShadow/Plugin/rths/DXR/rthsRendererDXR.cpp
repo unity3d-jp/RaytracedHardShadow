@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "rthsLog.h"
+#include "Foundation/rthsLog.h"
 #include "rthsRenderer.h"
 #ifdef _WIN32
 #include "rthsGfxContextDXR.h"
@@ -15,6 +15,9 @@ public:
     bool valid() const override;
     void render() override; // called from render thread
     void finish() override; // called from render thread
+
+    bool readbackRenderTarget(void *dst) override;
+    void* getRenderTexturePtr() override;
 
 private:
     RenderDataDXR m_render_data;
@@ -34,7 +37,7 @@ RendererDXR::~RendererDXR()
 bool RendererDXR::valid() const
 {
     auto ctx = GfxContextDXR::getInstance();
-    if (!ctx || !ctx->validateDevice())
+    if (!ctx || !ctx->checkError())
         return false;
     return true;
 }
@@ -60,6 +63,22 @@ void RendererDXR::finish()
     auto ctx = GfxContextDXR::getInstance();
     ctx->finish(m_render_data);
     clearMeshInstances();
+}
+
+bool RendererDXR::readbackRenderTarget(void *dst)
+{
+    if (!valid())
+        return false;
+
+    auto ctx = GfxContextDXR::getInstance();
+    return ctx->readbackRenderTarget(m_render_data, dst);
+}
+
+void* RendererDXR::getRenderTexturePtr()
+{
+    if (m_render_data.render_target)
+        return m_render_data.render_target->texture->resource.GetInterfacePtr();
+    return nullptr;
 }
 
 IRenderer* CreateRendererDXR()

@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "rthsRenderer.h"
-#include "rthsLog.h"
+#include "Foundation/rthsLog.h"
 
 namespace rths {
 
@@ -16,6 +16,12 @@ void CallOnMeshInstanceDelete(MeshInstanceData *inst)
 {
     for (auto& cb : g_scene_callbacks)
         cb->onMeshInstanceDelete(inst);
+}
+
+void CallOnRenderTargetDelete(RenderTargetData *rt)
+{
+    for (auto& cb : g_scene_callbacks)
+        cb->onRenderTargetDelete(rt);
 }
 
 ISceneCallback::ISceneCallback()
@@ -64,8 +70,9 @@ void RendererBase::endScene()
                 prev = geom;
             }
             else if (*prev.instance == *geom.instance) {
-                // duplicated instance. just merge hit mask.
-                prev.hit_mask |= geom.hit_mask;
+                // duplicated instance. just merge hit masks.
+                prev.receive_mask |= geom.receive_mask;
+                prev.cast_mask |= geom.cast_mask;
             }
             else {
                 m_geometries_tmp.push_back(prev);
@@ -92,22 +99,31 @@ void RendererBase::setSelfShadowThreshold(float v)
     m_scene_data.self_shadow_threshold = v;
 }
 
-void RendererBase::setRenderTarget(void *rt)
+void RendererBase::setRenderTarget(RenderTargetData *rt)
 {
     m_render_target = rt;
 }
 
-void RendererBase::setCamera(const float4x4& trans, const float4x4& view, const float4x4& proj, float near_, float far_, float fov)
+void RendererBase::setCamera(const float3& pos, const float4x4& view, const float4x4& proj)
 {
     m_scene_data.camera.view = view;
     m_scene_data.camera.proj = proj;
-    m_scene_data.camera.position = extract_position(trans);
-    m_scene_data.camera.near_plane = near_;
-    m_scene_data.camera.far_plane = far_;
-    m_scene_data.camera.fov = fov;
+    m_scene_data.camera.position = pos;
+
+    {
+        auto m22 = -proj[2][2];
+        auto m32 = -proj[3][2];
+        auto tmp_near = std::abs((2.0f * m32) / (2.0f*m22 - 2.0f));
+        auto tmp_far = std::abs(((m22 - 1.0f)*tmp_near) / (m22 + 1.0f));
+        if (tmp_near > tmp_far)
+            std::swap(tmp_near, tmp_far);
+        m_scene_data.camera.near_plane = tmp_near;
+        m_scene_data.camera.far_plane = tmp_far;
+
+    }
 }
 
-void RendererBase::addDirectionalLight(const float4x4& trans)
+void RendererBase::addDirectionalLight(const float3& dir)
 {
     if (m_scene_data.light_count == kMaxLights) {
         SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
@@ -115,10 +131,10 @@ void RendererBase::addDirectionalLight(const float4x4& trans)
     }
     auto& dst = m_scene_data.lights[m_scene_data.light_count++];
     dst.light_type = LightType::Directional;
-    dst.direction = extract_direction(trans);
+    dst.direction = dir;
 }
 
-void RendererBase::addSpotLight(const float4x4& trans, float range, float spot_angle)
+void RendererBase::addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle)
 {
     if (m_scene_data.light_count == kMaxLights) {
         SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
@@ -126,13 +142,13 @@ void RendererBase::addSpotLight(const float4x4& trans, float range, float spot_a
     }
     auto& dst = m_scene_data.lights[m_scene_data.light_count++];
     dst.light_type = LightType::Spot;
-    dst.position = extract_position(trans);
+    dst.position = pos;
     dst.range = range;
-    dst.direction = extract_direction(trans);
+    dst.direction = dir;
     dst.spot_angle = spot_angle * DegToRad;
 }
 
-void RendererBase::addPointLight(const float4x4& trans, float range)
+void RendererBase::addPointLight(const float3& pos, float range)
 {
     if (m_scene_data.light_count == kMaxLights) {
         SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
@@ -140,11 +156,11 @@ void RendererBase::addPointLight(const float4x4& trans, float range)
     }
     auto& dst = m_scene_data.lights[m_scene_data.light_count++];
     dst.light_type = LightType::Point;
-    dst.position = extract_position(trans);
+    dst.position = pos;
     dst.range = range;
 }
 
-void RendererBase::addReversePointLight(const float4x4& trans, float range)
+void RendererBase::addReversePointLight(const float3& pos, float range)
 {
     if (m_scene_data.light_count == kMaxLights) {
         SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
@@ -152,7 +168,7 @@ void RendererBase::addReversePointLight(const float4x4& trans, float range)
     }
     auto& dst = m_scene_data.lights[m_scene_data.light_count++];
     dst.light_type = LightType::ReversePoint;
-    dst.position = extract_position(trans);
+    dst.position = pos;
     dst.range = range;
 }
 
@@ -167,14 +183,6 @@ void RendererBase::clearMeshInstances()
     m_geometries.clear();
 }
 
-} // namespace rths
-
-
-#ifdef _WIN32
-    #include "DXR/rthsGfxContextDXR.h"
-#endif
-
-namespace rths {
 
 void MarkFrameBegin()
 {

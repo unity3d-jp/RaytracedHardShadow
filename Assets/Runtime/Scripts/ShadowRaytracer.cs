@@ -12,14 +12,35 @@ using Unity.Collections;
 namespace UTJ.RaytracedHardShadow
 {
     [ExecuteInEditMode]
+    [RequireComponent(typeof(Camera))]
+    [AddComponentMenu("UTJ/Raytraced Hard Shadow/Shadow Raytracer")]
     public class ShadowRaytracer : MonoBehaviour
     {
         #region types
         public enum ObjectScope
         {
             EntireScene,
-            SelectedScenes,
-            SelectedObjects,
+            Scenes,
+            Objects,
+        }
+
+        [Serializable]
+        public class Layer
+        {
+#if UNITY_EDITOR
+            public bool fold = true;
+#endif
+            public ObjectScope receiverScope;
+            public ObjectScope casterScope;
+#if UNITY_EDITOR
+            public SceneAsset[] receiverScenes;
+            public SceneAsset[] casterScenes;
+#endif
+            // keep scene paths in *ScenePaths fields to handle scene scope at runtime
+            public string[] receiverScenePaths;
+            public string[] casterScenePaths;
+            public GameObject[] receiverObjects;
+            public GameObject[] casterObjects;
         }
 
         public class MeshRecord
@@ -94,15 +115,51 @@ namespace UTJ.RaytracedHardShadow
 
             public void Update(rthsMeshData md, SkinnedMeshRenderer smr)
             {
-                Update(md, smr.localToWorldMatrix);
-                instData.SetBones(smr);
+                var bones = smr.bones;
+                if (bones.Length > 0)
+                {
+                    // skinned
+                    var rootBone = smr.rootBone;
+                    var rootMatrix = rootBone != null ? rootBone.localToWorldMatrix : Matrix4x4.identity;
+                    Update(md, rootMatrix);
+                    instData.SetBones(bones);
+                }
+                else
+                {
+                    // non-skinned
+                    Update(md, smr.localToWorldMatrix);
+                }
                 instData.SetBlendshapeWeights(smr);
             }
 
             public void Release()
             {
                 instData.Release();
-                meshData = default(rthsMeshData);
+                meshData = default(rthsMeshData); // Release() should not be called here
+                useCount = 0;
+            }
+        }
+
+        public class RenderTargetRecord
+        {
+            public rthsRenderTarget rtData;
+            public int useCount;
+
+            public void Update(RenderTexture rtex)
+            {
+                if (!rtex.IsCreated())
+                    rtex.Create();
+
+                if (!rtData)
+                {
+                    rtData = rthsRenderTarget.Create();
+                    rtData.Setup(rtex.GetNativeTexturePtr());
+                }
+            }
+
+            public void Release()
+            {
+                rtData.Release();
                 useCount = 0;
             }
         }
@@ -111,17 +168,19 @@ namespace UTJ.RaytracedHardShadow
 
 
         #region fields
-        [SerializeField] RenderTexture m_shadowBuffer;
+        public static readonly int kMaxLayers = 7;
+
+        [SerializeField] bool m_generateRenderTexture = true;
+        [SerializeField] RenderTexture m_outputTexture;
+        [SerializeField] bool m_assignGlobalTexture = true;
         [SerializeField] string m_globalTextureName = "_RaytracedHardShadow";
-        [SerializeField] bool m_generateShadowBuffer = true;
 
-        [SerializeField] Camera m_camera;
-
-        [SerializeField] bool m_ignoreSelfShadow = false;
-        [SerializeField] bool m_keepSelfDropShadow = false;
+        [SerializeField] bool m_cullBackFace = false;
+        [SerializeField] bool m_ignoreSelfShadow = true;
+        [SerializeField] bool m_keepSelfDropShadow = true;
+        [SerializeField] float m_selfShadowThreshold = 0.0001f;
         [SerializeField] float m_shadowRayOffset = 0.0001f;
-        [SerializeField] float m_selfShadowThreshold = 0.001f;
-        [SerializeField] bool m_cullBackFace = true;
+
         [SerializeField] bool m_GPUSkinning = true;
 
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
@@ -132,21 +191,18 @@ namespace UTJ.RaytracedHardShadow
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_lightScenes;
 #endif
+        [SerializeField] string[] m_lightScenePaths;
         [SerializeField] GameObject[] m_lightObjects;
 
         [Tooltip("Geometry scope for shadow geometries.")]
         [SerializeField] bool m_separateCastersAndReceivers;
         [SerializeField] ObjectScope m_geometryScope;
-        [SerializeField] ObjectScope m_receiverScope;
-        [SerializeField] ObjectScope m_casterScope;
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_geometryScenes;
-        [SerializeField] SceneAsset[] m_receiverScenes;
-        [SerializeField] SceneAsset[] m_casterScenes;
 #endif
+        [SerializeField] string[] m_geometryScenePaths;
         [SerializeField] GameObject[] m_geometryObjects;
-        [SerializeField] GameObject[] m_receiverObjects;
-        [SerializeField] GameObject[] m_casterObjects;
+        [SerializeField] List<Layer> m_layers = new List<Layer> { new Layer() };
 
         rthsRenderer m_renderer;
 
@@ -154,30 +210,30 @@ namespace UTJ.RaytracedHardShadow
         static Dictionary<Mesh, MeshRecord> s_meshDataCache;
         static Dictionary<Component, MeshRecord> s_bakedMeshDataCache;
         static Dictionary<Component, MeshInstanceRecord> s_meshInstDataCache;
+        static Dictionary<RenderTexture, RenderTargetRecord> s_renderTargetCache;
         #endregion
 
 
         #region properties
-        public RenderTexture shadowBuffer
+        public bool generateRenderTexture
         {
-            get { return m_shadowBuffer; }
-            set { m_shadowBuffer = value; }
+            get { return m_generateRenderTexture; }
+            set { m_generateRenderTexture = value; }
+        }
+        public RenderTexture outputTexture
+        {
+            get { return m_outputTexture; }
+            set { m_outputTexture = value; }
+        }
+        public bool assignGlobalTexture
+        {
+            get { return m_assignGlobalTexture; }
+            set { m_assignGlobalTexture = value; }
         }
         public string globalTextureName
         {
             get { return m_globalTextureName; }
             set { m_globalTextureName = value; }
-        }
-        public bool autoGenerateShadowBuffer
-        {
-            get { return m_generateShadowBuffer; }
-            set { m_generateShadowBuffer = value; }
-        }
-
-        public new Camera camera
-        {
-            get { return m_camera; }
-            set { m_camera = value; }
         }
 
         public bool ignoreSelfShadow
@@ -210,7 +266,13 @@ namespace UTJ.RaytracedHardShadow
         public SceneAsset[] lightScenes
         {
             get { return m_lightScenes; }
-            set { m_lightScenes = value; }
+            set { m_lightScenes = value; UpdateScenePaths(); }
+        }
+#else
+        public string[] lightScenePaths
+        {
+            get { return m_lightScenePaths; }
+            set { m_lightScenePaths = value; }
         }
 #endif
         public GameObject[] lightObjects
@@ -230,31 +292,17 @@ namespace UTJ.RaytracedHardShadow
             get { return m_geometryScope; }
             set { m_geometryScope = value; }
         }
-        public ObjectScope receiverScope
-        {
-            get { return m_receiverScope; }
-            set { m_receiverScope = value; }
-        }
-        public ObjectScope casterScope
-        {
-            get { return m_casterScope; }
-            set { m_casterScope = value; }
-        }
 #if UNITY_EDITOR
         public SceneAsset[] geometryScenes
         {
             get { return m_geometryScenes; }
-            set { m_geometryScenes = value; }
+            set { m_geometryScenes = value; UpdateScenePaths(); }
         }
-        public SceneAsset[] receiverScenes
+#else
+        public string[] geometryScenePaths
         {
-            get { return m_receiverScenes; }
-            set { m_receiverScenes = value; }
-        }
-        public SceneAsset[] casterScenes
-        {
-            get { return m_casterScenes; }
-            set { m_casterScenes = value; }
+            get { return m_geometryScenePaths; }
+            set { m_geometryScenePaths = value; }
         }
 #endif
         public GameObject[] geometryObjects
@@ -262,92 +310,22 @@ namespace UTJ.RaytracedHardShadow
             get { return m_geometryObjects; }
             set { m_geometryObjects = value; }
         }
-        public GameObject[] receiverObjects
+
+        public int layerCount
         {
-            get { return m_receiverObjects; }
-            set { m_receiverObjects = value; }
-        }
-        public GameObject[] casterObjects
-        {
-            get { return m_casterObjects; }
-            set { m_casterObjects = value; }
+            get { return m_layers.Count; }
         }
         #endregion
 
 
         #region impl
-        public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
-        {
-            if (m_lightScope == ObjectScope.EntireScene)
-            {
-                foreach (var light in FindObjectsOfType<Light>())
-                    if (light.enabled)
-                        bodyL.Invoke(light);
-                foreach (var slight in FindObjectsOfType<ShadowCasterLight>())
-                    if (slight.enabled)
-                        bodySCL.Invoke(slight);
-            }
-            else if (m_lightScope == ObjectScope.SelectedScenes)
-            {
-#if UNITY_EDITOR
-                int numScenes = SceneManager.sceneCount;
-                for (int si = 0; si < numScenes; ++si)
-                {
-                    var scene = SceneManager.GetSceneAt(si);
-                    if (!scene.isLoaded)
-                        continue;
-
-                    foreach (var sceneAsset in m_lightScenes)
-                    {
-                        if (sceneAsset == null)
-                            continue;
-
-                        var path = AssetDatabase.GetAssetPath(sceneAsset);
-                        if (scene.path == path)
-                        {
-                            foreach (var go in scene.GetRootGameObjects())
-                            {
-                                if (!go.activeInHierarchy)
-                                    continue;
-
-                                foreach (var light in go.GetComponentsInChildren<Light>())
-                                    if (light.enabled)
-                                        bodyL.Invoke(light);
-                                foreach (var slight in go.GetComponentsInChildren<ShadowCasterLight>())
-                                    if (slight.enabled)
-                                        bodySCL.Invoke(slight);
-                            }
-                            break;
-                        }
-                    }
-                }
-#endif
-            }
-            else if (m_lightScope == ObjectScope.SelectedObjects)
-            {
-                foreach (var go in m_lightObjects)
-                {
-                    if (go == null || !go.activeInHierarchy)
-                        continue;
-
-                    foreach (var light in go.GetComponentsInChildren<Light>())
-                        if (light.enabled)
-                            bodyL.Invoke(light);
-                    foreach (var slight in go.GetComponentsInChildren<ShadowCasterLight>())
-                        if (slight.enabled)
-                            bodySCL.Invoke(slight);
-                }
-            }
-        }
-
-
         // mesh cache serves two purposes:
         // 1. prevent multiple SkinnedMeshRenderer.Bake() if there are multiple ShadowRaytracers
         //    this is just for optimization.
         // 2. prevent unexpected GC
         //    without cache, temporary meshes created by SkinnedMeshRenderer.Bake() may be GCed and can cause error or crash in render thread.
 
-        static void ClearAllMeshRecords()
+        static void ClearAllCacheRecords()
         {
             ClearBakedMeshRecords();
 
@@ -358,6 +336,10 @@ namespace UTJ.RaytracedHardShadow
             foreach (var rec in s_meshInstDataCache)
                 rec.Value.instData.Release();
             s_meshInstDataCache.Clear();
+
+            foreach (var rec in s_renderTargetCache)
+                rec.Value.rtData.Release();
+            s_renderTargetCache.Clear();
         }
 
         static void ClearBakedMeshRecords()
@@ -369,9 +351,11 @@ namespace UTJ.RaytracedHardShadow
 
         static List<Mesh> s_meshesToErase;
         static List<Component> s_instToErase;
+        static List<RenderTexture> s_rtToErase;
 
         static void EraseUnusedMeshRecords()
         {
+            // mesh data
             {
                 if (s_meshesToErase == null)
                     s_meshesToErase = new List<Mesh>();
@@ -389,6 +373,8 @@ namespace UTJ.RaytracedHardShadow
                 }
                 s_meshesToErase.Clear();
             }
+
+            // mesh instance data
             {
                 if (s_instToErase == null)
                     s_instToErase = new List<Component>();
@@ -405,6 +391,25 @@ namespace UTJ.RaytracedHardShadow
                     s_meshInstDataCache.Remove(k);
                 }
                 s_instToErase.Clear();
+            }
+
+            // render target data
+            {
+                if (s_rtToErase == null)
+                    s_rtToErase = new List<RenderTexture>();
+                foreach (var rec in s_renderTargetCache)
+                {
+                    if (rec.Value.useCount == 0)
+                        s_rtToErase.Add(rec.Key);
+                    rec.Value.useCount = 0;
+                }
+                foreach (var k in s_rtToErase)
+                {
+                    var rec = s_renderTargetCache[k];
+                    rec.Release();
+                    s_renderTargetCache.Remove(k);
+                }
+                s_rtToErase.Clear();
             }
         }
 
@@ -481,86 +486,207 @@ namespace UTJ.RaytracedHardShadow
             return rec.instData;
         }
 
-        public void EnumerateMeshRenderers(Action<MeshRenderer, byte> bodyMR, Action<SkinnedMeshRenderer, byte> bodySMR)
+        static rthsRenderTarget GetRenderTargetData(RenderTexture rt)
         {
-            // C# 7.0 supports function in function but we stick to the old way for compatibility
+            if (rt == null)
+                return default(rthsRenderTarget);
 
-            Action<GameObject[], byte> processGOs = (gos, mask) =>
+            RenderTargetRecord rec;
+            if (!s_renderTargetCache.TryGetValue(rt, out rec))
+            {
+                rec = new RenderTargetRecord();
+                rec.Update(rt);
+                s_renderTargetCache.Add(rt, rec);
+            }
+            rec.useCount++;
+            return rec.rtData;
+        }
+
+
+        // user must call UpdateScenePaths() manually if made changes to layer
+        public Layer GetLayer(int i)
+        {
+            return m_layers[i];
+        }
+
+        // user must call UpdateScenePaths() manually if made changes to layer
+        public Layer AddLayer()
+        {
+            var ret = new Layer();
+            m_layers.Add(ret);
+            return ret;
+        }
+        public void RemoveLayer(Layer l)
+        {
+            m_layers.Remove(l);
+        }
+
+#if UNITY_EDITOR
+        void UpdateScenePaths(ref string[] dst, SceneAsset[] src)
+        {
+            dst = Array.ConvertAll(src, s => s != null ? AssetDatabase.GetAssetPath(s) : null);
+        }
+#endif
+
+        public void UpdateScenePaths()
+        {
+#if UNITY_EDITOR
+            if (m_lightScope == ObjectScope.Scenes)
+                UpdateScenePaths(ref m_lightScenePaths, m_lightScenes);
+
+            if (m_separateCastersAndReceivers)
+            {
+                foreach(var layer in m_layers)
+                {
+                    if (layer.casterScope == ObjectScope.Scenes)
+                        UpdateScenePaths(ref layer.casterScenePaths, layer.casterScenes);
+                    if (layer.receiverScope == ObjectScope.Scenes)
+                        UpdateScenePaths(ref layer.receiverScenePaths, layer.receiverScenes);
+                }
+            }
+            else
+            {
+                if (m_geometryScope == ObjectScope.Scenes)
+                    UpdateScenePaths(ref m_geometryScenePaths, m_geometryScenes);
+            }
+#endif
+        }
+
+        public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
+        {
+            Action<GameObject[]> processGOs = (gos) =>
             {
                 foreach (var go in gos)
                 {
-                    if (!go.activeInHierarchy)
+                    if (go == null || !go.activeInHierarchy)
                         continue;
 
-                    foreach (var mr in go.GetComponentsInChildren<MeshRenderer>())
-                        if (mr.enabled)
-                            bodyMR.Invoke(mr, mask);
-                    foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
-                        if (smr.enabled)
-                            bodySMR.Invoke(smr, mask);
+                    foreach (var l in go.GetComponentsInChildren<Light>())
+                        if (l.enabled)
+                            bodyL.Invoke(l);
+                    foreach (var scl in go.GetComponentsInChildren<ShadowCasterLight>())
+                        if (scl.enabled)
+                            bodySCL.Invoke(scl);
                 }
             };
 
-#if UNITY_EDITOR
-            Action<SceneAsset[], byte> processScene = (sceneAssets, mask) => {
-                foreach (var sceneAsset in sceneAssets)
+            Action<string[]> processScenes = (scenePaths) =>
+            {
+                foreach (var scenePath in scenePaths)
                 {
-                    if (sceneAsset == null)
-                        return;
+                    if (scenePath == null || scenePath.Length == 0)
+                        continue;
 
-                    var path = AssetDatabase.GetAssetPath(sceneAsset);
                     int numScenes = SceneManager.sceneCount;
                     for (int si = 0; si < numScenes; ++si)
                     {
                         var scene = SceneManager.GetSceneAt(si);
-                        if (scene.isLoaded && scene.path == path)
+                        if (scene.isLoaded && scene.path == scenePath)
                         {
-                            processGOs(scene.GetRootGameObjects(), mask);
+                            processGOs(scene.GetRootGameObjects());
                             break;
                         }
                     }
                 }
             };
-#endif
 
-            Action<byte> processEntireScene = (mask) =>
+            Action processEntireScene = () =>
+            {
+                foreach (var l in FindObjectsOfType<Light>())
+                    if (l.enabled)
+                        bodyL.Invoke(l);
+                foreach (var scl in FindObjectsOfType<ShadowCasterLight>())
+                    if (scl.enabled)
+                        bodySCL.Invoke(scl);
+            };
+
+            switch (m_lightScope)
+            {
+                case ObjectScope.EntireScene: processEntireScene(); break;
+                case ObjectScope.Scenes: processScenes(m_lightScenePaths); break;
+                case ObjectScope.Objects: processGOs(m_lightObjects); break;
+            }
+        }
+
+        public void EnumerateMeshRenderers(Action<MeshRenderer, byte, byte> bodyMR, Action<SkinnedMeshRenderer, byte, byte> bodySMR)
+        {
+            // C# 7.0 supports function in function but we stick to the old way for compatibility
+
+            Action<GameObject[], byte, byte> processGOs = (gos, rmask, cmask) =>
+            {
+                foreach (var go in gos)
+                {
+                    if (go == null || !go.activeInHierarchy)
+                        continue;
+
+                    foreach (var mr in go.GetComponentsInChildren<MeshRenderer>())
+                        if (mr.enabled)
+                            bodyMR.Invoke(mr, rmask, cmask);
+                    foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
+                        if (smr.enabled)
+                            bodySMR.Invoke(smr, rmask, cmask);
+                }
+            };
+
+            Action<string[], byte, byte> processScenes = (scenePaths, rmask, cmask) => {
+                foreach (var scenePath in scenePaths)
+                {
+                    if (scenePath == null || scenePath.Length == 0)
+                        continue;
+
+                    int numScenes = SceneManager.sceneCount;
+                    for (int si = 0; si < numScenes; ++si)
+                    {
+                        var scene = SceneManager.GetSceneAt(si);
+                        if (scene.isLoaded && scene.path == scenePath)
+                        {
+                            processGOs(scene.GetRootGameObjects(), rmask, cmask);
+                            break;
+                        }
+                    }
+                }
+            };
+
+            Action<byte, byte> processEntireScene = (rmask, cmask) =>
             {
                 foreach (var mr in FindObjectsOfType<MeshRenderer>())
                     if (mr.enabled)
-                        bodyMR.Invoke(mr, mask);
+                        bodyMR.Invoke(mr, rmask, cmask);
                 foreach (var smr in FindObjectsOfType<SkinnedMeshRenderer>())
                     if (smr.enabled)
-                        bodySMR.Invoke(smr, mask);
+                        bodySMR.Invoke(smr, rmask, cmask);
             };
 
             if (m_separateCastersAndReceivers)
             {
-                switch(m_receiverScope)
+                int shift = 0;
+                foreach (var layer in m_layers)
                 {
-                    case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.Rceiver); break;
-#if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScene(m_receiverScenes, (byte)rthsHitMask.Rceiver); break;
-#endif
-                    case ObjectScope.SelectedObjects: processGOs(m_receiverObjects, (byte)rthsHitMask.Rceiver); break;
-                }
-                switch (m_casterScope)
-                {
-                    case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.Caster); break;
-#if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScene(m_casterScenes, (byte)rthsHitMask.Caster); break;
-#endif
-                    case ObjectScope.SelectedObjects: processGOs(m_casterObjects, (byte)rthsHitMask.Caster); break;
+                    byte cmask = (byte)((uint)rthsHitMask.Caster << shift);
+                    byte rmask = (byte)((uint)rthsHitMask.Rceiver | (uint)cmask);
+                    switch (layer.receiverScope)
+                    {
+                        case ObjectScope.EntireScene: processEntireScene(rmask, 0); break;
+                        case ObjectScope.Scenes: processScenes(layer.receiverScenePaths, rmask, 0); break;
+                        case ObjectScope.Objects: processGOs(layer.receiverObjects, rmask, 0); break;
+                    }
+                    switch (layer.casterScope)
+                    {
+                        case ObjectScope.EntireScene: processEntireScene(0, cmask); break;
+                        case ObjectScope.Scenes: processScenes(layer.casterScenePaths, 0, cmask); break;
+                        case ObjectScope.Objects: processGOs(layer.casterObjects, 0, cmask); break;
+                    }
+                    shift += 1;
                 }
             }
             else
             {
+                byte mask = (byte)rthsHitMask.Both;
                 switch (m_geometryScope)
                 {
-                    case ObjectScope.EntireScene: processEntireScene((byte)rthsHitMask.All); break;
-#if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScene(m_geometryScenes, (byte)rthsHitMask.All); break;
-#endif
-                    case ObjectScope.SelectedObjects: processGOs(m_geometryObjects, (byte)rthsHitMask.All); break;
+                    case ObjectScope.EntireScene: processEntireScene(mask, mask); break;
+                    case ObjectScope.Scenes: processScenes(m_geometryScenePaths, mask, mask); break;
+                    case ObjectScope.Objects: processGOs(m_geometryObjects, mask, mask); break;
                 }
             }
         }
@@ -586,11 +712,13 @@ namespace UTJ.RaytracedHardShadow
                     s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
                     s_bakedMeshDataCache = new Dictionary<Component, MeshRecord>();
                     s_meshInstDataCache = new Dictionary<Component, MeshInstanceRecord>();
+                    s_renderTargetCache = new Dictionary<RenderTexture, RenderTargetRecord>();
                 }
             }
             else
             {
-                Debug.Log("ShadowRenderer: " + rthsRenderer.errorLog);
+                Debug.LogWarning("ShadowRaytracer: " + rthsRenderer.errorLog);
+                this.enabled = false;
             }
         }
         #endregion
@@ -599,9 +727,11 @@ namespace UTJ.RaytracedHardShadow
 #if UNITY_EDITOR
         void Reset()
         {
-            m_camera = GetComponent<Camera>();
-            if (m_camera == null)
-                m_camera = Camera.main;
+        }
+
+        void OnValidate()
+        {
+            UpdateScenePaths();
         }
 #endif
 
@@ -618,7 +748,7 @@ namespace UTJ.RaytracedHardShadow
                 --s_instanceCount;
 
                 if (s_instanceCount==0)
-                    ClearAllMeshRecords();
+                    ClearAllCacheRecords();
             }
         }
 
@@ -645,51 +775,47 @@ namespace UTJ.RaytracedHardShadow
             if (!m_renderer)
                 return;
 
-            if (m_camera == null)
-            {
-                m_camera = Camera.main;
-                if (m_camera == null)
-                {
-                    Debug.LogWarning("ShadowRaytracer: camera is null");
-                }
-            }
+            var cam = GetComponent<Camera>();
+            if (cam == null)
+                return;
 
+            bool updateGlobalTexture = false;
 #if UNITY_EDITOR
-            if (m_shadowBuffer != null && AssetDatabase.Contains(m_shadowBuffer))
+            if (m_outputTexture != null && AssetDatabase.Contains(m_outputTexture))
             {
-                if (!m_shadowBuffer.IsCreated())
-                    m_shadowBuffer.Create();
-                if (m_globalTextureName != null && m_globalTextureName.Length != 0)
-                    Shader.SetGlobalTexture(m_globalTextureName, m_shadowBuffer);
+                if (!m_outputTexture.IsCreated())
+                    m_outputTexture.Create();
+                if (m_assignGlobalTexture)
+                    updateGlobalTexture = true;
             }
             else
 #endif
-            if (m_generateShadowBuffer)
+            if (m_generateRenderTexture)
             {
                 // create output buffer if not assigned. fit its size to camera resolution if already assigned.
 
-                var resolution = new Vector2Int(m_camera.pixelWidth, m_camera.pixelHeight);
-                if (m_shadowBuffer != null && (m_shadowBuffer.width != resolution.x || m_shadowBuffer.height != resolution.y))
+                var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
+                if (m_outputTexture != null && (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y))
                 {
-                    m_shadowBuffer.Release();
-                    m_shadowBuffer = null;
+                    m_outputTexture.Release();
+                    m_outputTexture = null;
                 }
-                if (m_shadowBuffer == null)
+                if (m_outputTexture == null)
                 {
-                    m_shadowBuffer = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RHalf);
-                    m_shadowBuffer.name = "RaytracedHardShadow";
-                    m_shadowBuffer.enableRandomWrite = true; // enable unordered access
-                    m_shadowBuffer.Create();
-                    if (m_globalTextureName != null && m_globalTextureName.Length != 0)
-                        Shader.SetGlobalTexture(m_globalTextureName, m_shadowBuffer);
+                    m_outputTexture = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RHalf);
+                    m_outputTexture.name = "RaytracedHardShadow";
+                    m_outputTexture.enableRandomWrite = true; // enable unordered access
+                    m_outputTexture.Create();
+                    if (m_assignGlobalTexture)
+                        updateGlobalTexture = true;
                 }
-            }
-            if (m_shadowBuffer == null)
-            {
-                Debug.LogWarning("ShadowRaytracer: output ShadowBuffer is null");
             }
 
-            if (m_camera != null && m_shadowBuffer != null)
+            if (m_outputTexture == null)
+                return;
+            if (updateGlobalTexture)
+                Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+
             {
                 int flags = 0;
                 if (m_cullBackFace)
@@ -705,17 +831,17 @@ namespace UTJ.RaytracedHardShadow
 
                 m_renderer.BeginScene();
                 m_renderer.SetRaytraceFlags(flags);
-                m_renderer.SetShadowRayOffset(m_shadowRayOffset);
+                m_renderer.SetShadowRayOffset(m_ignoreSelfShadow ? 0.0f : m_shadowRayOffset);
                 m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
-                m_renderer.SetRenderTarget(m_shadowBuffer);
-                m_renderer.SetCamera(m_camera);
+                m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
+                m_renderer.SetCamera(cam);
                 EnumerateLights(
                     l => { m_renderer.AddLight(l); },
                     scl => { m_renderer.AddLight(scl); }
                     );
                 EnumerateMeshRenderers(
-                    (mr, mask) => { m_renderer.AddGeometry(GetMeshInstanceData(mr), mask); },
-                    (smr, mask) => { m_renderer.AddGeometry(GetMeshInstanceData(smr), mask); }
+                    (mr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(mr), rmask, cmask); },
+                    (smr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(smr), rmask, cmask); }
                     );
                 m_renderer.EndScene();
             }

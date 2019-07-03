@@ -1,9 +1,14 @@
 #include "pch.h"
 #include "rths.h"
-#include "rthsLog.h"
+#include "Foundation/rthsLog.h"
 #include "rthsRenderer.h"
 
 using namespace rths;
+
+rthsAPI const char* rthsGetErrorLog()
+{
+    return GetErrorLog().c_str();
+}
 
 
 rthsAPI MeshData* rthsMeshCreate()
@@ -17,13 +22,28 @@ rthsAPI void rthsMeshRelease(MeshData *self)
     self->release();
 }
 
+rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData * self, CPUResourcePtr vb, CPUResourcePtr ib,
+    int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
+{
+    if (!self)
+        return;
+    self->cpu_vertex_buffer = vb;
+    self->cpu_index_buffer = ib;
+    self->vertex_stride = vertex_stride;
+    self->vertex_count = vertex_count;
+    self->vertex_offset = vertex_offset;
+    self->index_stride = index_stride;
+    self->index_count = index_count;
+    self->index_offset = index_offset;
+}
+
 rthsAPI void rthsMeshSetGPUBuffers(MeshData *self, GPUResourcePtr vb, GPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
 {
     if (!self)
         return;
-    self->vertex_buffer = vb;
-    self->index_buffer = ib;
+    self->gpu_vertex_buffer = vb;
+    self->gpu_index_buffer = ib;
     self->vertex_stride = vertex_stride;
     self->vertex_count = vertex_count;
     self->vertex_offset = vertex_offset;
@@ -117,7 +137,7 @@ rthsAPI void rthsMeshInstanceSetTransform(MeshInstanceData *self, float4x4 trans
 }
 rthsAPI void rthsMeshInstanceSetBones(MeshInstanceData *self, const float4x4 *bones, int num_bones)
 {
-    if (!self)
+    if (!self || !self->mesh->skin.valid())
         return;
 
     if (self->bones.size() != num_bones)
@@ -134,7 +154,7 @@ rthsAPI void rthsMeshInstanceSetBones(MeshInstanceData *self, const float4x4 *bo
 }
 rthsAPI void rthsMeshInstanceSetBlendshapeWeights(MeshInstanceData *self, const float *bsw, int num_bsw)
 {
-    if (!self)
+    if (!self || self->mesh->blendshapes.empty())
         return;
 
     if (self->blendshape_weights.size() != num_bsw)
@@ -151,115 +171,150 @@ rthsAPI void rthsMeshInstanceSetBlendshapeWeights(MeshInstanceData *self, const 
 }
 
 
-rthsAPI const char* rthsGetErrorLog()
+rthsAPI RenderTargetData* rthsRenderTargetCreate()
 {
-    return GetErrorLog().c_str();
+    return new RenderTargetData();
+}
+rthsAPI void rthsRenderTargetRelease(RenderTargetData *self)
+{
+    if (!self)
+        return;
+    self->release();
+}
+rthsAPI void rthsRenderTargetSetGPUTexture(RenderTargetData *self, GPUResourcePtr tex)
+{
+    if (!self)
+        return;
+    self->gpu_texture = tex;
+}
+rthsAPI void rthsRenderTargetSetup(RenderTargetData *self, int width, int height, RenderTargetFormat format)
+{
+    if (!self)
+        return;
+    self->width = width;
+    self->height = height;
+    self->format = format;
 }
 
-rthsAPI IRenderer* rthsCreateRenderer()
+
+rthsAPI IRenderer* rthsRendererCreate()
 {
     return CreateRendererDXR();
 }
 
-rthsAPI void rthsReleaseRenderer(IRenderer *self)
+rthsAPI void rthsRendererRelease(IRenderer *self)
 {
     delete self;
 }
 
-rthsAPI void rthsSetRenderTarget(IRenderer *self, void *render_target)
+rthsAPI void rthsRendererSetRenderTarget(IRenderer *self, RenderTargetData *render_target)
 {
     if (!self || !render_target)
         return;
     self->setRenderTarget(render_target);
 }
 
-rthsAPI void rthsBeginScene(IRenderer *self)
+rthsAPI void rthsRendererBeginScene(IRenderer *self)
 {
     if (!self)
         return;
     self->beginScene();
 }
 
-rthsAPI void rthsEndScene(IRenderer *self)
+rthsAPI void rthsRendererEndScene(IRenderer *self)
 {
     if (!self)
         return;
     self->endScene();
 }
 
-rthsAPI void rthsSetRenderFlags(IRenderer *self, uint32_t v)
+rthsAPI void rthsRendererSetRenderFlags(IRenderer *self, uint32_t v)
 {
     if (!self)
         return;
     self->setRaytraceFlags(v);
 }
-rthsAPI void rthsSetShadowRayOffset(IRenderer *self, float v)
+rthsAPI void rthsRendererSetShadowRayOffset(IRenderer *self, float v)
 {
     if (!self)
         return;
     self->setShadowRayOffset(v);
 }
-rthsAPI void rthsSetSelfShadowThreshold(IRenderer *self, float v)
+rthsAPI void rthsRendererSetSelfShadowThreshold(IRenderer *self, float v)
 {
     if (!self)
         return;
     self->setSelfShadowThreshold(v);
 }
 
-rthsAPI void rthsSetCamera(IRenderer *self, float4x4 transform, float4x4 view, float4x4 proj, float near_plane, float far_plane, float fov)
+rthsAPI void rthsRendererSetCamera(IRenderer *self, float3 pos, float4x4 view, float4x4 proj)
 {
     if (!self)
         return;
-    self->setCamera(transform, view, proj, near_plane, far_plane, fov);
+    self->setCamera(pos, view, proj);
 }
 
-rthsAPI void rthsAddDirectionalLight(IRenderer *self, float4x4 transform)
+rthsAPI void rthsRendererAddDirectionalLight(IRenderer *self, float3 dir)
 {
     if (!self)
         return;
-    self->addDirectionalLight(transform);
+    self->addDirectionalLight(dir);
 }
 
-rthsAPI void rthsAddSpotLight(IRenderer *self, float4x4 transform, float range, float spot_angle)
+rthsAPI void rthsRendererAddSpotLight(IRenderer *self, float3 pos, float3 dir, float range, float spot_angle)
 {
     if (!self)
         return;
-    self->addSpotLight(transform, range, spot_angle);
+    self->addSpotLight(pos, dir, range, spot_angle);
 }
 
-rthsAPI void rthsAddPointLight(IRenderer *self, float4x4 transform, float range)
+rthsAPI void rthsRendererAddPointLight(IRenderer *self, float3 pos, float range)
 {
     if (!self)
         return;
-    self->addPointLight(transform, range);
+    self->addPointLight(pos, range);
 }
 
-rthsAPI void rthsAddReversePointLight(IRenderer *self, float4x4 transform, float range)
+rthsAPI void rthsRendererAddReversePointLight(IRenderer *self, float3 pos, float range)
 {
     if (!self)
         return;
-    self->addReversePointLight(transform, range);
+    self->addReversePointLight(pos, range);
 }
 
-rthsAPI void rthsAddGeometry(IRenderer *self, rths::MeshInstanceData *mesh, uint8_t mask)
+rthsAPI void rthsRendererAddGeometry(IRenderer *self, rths::MeshInstanceData *mesh, uint8_t rmask, uint8_t cmask)
 {
     if (!self)
         return;
-    self->addGeometry({ mesh, mask });
+    self->addGeometry({ mesh, rmask, cmask });
 }
 
-rthsAPI void rthsRender(IRenderer *self)
+rthsAPI void rthsRendererStartRender(IRenderer *self)
 {
     if (!self)
         return;
     self->render();
 }
 
-rthsAPI void rthsFinish(IRenderer *self)
+rthsAPI void rthsRendererFinishRender(IRenderer *self)
 {
     if (!self)
         return;
     self->finish();
+}
+
+rthsAPI bool rthsRendererReadbackRenderTarget(rths::IRenderer *self, void *dst)
+{
+    if (!self)
+        return false;
+    return self->readbackRenderTarget(dst);
+}
+
+rthsAPI GPUResourcePtr rthsRendererGetRenderTexturePtr(rths::IRenderer *self)
+{
+    if (!self)
+        return nullptr;
+    return self->getRenderTexturePtr();
 }
 
 rthsAPI void rthsMarkFrameBegin()

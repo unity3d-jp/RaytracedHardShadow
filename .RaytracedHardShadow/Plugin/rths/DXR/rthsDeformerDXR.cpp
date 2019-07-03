@@ -1,7 +1,7 @@
 #include "pch.h"
 #ifdef _WIN32
-#include "rthsLog.h"
-#include "rthsMisc.h"
+#include "Foundation/rthsLog.h"
+#include "Foundation/rthsMisc.h"
 #include "rthsGfxContextDXR.h"
 #include "rthsDeformerDXR.h"
 
@@ -52,22 +52,19 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
 {
     {
         const D3D12_DESCRIPTOR_RANGE ranges[] = {
-                { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, 0 },
-                { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, 0 },
-                { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, 0 },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
-        D3D12_ROOT_PARAMETER params[_countof(ranges)]{};
-        for (int i = 0; i < _countof(ranges); i++) {
-            auto& param = params[i];
-            param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-            param.DescriptorTable.NumDescriptorRanges = 1;
-            param.DescriptorTable.pDescriptorRanges = &ranges[i];
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        }
+        D3D12_ROOT_PARAMETER param{};
+        param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        param.DescriptorTable.NumDescriptorRanges = _countof(ranges);
+        param.DescriptorTable.pDescriptorRanges = ranges;
+        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         D3D12_ROOT_SIGNATURE_DESC desc{};
-        desc.NumParameters = _countof(params);
-        desc.pParameters = params;
+        desc.NumParameters = 1;
+        desc.pParameters = &param;
 
         ID3DBlobPtr sig_blob;
         ID3DBlobPtr error_blob;
@@ -102,20 +99,15 @@ DeformerDXR::~DeformerDXR()
 
 bool DeformerDXR::prepare(RenderDataDXR& rd)
 {
-    if (!rd.cmd_list_compute) {
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&rd.cmd_allocator_compute));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, rd.cmd_allocator_compute, nullptr, IID_PPV_ARGS(&rd.cmd_list_compute));
-        rd.cmd_list_compute->Close();
+    if (!rd.cl_deform) {
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&rd.ca_deform));
+        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, rd.ca_deform, m_pipeline_state, IID_PPV_ARGS(&rd.cl_deform));
+        DbgSetName(rd.ca_deform, L"CA Deform");
+        DbgSetName(rd.cl_deform, L"CL Deform");
     }
 
-    bool ret = true;
-    if (FAILED(rd.cmd_allocator_compute->Reset()))
-        ret = false;
-    else if (FAILED(rd.cmd_list_compute->Reset(rd.cmd_allocator_compute, m_pipeline_state)))
-        ret = false;
-
-    TimestampQuery(rd.timestamp, rd.cmd_list_compute, "DeformerDXR: begin");
-    return ret;
+    TimestampQuery(rd.timestamp, rd.cl_deform, "DeformerDXR: begin");
+    return true;
 }
 
 bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
@@ -279,8 +271,15 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
             // update on every frame
             writeBuffer(inst_dxr.bone_matrices, [&](void *dst_) {
                 auto dst = (float4x4*)dst_;
+
+                // note:
+                // object space skinning is recommended for better BLAS building. ( http://intro-to-dxr.cwyman.org/presentations/IntroDXR_RaytracingAPI.pdf )
+                // so, try to convert bone matrices to root bone space.
+                // on skinned meshes, inst.transform is root bone's transform or identity if root bone is not assigned.
+                // both cases work, but identity matrix means world space skinning that is not optimal.
+                auto iroot = invert(inst.transform);
                 for (int bi = 0; bi < bone_count; ++bi)
-                    *dst++ = mesh.skin.bindposes[bi] * inst.bones[bi];
+                    *dst++ = mesh.skin.bindposes[bi] * inst.bones[bi] * iroot;
             });
         }
 
@@ -309,25 +308,34 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
     createCBV(hmesh_info.hcpu, mesh_dxr.mesh_info, mesh_info_size);
 
     {
-        auto cl = rd.cmd_list_compute;
+        auto& cl = rd.cl_deform;
         cl->SetComputeRootSignature(m_rootsig_deform);
 
         ID3D12DescriptorHeap* heaps[] = { inst_dxr.srvuav_heap };
         cl->SetDescriptorHeaps(_countof(heaps), heaps);
         cl->SetComputeRootDescriptorTable(0, hdst_vertices.hgpu);
-        cl->SetComputeRootDescriptorTable(1, hbase_vertices.hgpu);
-        cl->SetComputeRootDescriptorTable(2, hmesh_info.hgpu);
         cl->Dispatch(mesh.vertex_count, 1, 1);
     }
 
     return true;
 }
 
-bool DeformerDXR::finish(RenderDataDXR& rd)
+bool DeformerDXR::close(RenderDataDXR& rd)
 {
-    auto cl = rd.cmd_list_compute;
-    TimestampQuery(rd.timestamp, cl, "DeformerDXR: end");
-    if (SUCCEEDED(cl->Close())) {
+    if (rd.cl_deform) {
+        TimestampQuery(rd.timestamp, rd.cl_deform, "DeformerDXR: end");
+        if (SUCCEEDED(rd.cl_deform->Close())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool DeformerDXR::reset(RenderDataDXR & rd)
+{
+    if (rd.ca_deform && rd.cl_deform) {
+        rd.ca_deform->Reset();
+        rd.cl_deform->Reset(rd.ca_deform, m_pipeline_state);
         return true;
     }
     return false;

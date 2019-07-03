@@ -10,12 +10,10 @@ public:
     virtual ~IResourceTranslator() {}
 
     virtual ID3D12FencePtr getFence(ID3D12Device *dxr_device) = 0;
-    virtual void setFenceValue(uint64_t v) = 0;
-    virtual uint64_t inclementFenceValue() = 0;
 
-    virtual TextureDataDXRPtr createTemporaryTexture(void *ptr) = 0;
+    virtual TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) = 0;
     virtual uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value_to_wait) = 0;
-    virtual BufferDataDXRPtr translateBuffer(void *ptr) = 0;
+    virtual BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) = 0;
 };
 using IResourceTranslatorPtr = std::shared_ptr<IResourceTranslator>;
 

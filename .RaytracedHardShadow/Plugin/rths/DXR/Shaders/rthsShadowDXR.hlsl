@@ -3,8 +3,7 @@
 struct RayPayload
 {
     float shadow;
-    uint instance_id;     // 
-    uint primitive_index; // instance & primitive id for first ray
+    uint instance_id;     // instance id for first ray
 };
 
 [shader("raygeneration")]
@@ -23,8 +22,8 @@ void RayGen()
         CameraRight() * screen_pos.x +
         CameraUp() * screen_pos.y +
         CameraForward() * CameraFocalLength());
-    ray.TMin = CameraNearPlane();
-    ray.TMax = CameraFarPlane();
+    ray.TMin = CameraNearPlane(); // 
+    ray.TMax = CameraFarPlane();  // todo: correct this
 
     RayPayload payload;
     payload.shadow = 0.0;
@@ -54,7 +53,6 @@ void Miss2(inout RayPayload payload : SV_RayPayload)
 void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
     payload.instance_id = InstanceID();
-    payload.primitive_index = PrimitiveIndex();
 
     // shoot shadow ray (hit position -> light)
 
@@ -78,7 +76,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
             ray.Direction = -light.direction.xyz;
             ray.TMin = 0.0f;
             ray.TMax = CameraFarPlane();
-            TraceRay(gRtScene, ray_flags, HM_CASTER, 1, 0, 1, ray, payload);
+            TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
         }
         else if (light.light_type == LT_SPOT) {
             // spot light
@@ -91,7 +89,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(gRtScene, ray_flags, HM_CASTER, 1, 0, 1, ray, payload);
+                TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_POINT) {
@@ -106,7 +104,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(gRtScene, ray_flags, HM_CASTER, 1, 0, 1, ray, payload);
+                TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_REVERSE_POINT) {
@@ -121,7 +119,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = -dir;
                 ray.TMin = 0.0f;
                 ray.TMax = light.range - distance;
-                TraceRay(gRtScene, ray_flags, HM_CASTER, 1, 0, 1, ray, payload);
+                TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
             }
         }
     }
@@ -130,13 +128,12 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
 [shader("anyhit")]
 void AnyHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
-    if (payload.instance_id == InstanceID()) {
-        int render_flags = RenderFlags();
-        if ((render_flags & RF_KEEP_SELF_DROP_SHADOW) == 0 || (payload.primitive_index == PrimitiveIndex() || RayTCurrent() < SelfShadowThreshold())) {
-            // ignore self shadow
-            IgnoreHit();
-            return;
-        }
+    if ( RayTCurrent() < SelfShadowThreshold() ||
+        (payload.instance_id == InstanceID() && (RenderFlags() & RF_KEEP_SELF_DROP_SHADOW) == 0))
+    {
+        // ignore self shadow
+        IgnoreHit();
+        return;
     }
     AcceptHitAndEndSearch();
 }

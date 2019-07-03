@@ -75,10 +75,25 @@ namespace UTJ.RaytracedHardShadow
 
     public enum rthsHitMask
     {
-        Rceiver = 0x0001,
-        Caster  = 0x0002,
-        All = Rceiver | Caster,
+        Rceiver = 0x01,
+        Caster  = 0x02,
+        Both    = Rceiver | Caster,
     }
+
+    public enum rthsRenderTargetFormat
+    {
+        Unknown = 0,
+        Ru8,
+        RGu8,
+        RGBAu8,
+        Rf16,
+        RGf16,
+        RGBAf16,
+        Rf32,
+        RGf32,
+        RGBAf32,
+    }
+
 
     public struct rthsMeshData
     {
@@ -86,6 +101,7 @@ namespace UTJ.RaytracedHardShadow
         public IntPtr self;
         [DllImport("rths")] static extern IntPtr rthsMeshCreate();
         [DllImport("rths")] static extern void rthsMeshRelease(IntPtr self);
+        [DllImport("rths")] static extern void rthsMeshSetCPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
         [DllImport("rths")] static extern void rthsMeshSetGPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
         [DllImport("rths")] static extern void rthsMeshSetSkinBindposes(IntPtr self, Matrix4x4[] bindposes, int num_bindposes);
         [DllImport("rths")] static extern void rthsMeshSetSkinWeights(IntPtr self, IntPtr c, int nc, IntPtr w, int nw);
@@ -201,14 +217,14 @@ namespace UTJ.RaytracedHardShadow
 
         public void SetBones(Matrix4x4[] bones)
         {
-            if (bones == null)
+            if (bones == null || bones.Length == 0)
                 rthsMeshInstanceSetBones(self, null, 0);
             else
                 rthsMeshInstanceSetBones(self, bones, bones.Length);
         }
         public void SetBones(Transform[] bones)
         {
-            if (bones == null)
+            if (bones == null || bones.Length == 0)
             {
                 rthsMeshInstanceSetBones(self, null, 0);
             }
@@ -223,11 +239,6 @@ namespace UTJ.RaytracedHardShadow
                 }
                 SetBones(transforms);
             }
-        }
-        public void SetBones(SkinnedMeshRenderer smr)
-        {
-            if (smr.rootBone != null)
-                SetBones(smr.bones);
         }
 
         public void SetBlendshapeWeights(float[] bsw)
@@ -261,28 +272,63 @@ namespace UTJ.RaytracedHardShadow
         }
     }
 
+    public struct rthsRenderTarget
+    {
+        #region internal
+        public IntPtr self;
+        [DllImport("rths")] static extern IntPtr rthsRenderTargetCreate();
+        [DllImport("rths")] static extern void rthsRenderTargetRelease(IntPtr self);
+        [DllImport("rths")] static extern void rthsRenderTargetSetGPUTexture(IntPtr self, IntPtr tex);
+        [DllImport("rths")] static extern void rthsRenderTargetSetup(IntPtr self, int width, int height, rthsRenderTargetFormat format);
+        #endregion
 
+        public static implicit operator bool(rthsRenderTarget v) { return v.self != IntPtr.Zero; }
+        public static bool operator ==(rthsRenderTarget a, rthsRenderTarget b) { return a.self == b.self; }
+        public static bool operator !=(rthsRenderTarget a, rthsRenderTarget b) { return a.self != b.self; }
+
+        public static rthsRenderTarget Create()
+        {
+            // rthsCreateRenderer() will return null if DXR is not supported
+            return new rthsRenderTarget { self = rthsRenderTargetCreate() };
+        }
+
+        public void Release()
+        {
+            rthsRenderTargetRelease(self);
+            self = IntPtr.Zero;
+        }
+
+        public void Setup(IntPtr GPUTexture)
+        {
+            rthsRenderTargetSetGPUTexture(self, GPUTexture);
+        }
+
+        public void Setup(int width, int height, rthsRenderTargetFormat format)
+        {
+            rthsRenderTargetSetup(self, width, height, format);
+        }
+    }
 
     public struct rthsRenderer
     {
         #region internal
         public IntPtr self;
         [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
-        [DllImport("rths")] static extern IntPtr rthsCreateRenderer();
-        [DllImport("rths")] static extern void rthsReleaseRenderer(IntPtr self);
+        [DllImport("rths")] static extern IntPtr rthsRendererCreate();
+        [DllImport("rths")] static extern void rthsRendererRelease(IntPtr self);
 
-        [DllImport("rths")] static extern void rthsBeginScene(IntPtr self);
-        [DllImport("rths")] static extern void rthsEndScene(IntPtr self);
-        [DllImport("rths")] static extern void rthsSetRenderFlags(IntPtr self, int flags);
-        [DllImport("rths")] static extern void rthsSetShadowRayOffset(IntPtr self, float v);
-        [DllImport("rths")] static extern void rthsSetSelfShadowThreshold(IntPtr self, float v);
-        [DllImport("rths")] static extern void rthsSetRenderTarget(IntPtr self, IntPtr rt);
-        [DllImport("rths")] static extern void rthsSetCamera(IntPtr self, Matrix4x4 trans, Matrix4x4 view, Matrix4x4 proj, float near, float far, float fov);
-        [DllImport("rths")] static extern void rthsAddDirectionalLight(IntPtr self, Matrix4x4 trans);
-        [DllImport("rths")] static extern void rthsAddSpotLight(IntPtr self, Matrix4x4 trans, float range, float spotAngle);
-        [DllImport("rths")] static extern void rthsAddPointLight(IntPtr self, Matrix4x4 trans, float range);
-        [DllImport("rths")] static extern void rthsAddReversePointLight(IntPtr self, Matrix4x4 trans, float range);
-        [DllImport("rths")] static extern void rthsAddGeometry(IntPtr self, rthsMeshInstanceData mesh, byte hitMask);
+        [DllImport("rths")] static extern void rthsRendererBeginScene(IntPtr self);
+        [DllImport("rths")] static extern void rthsRendererEndScene(IntPtr self);
+        [DllImport("rths")] static extern void rthsRendererSetRenderFlags(IntPtr self, int flags);
+        [DllImport("rths")] static extern void rthsRendererSetShadowRayOffset(IntPtr self, float v);
+        [DllImport("rths")] static extern void rthsRendererSetSelfShadowThreshold(IntPtr self, float v);
+        [DllImport("rths")] static extern void rthsRendererSetRenderTarget(IntPtr self, rthsRenderTarget rt);
+        [DllImport("rths")] static extern void rthsRendererSetCamera(IntPtr self, Vector3 pos, Matrix4x4 view, Matrix4x4 proj);
+        [DllImport("rths")] static extern void rthsRendererAddDirectionalLight(IntPtr self, Vector3 dir);
+        [DllImport("rths")] static extern void rthsRendererAddSpotLight(IntPtr self, Vector3 pos, Vector3 dir, float range, float spotAngle);
+        [DllImport("rths")] static extern void rthsRendererAddPointLight(IntPtr self, Vector3 pos, float range);
+        [DllImport("rths")] static extern void rthsRendererAddReversePointLight(IntPtr self, Vector3 pos, float range);
+        [DllImport("rths")] static extern void rthsRendererAddGeometry(IntPtr self, rthsMeshInstanceData mesh, byte rmask, byte cmask);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
@@ -300,60 +346,61 @@ namespace UTJ.RaytracedHardShadow
         public static rthsRenderer Create()
         {
             // rthsCreateRenderer() will return null if DXR is not supported
-            return new rthsRenderer { self = rthsCreateRenderer() };
+            return new rthsRenderer { self = rthsRendererCreate() };
         }
 
         public void Release()
         {
-            rthsReleaseRenderer(self);
+            rthsRendererRelease(self);
             self = IntPtr.Zero;
         }
 
-        public void SetRenderTarget(RenderTexture rt)
+        public void SetRenderTarget(rthsRenderTarget rt)
         {
-            rthsSetRenderTarget(self, rt.GetNativeTexturePtr());
+            rthsRendererSetRenderTarget(self, rt);
         }
 
         public void BeginScene()
         {
-            rthsBeginScene(self);
+            rthsRendererBeginScene(self);
         }
 
         public void EndScene()
         {
-            rthsEndScene(self);
+            rthsRendererEndScene(self);
         }
 
         public void SetRaytraceFlags(int flags)
         {
-            rthsSetRenderFlags(self, flags);
+            rthsRendererSetRenderFlags(self, flags);
         }
         public void SetShadowRayOffset(float v)
         {
-            rthsSetShadowRayOffset(self, v);
+            rthsRendererSetShadowRayOffset(self, v);
         }
         public void SetSelfShadowThreshold(float v)
         {
-            rthsSetSelfShadowThreshold(self, v);
+            rthsRendererSetSelfShadowThreshold(self, v);
         }
 
         public void SetCamera(Camera cam)
         {
-            rthsSetCamera(self, cam.transform.localToWorldMatrix, cam.worldToCameraMatrix, cam.projectionMatrix, cam.nearClipPlane, cam.farClipPlane, cam.fieldOfView);
+            rthsRendererSetCamera(self, cam.transform.position, cam.worldToCameraMatrix, cam.projectionMatrix);
         }
 
         public bool AddLight(Light light)
         {
+            var trans = light.transform;
             switch (light.type)
             {
                 case LightType.Directional:
-                    rthsAddDirectionalLight(self, light.transform.localToWorldMatrix);
+                    rthsRendererAddDirectionalLight(self, trans.forward);
                     return true;
                 case LightType.Spot:
-                    rthsAddSpotLight(self, light.transform.localToWorldMatrix, light.range, light.spotAngle);
+                    rthsRendererAddSpotLight(self, trans.position, trans.forward, light.range, light.spotAngle);
                     return true;
                 case LightType.Point:
-                    rthsAddPointLight(self, light.transform.localToWorldMatrix, light.range);
+                    rthsRendererAddPointLight(self, trans.position, light.range);
                     return true;
                 default:
                     Debug.LogWarning("rthsShadowRenderer: " + light.type + " is not supported");
@@ -362,19 +409,20 @@ namespace UTJ.RaytracedHardShadow
         }
         public bool AddLight(ShadowCasterLight light)
         {
+            var trans = light.transform;
             switch (light.lightType)
             {
                 case ShadowCasterLightType.Directional:
-                    rthsAddDirectionalLight(self, light.transform.localToWorldMatrix);
+                    rthsRendererAddDirectionalLight(self, trans.forward);
                     return true;
                 case ShadowCasterLightType.Spot:
-                    rthsAddSpotLight(self, light.transform.localToWorldMatrix, light.range, light.spotAngle);
+                    rthsRendererAddSpotLight(self, trans.position, trans.forward, light.range, light.spotAngle);
                     return true;
                 case ShadowCasterLightType.Point:
-                    rthsAddPointLight(self, light.transform.localToWorldMatrix, light.range);
+                    rthsRendererAddPointLight(self, trans.position, light.range);
                     return true;
                 case ShadowCasterLightType.ReversePoint:
-                    rthsAddReversePointLight(self, light.transform.localToWorldMatrix, light.range);
+                    rthsRendererAddReversePointLight(self, trans.position, light.range);
                     return true;
                 default:
                     Debug.LogWarning("rthsShadowRenderer: " + light.lightType + " is not supported");
@@ -382,9 +430,9 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void AddGeometry(rthsMeshInstanceData mesh, byte hitMask = 0xff)
+        public void AddGeometry(rthsMeshInstanceData mesh, byte rmask, byte cmask)
         {
-            rthsAddGeometry(self, mesh, hitMask);
+            rthsRendererAddGeometry(self, mesh, rmask, cmask);
         }
 
         public static void IssueRender()

@@ -1,127 +1,9 @@
 #pragma once
+#include "Foundation/rthsRefPtr.h"
+#include "Foundation/rthsMath.h"
+#include "Foundation/rthsHalf.h"
 
 namespace rths {
-
-constexpr float PI = 3.14159265358979323846264338327950288419716939937510f;
-constexpr float DegToRad = PI / 180.0f;
-constexpr float RadToDeg = 1.0f / (PI / 180.0f);
-
-using nanosec = uint64_t;
-
-struct int2
-{
-    int x, y;
-
-    int& operator[](size_t i) { return ((int*)this)[i]; }
-    const int& operator[](size_t i) const { return ((int*)this)[i]; }
-};
-
-struct int3
-{
-    int x, y, z;
-
-    int& operator[](size_t i) { return ((int*)this)[i]; }
-    const int& operator[](size_t i) const { return ((int*)this)[i]; }
-};
-
-struct int4
-{
-    int x, y, z, w;
-
-    int& operator[](size_t i) { return ((int*)this)[i]; }
-    const int& operator[](size_t i) const { return ((int*)this)[i]; }
-};
-
-struct float2
-{
-    float x,y;
-
-    float& operator[](size_t i) { return ((float*)this)[i]; }
-    const float& operator[](size_t i) const { return ((float*)this)[i]; }
-};
-
-struct float3
-{
-    float x,y,z;
-
-    float& operator[](size_t i) { return ((float*)this)[i]; }
-    const float& operator[](size_t i) const { return ((float*)this)[i]; }
-};
-
-struct float4
-{
-    float x,y,z,w;
-
-    float& operator[](size_t i) { return ((float*)this)[i]; }
-    const float& operator[](size_t i) const { return ((float*)this)[i]; }
-};
-
-struct float3x4
-{
-    float4 v[3];
-
-    float4& operator[](size_t i) { return v[i]; }
-    const float4& operator[](size_t i) const { return v[i]; }
-};
-
-struct float4x4
-{
-    float4 v[4];
-
-    float4& operator[](size_t i) { return v[i]; }
-    const float4& operator[](size_t i) const { return v[i]; }
-    bool operator==(float4x4& v) const { return std::memcmp(this, &v, sizeof(*this)) == 0; }
-    bool operator!=(float4x4& v) const { return !(*this == v); }
-
-    static float4x4 identity()
-    {
-        return{ {
-             { 1, 0, 0, 0 },
-             { 0, 1, 0, 0 },
-             { 0, 0, 1, 0 },
-             { 0, 0, 0, 1 },
-         } };
-    }
-};
-
-
-inline float3 operator-(const float3& l) { return{ -l.x, -l.y, -l.z }; }
-inline float3 operator*(const float3& l, float r) { return{ l.x * r, l.y * r, l.z * r }; }
-inline float3 operator/(const float3& l, float r) { return{ l.x / r, l.y / r, l.z / r }; }
-
-inline float clamp(float v, float vmin, float vmax) { return std::min<float>(std::max<float>(v, vmin), vmax); }
-inline float dot(const float3& l, const float3& r) { return l.x*r.x + l.y*r.y + l.z*r.z; }
-inline float length_sq(const float3& v) { return dot(v, v); }
-inline float length(const float3& v) { return sqrt(length_sq(v)); }
-inline float3 normalize(const float3& v) { return v / length(v); }
-
-inline float4 to_float4(const float3& xyz, float w)
-{
-    return{ xyz.x, xyz.y, xyz.z, w };
-}
-
-inline float3x4 to_float3x4(const float4x4& v)
-{
-    // copy with transpose
-    return float3x4{ {
-        {v[0][0], v[1][0], v[2][0], v[3][0]},
-        {v[0][1], v[1][1], v[2][1], v[3][1]},
-        {v[0][2], v[1][2], v[2][2], v[3][2]},
-    } };
-}
-inline float3 extract_position(const float4x4& m)
-{
-    return (const float3&)m[3];
-}
-inline float3 extract_direction(const float4x4& m)
-{
-    return normalize((const float3&)m[2]);
-}
-
-float4x4 operator*(const float4x4 &a, const float4x4 &b);
-float4x4 invert(const float4x4& x);
-
-
 
 struct CameraData
 {
@@ -133,8 +15,7 @@ struct CameraData
     };
     float near_plane;
     float far_plane;
-    float fov;
-    float pad1;
+    float2 pad1;
 };
 
 enum class RenderFlag : uint32_t
@@ -156,9 +37,12 @@ enum class LightType : uint32_t
 
 enum class HitMask : uint8_t
 {
-    Receiver    = 0x0001,
-    Caster      = 0x0002,
-    All = Receiver | Caster,
+    Receiver    = 0x01,
+    Caster      = 0x02,
+    Both        = Receiver | Caster,
+
+    AllCaster   = 0xfe,
+    ALl         = 0xff,
 };
 
 enum class UpdateFlag : uint32_t
@@ -167,6 +51,20 @@ enum class UpdateFlag : uint32_t
     Transform = 1,
     Blendshape = 2,
     Bone = 4,
+};
+
+enum class RenderTargetFormat : uint32_t
+{
+    Unknown = 0,
+    Ru8,
+    RGu8,
+    RGBAu8,
+    Rf16,
+    RGf16,
+    RGBAf16,
+    Rf32,
+    RGf32,
+    RGBAf32,
 };
 
 struct LightData
@@ -201,10 +99,29 @@ struct SceneData
     bool operator!=(SceneData& v) const { return !(*this == v); }
 };
 
-using GPUResourcePtr = void*;
+using GPUResourcePtr = const void*;
+using CPUResourcePtr = const void*;
 
-using TextureData = GPUResourcePtr;
-using BufferData = GPUResourcePtr;
+
+// resource type exposed to plugin user
+template<class T>
+class SharedResource : public RefCount<T>
+{
+public:
+    bool operator==(const SharedResource& v) const { return id == v.id; }
+    bool operator!=(const SharedResource& v) const { return id != v.id; }
+    bool operator<(const SharedResource& v) const { return id < v.id; }
+
+protected:
+    static uint64_t newID()
+    {
+        static uint64_t s_id;
+        return ++s_id;
+    }
+
+    uint64_t id = newID();
+};
+
 
 struct BoneWeight1
 {
@@ -221,6 +138,8 @@ struct SkinData
     std::vector<float4x4>    bindposes;
     std::vector<uint8_t>     bone_counts;
     std::vector<BoneWeight1> weights;
+
+    bool valid() const;
 };
 
 struct BlendshapeFrameData
@@ -233,54 +152,14 @@ struct BlendshapeData
     std::vector<BlendshapeFrameData> frames;
 };
 
-template<class T> void addref(T *v) { v->addref(); }
-template<class T> void release(T *v) { v->release(); }
 
-template<class T>
-class ref_ptr
+class MeshData : public SharedResource<MeshData>
 {
 public:
-    ref_ptr() {}
-    ref_ptr(T *data) { reset(data); }
-    ref_ptr(T&& data) { swap(data); }
-    ref_ptr(const ref_ptr& v) { reset(v.m_ptr); }
-    ref_ptr& operator=(const ref_ptr& v) { reset(v.m_ptr); return *this; }
-    ~ref_ptr() { reset(); }
-    void reset(T *data = nullptr)
-    {
-        if (m_ptr)
-            release<T>(m_ptr);
-        m_ptr = data;
-        if (m_ptr)
-            addref<T>(m_ptr);
-    }
-    void swap(ref_ptr& v)
-    {
-        std::swap(m_ptr, v->m_data);
-    }
-
-    T& operator*() { return *m_ptr; }
-    const T& operator*() const { return *m_ptr; }
-    T* operator->() { return m_ptr; }
-    const T* operator->() const { return m_ptr; }
-    operator T*() { return m_ptr; }
-    operator const T*() const { return m_ptr; }
-    operator bool() const { return m_ptr; }
-    bool operator==(const ref_ptr<T>& v) const { return m_ptr == v.m_ptr; }
-    bool operator!=(const ref_ptr<T>& v) const { return m_ptr != v.m_ptr; }
-
-private:
-    T *m_ptr = nullptr;
-};
-
-class MeshData;
-using MeshDataCallback = std::function<void(MeshData*)>;
-
-class MeshData
-{
-public:
-    GPUResourcePtr vertex_buffer = nullptr; // host
-    GPUResourcePtr index_buffer = nullptr; // host
+    GPUResourcePtr gpu_vertex_buffer = nullptr;
+    GPUResourcePtr gpu_index_buffer = nullptr;
+    CPUResourcePtr cpu_vertex_buffer = nullptr;
+    CPUResourcePtr cpu_index_buffer = nullptr;
     int vertex_stride = 0; // if 0, treated as size_of_vertex_buffer / vertex_count
     int vertex_count = 0;
     int vertex_offset = 0; // in byte
@@ -292,23 +171,12 @@ public:
 
     MeshData();
     ~MeshData();
-    void addref();
-    void release();
     bool valid() const;
-    bool operator==(const MeshData& v) const;
-    bool operator!=(const MeshData& v) const;
-    bool operator<(const MeshData& v) const;
-
-private:
-    uint64_t id = 0;
-    std::atomic_int ref_count = 1;
 };
 using MeshDataPtr = ref_ptr<MeshData>;
 
-class MeshInstanceData;
-using MeshInstanceDataCallback = std::function<void(MeshInstanceData*)>;
 
-class MeshInstanceData
+class MeshInstanceData : public SharedResource<MeshInstanceData>
 {
 public:
     MeshDataPtr mesh;
@@ -319,18 +187,10 @@ public:
 
     MeshInstanceData();
     ~MeshInstanceData();
-    void addref();
-    void release();
     bool valid() const;
-    bool operator==(const MeshInstanceData& v) const;
-    bool operator!=(const MeshInstanceData& v) const;
-    bool operator<(const MeshInstanceData& v) const;
-
-private:
-    uint64_t id = 0;
-    std::atomic_int ref_count = 1;
 };
 using MeshInstanceDataPtr = ref_ptr<MeshInstanceData>;
+
 
 // one instance may be rendered multiple times with different hit mask in one frame.
 // (e.g. one renderer render the object as a receiver, another one render it as a caster)
@@ -339,26 +199,24 @@ class GeometryData
 {
 public:
     MeshInstanceDataPtr instance;
-    uint8_t hit_mask; // combination of HitMask
+    uint8_t receive_mask;
+    uint8_t cast_mask;
 
     bool valid() const;
 };
 
 
-template<class StdFuncT>
-static inline void add_callback(std::vector<StdFuncT>& funcs, const StdFuncT& to_add)
+class RenderTargetData : public SharedResource<RenderTargetData>
 {
-    funcs.push_back(to_add);
-}
+public:
+    GPUResourcePtr gpu_texture = nullptr;
+    int width = 0;
+    int height = 0;
+    RenderTargetFormat format = RenderTargetFormat::Unknown;
 
-template<class StdFuncT>
-static inline void erase_callback(std::vector<StdFuncT>& funcs, const StdFuncT& to_erase)
-{
-    auto it = std::find_if(funcs.begin(), funcs.end(),
-        [&to_erase](auto& a) { return a.target<void*>() == to_erase.target<void*>(); });
-    if (it != funcs.end())
-        funcs.erase(it);
-}
-
+    RenderTargetData();
+    ~RenderTargetData();
+};
+using RenderTargetDataPtr = ref_ptr<RenderTargetData>;
 
 } // namespace rths

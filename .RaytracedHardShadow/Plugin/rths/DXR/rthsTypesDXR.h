@@ -107,7 +107,7 @@ private:
 class TextureDataDXR
 {
 public:
-    void *texture = nullptr; // host
+    GPUResourcePtr texture = nullptr; // host
     int width = 0;
     int height = 0;
 
@@ -125,7 +125,7 @@ using TextureDataDXRPtr = std::shared_ptr<TextureDataDXR>;
 class BufferDataDXR
 {
 public:
-    void *buffer = nullptr; // host
+    GPUResourcePtr buffer = nullptr; // host
     int size = 0;
 
     ID3D12ResourcePtr resource;
@@ -185,11 +185,21 @@ class GeometryDataDXR
 {
 public:
     MeshInstanceDataDXRPtr inst;
-    uint8_t hit_mask;
+    uint8_t receive_mask;
+    uint8_t cast_mask;
 
     bool operator==(const GeometryDataDXR& v) const;
     bool operator!=(const GeometryDataDXR& v) const;
 };
+
+class RenderTargetDataDXR
+{
+public:
+    RenderTargetData *base = nullptr;
+    TextureDataDXRPtr texture;
+};
+using RenderTargetDataDXRPtr = std::shared_ptr<RenderTargetDataDXR>;
+
 
 class TimestampDXR
 {
@@ -236,13 +246,14 @@ using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
 class RenderDataDXR
 {
 public:
-    ID3D12CommandAllocatorPtr cmd_allocator_direct, cmd_allocator_compute, cmd_allocator_immediate_copy;
-    ID3D12GraphicsCommandList4Ptr cmd_list_direct, cmd_list_compute, cmd_list_immediate_copy;
+    ID3D12CommandAllocatorPtr ca_deform, ca_blas, ca_tlas, ca_rays, ca_immediate_copy;
+    ID3D12GraphicsCommandList4Ptr cl_deform, cl_blas, cl_tlas, cl_rays, cl_immediate_copy;
 
     ID3D12DescriptorHeapPtr desc_heap;
-    DescriptorHandleDXR tlas_handle;
-    DescriptorHandleDXR scene_data_handle;
     DescriptorHandleDXR render_target_handle;
+    DescriptorHandleDXR tlas_handle;
+    DescriptorHandleDXR instance_data_handle;
+    DescriptorHandleDXR scene_data_handle;
 
     std::vector<GeometryDataDXR> geometries, geometries_prev;
     SceneData scene_data_prev{};
@@ -250,11 +261,12 @@ public:
     ID3D12ResourcePtr tlas_scratch;
     ID3D12ResourcePtr tlas;
     ID3D12ResourcePtr scene_data;
-    TextureDataDXRPtr render_target;
+    ID3D12ResourcePtr instance_data;
+    RenderTargetDataDXRPtr render_target;
 
     ID3D12ResourcePtr shader_table;
 
-    uint64_t fence_value = 0;
+    uint64_t fv_deform = 0, fv_blas = 0, fv_tlas = 0, fv_rays = 0;
     FenceEventDXR fence_event;
     int render_flags = 0;
 
@@ -296,6 +308,8 @@ extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
 extern const D3D12_HEAP_PROPERTIES kReadbackHeapProps;
 
+size_t SizeOfElement(DXGI_FORMAT rtf);
+DXGI_FORMAT GetDXGIFormat(RenderTargetFormat format);
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
 std::string ToString(ID3DBlob *blob);
 

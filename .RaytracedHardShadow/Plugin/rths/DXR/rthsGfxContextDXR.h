@@ -16,32 +16,40 @@ public:
     static void finalizeInstance();
     static GfxContextDXR* getInstance();
 
-    bool valid() const;
-    bool validateDevice();
-    ID3D12Device5Ptr getDevice();
-
     bool initializeDevice();
     void frameBegin() override;
     void prepare(RenderDataDXR& rd);
     void setSceneData(RenderDataDXR& rd, SceneData& data);
-    void setRenderTarget(RenderDataDXR& rd, TextureData& rt);
+    void setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt);
     void setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geometries);
-    uint64_t flush(RenderDataDXR& rd);
+    void flush(RenderDataDXR& rd);
     void finish(RenderDataDXR& rd);
     void frameEnd() override;
 
+    bool readbackRenderTarget(RenderDataDXR& rd, void *dst);
+
     void onMeshDelete(MeshData *mesh) override;
     void onMeshInstanceDelete(MeshInstanceData *inst) override;
+    void onRenderTargetDelete(RenderTargetData *rt) override;
+
+
+    bool valid() const;
+    bool checkError();
+    ID3D12Device5Ptr getDevice();
+
+    uint64_t incrementFenceValue();
+    void setFenceValue(uint64_t v);
 
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     ID3D12ResourcePtr createTexture(int width, int height, DXGI_FORMAT format);
 
     void addResourceBarrier(ID3D12GraphicsCommandList4Ptr cl, ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
-    uint64_t submitCommandList(ID3D12GraphicsCommandList4Ptr cl, bool add_signal);
+    uint64_t submitCommandList(ID3D12GraphicsCommandList4Ptr cl, ID3D12CommandAllocatorPtr ca, uint64_t preceding_fv = 0, bool emit_signal = true);
+
     bool readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t size);
     bool uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t size);
-    bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, size_t stride);
-    bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, size_t stride);
+    bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, DXGI_FORMAT format);
+    bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, DXGI_FORMAT format);
     void executeImmediateCopy(RenderDataDXR& rd);
 
 private:
@@ -57,20 +65,18 @@ private:
     ID3D12Device5Ptr m_device;
     ID3D12CommandQueuePtr m_cmd_queue_direct, m_cmd_queue_compute, m_cmd_queue_immediate_copy;
     ID3D12FencePtr m_fence;
+    uint64_t m_fence_value = 0;
+    uint64_t m_fv_last_rays = 0;
 
     ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_global_rootsig;
     ID3D12RootSignaturePtr m_local_rootsig;
 
-    std::map<void*, TextureDataDXRPtr> m_texture_records;
-    std::map<void*, BufferDataDXRPtr> m_buffer_records;
+    std::map<const void*, TextureDataDXRPtr> m_texture_records;
+    std::map<const void*, BufferDataDXRPtr> m_buffer_records;
     std::map<MeshData*, MeshDataDXRPtr> m_mesh_records;
     std::map<MeshInstanceData*, MeshInstanceDataDXRPtr> m_meshinstance_records;
-
-    FrameBeginCallback m_on_frame_begin;
-    FrameEndCallback m_on_frame_end;
-    MeshDataCallback m_on_mesh_delete;
-    MeshInstanceDataCallback m_on_meshinstance_delete;
+    std::map<RenderTargetData*, RenderTargetDataDXRPtr> m_rendertarget_records;
 };
 
 } // namespace rths
