@@ -20,8 +20,8 @@ namespace UTJ.RaytracedHardShadow
         public enum ObjectScope
         {
             EntireScene,
-            SelectedScenes,
-            SelectedObjects,
+            Scenes,
+            Objects,
         }
 
         [Serializable]
@@ -323,7 +323,7 @@ namespace UTJ.RaytracedHardShadow
                     if (slight.enabled)
                         bodySCL.Invoke(slight);
             }
-            else if (m_lightScope == ObjectScope.SelectedScenes)
+            else if (m_lightScope == ObjectScope.Scenes)
             {
 #if UNITY_EDITOR
                 int numScenes = SceneManager.sceneCount;
@@ -359,7 +359,7 @@ namespace UTJ.RaytracedHardShadow
                 }
 #endif
             }
-            else if (m_lightScope == ObjectScope.SelectedObjects)
+            else if (m_lightScope == ObjectScope.Objects)
             {
                 foreach (var go in m_lightObjects)
                 {
@@ -623,17 +623,17 @@ namespace UTJ.RaytracedHardShadow
                     {
                         case ObjectScope.EntireScene: processEntireScene(rmask, 0); break;
 #if UNITY_EDITOR
-                        case ObjectScope.SelectedScenes: processScenes(layer.receiverScenes, rmask, 0); break;
+                        case ObjectScope.Scenes: processScenes(layer.receiverScenes, rmask, 0); break;
 #endif
-                        case ObjectScope.SelectedObjects: processGOs(layer.receiverObjects, rmask, 0); break;
+                        case ObjectScope.Objects: processGOs(layer.receiverObjects, rmask, 0); break;
                     }
                     switch (layer.casterScope)
                     {
                         case ObjectScope.EntireScene: processEntireScene(0, cmask); break;
 #if UNITY_EDITOR
-                        case ObjectScope.SelectedScenes: processScenes(layer.casterScenes, 0, cmask); break;
+                        case ObjectScope.Scenes: processScenes(layer.casterScenes, 0, cmask); break;
 #endif
-                        case ObjectScope.SelectedObjects: processGOs(layer.casterObjects, 0, cmask); break;
+                        case ObjectScope.Objects: processGOs(layer.casterObjects, 0, cmask); break;
                     }
                     shift += 1;
                 }
@@ -645,9 +645,9 @@ namespace UTJ.RaytracedHardShadow
                 {
                     case ObjectScope.EntireScene: processEntireScene(mask, mask); break;
 #if UNITY_EDITOR
-                    case ObjectScope.SelectedScenes: processScenes(m_geometryScenes, mask, mask); break;
+                    case ObjectScope.Scenes: processScenes(m_geometryScenes, mask, mask); break;
 #endif
-                    case ObjectScope.SelectedObjects: processGOs(m_geometryObjects, mask, mask); break;
+                    case ObjectScope.Objects: processGOs(m_geometryObjects, mask, mask); break;
                 }
             }
         }

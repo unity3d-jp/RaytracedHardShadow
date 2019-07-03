@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using UTJ.RaytracedHardShadow;
@@ -7,6 +8,66 @@ namespace UTJ.RaytracedHardShadowEditor
     [CustomEditor(typeof(UTJ.RaytracedHardShadow.ShadowRaytracer))]
     public class ShadowRaytracerEditor : Editor
     {
+        // return drag & dropped scenes from *Hierarchy*.
+        // scene assets from Project are ignored. these should be handled by Unity's default behavior.
+        public static SceneAsset[] GetDroppedScenesFromHierarchy(Rect dropArea)
+        {
+            List<SceneAsset> ret = null;
+
+            var evt = Event.current;
+            if (evt.type == EventType.DragUpdated || evt.type == EventType.DragPerform)
+            {
+                if (dropArea.Contains(evt.mousePosition))
+                {
+                    DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+
+                    if (evt.type == EventType.DragPerform)
+                    {
+                        // scene assets from Project have both objectReferences and paths.
+                        // scenes from Hierarchy have only paths.
+                        if (DragAndDrop.objectReferences.Length == 0 && DragAndDrop.paths.Length != 0)
+                        {
+                            DragAndDrop.AcceptDrag();
+
+                            ret = new List<SceneAsset>();
+                            foreach (var path in DragAndDrop.paths)
+                            {
+                                if (path.EndsWith(".unity"))
+                                {
+                                    var sceneAsset = AssetDatabase.LoadAssetAtPath<SceneAsset>(path);
+                                    if (sceneAsset != null)
+                                        ret.Add(sceneAsset);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (ret != null && ret.Count > 0)
+            {
+                evt.Use();
+                return ret.ToArray();
+            }
+            return null;
+        }
+
+        public static bool AddDroppedScenesFromHierarchy(SerializedProperty dst, Rect dropArea)
+        {
+            var sceneAssets = GetDroppedScenesFromHierarchy(dropArea);
+            if (sceneAssets != null)
+            {
+                foreach (var s in sceneAssets)
+                {
+                    int i = dst.arraySize;
+                    dst.InsertArrayElementAtIndex(i);
+                    dst.GetArrayElementAtIndex(i).objectReferenceValue = s;
+                }
+                return true;
+            }
+            return false;
+        }
+
         static readonly int indentSize = 16;
 
         public override void OnInspectorGUI()
@@ -45,9 +106,9 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.Space();
 
             EditorGUILayout.PropertyField(so.FindProperty("m_lightScope"));
-            if (t.lightScope == ShadowRaytracer.ObjectScope.SelectedScenes)
+            if (t.lightScope == ShadowRaytracer.ObjectScope.Scenes)
                 EditorGUILayout.PropertyField(so.FindProperty("m_lightScenes"), true);
-            else if (t.lightScope == ShadowRaytracer.ObjectScope.SelectedObjects)
+            else if (t.lightScope == ShadowRaytracer.ObjectScope.Objects)
                 EditorGUILayout.PropertyField(so.FindProperty("m_lightObjects"), true);
             EditorGUILayout.Space();
 
@@ -83,10 +144,14 @@ namespace UTJ.RaytracedHardShadowEditor
                         EditorGUI.indentLevel++;
                         switch ((ShadowRaytracer.ObjectScope)spReceiverScope.intValue)
                         {
-                            case ShadowRaytracer.ObjectScope.SelectedScenes:
-                                EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("receiverScenes"), true);
+                            case ShadowRaytracer.ObjectScope.Scenes:
+                                {
+                                    var spScenes = spLayer.FindPropertyRelative("receiverScenes");
+                                    EditorGUILayout.PropertyField(spScenes, true);
+                                    AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
+                                }
                                 break;
-                            case ShadowRaytracer.ObjectScope.SelectedObjects:
+                            case ShadowRaytracer.ObjectScope.Objects:
                                 EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("receiverObjects"), true);
                                 break;
                         }
@@ -97,10 +162,14 @@ namespace UTJ.RaytracedHardShadowEditor
                         EditorGUI.indentLevel++;
                         switch ((ShadowRaytracer.ObjectScope)spCasterScope.intValue)
                         {
-                            case ShadowRaytracer.ObjectScope.SelectedScenes:
-                                EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("casterScenes"), true);
+                            case ShadowRaytracer.ObjectScope.Scenes:
+                                {
+                                    var spScenes = spLayer.FindPropertyRelative("casterScenes");
+                                    EditorGUILayout.PropertyField(spScenes, true);
+                                    AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
+                                }
                                 break;
-                            case ShadowRaytracer.ObjectScope.SelectedObjects:
+                            case ShadowRaytracer.ObjectScope.Objects:
                                 EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("casterObjects"), true);
                                 break;
                         }
@@ -137,10 +206,14 @@ namespace UTJ.RaytracedHardShadowEditor
                 EditorGUILayout.PropertyField(so.FindProperty("m_geometryScope"));
                 switch (t.geometryScope)
                 {
-                    case ShadowRaytracer.ObjectScope.SelectedScenes:
-                        EditorGUILayout.PropertyField(so.FindProperty("m_geometryScenes"), true);
+                    case ShadowRaytracer.ObjectScope.Scenes:
+                        {
+                            var spScenes = so.FindProperty("m_geometryScenes");
+                            EditorGUILayout.PropertyField(spScenes, true);
+                            AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
+                        }
                         break;
-                    case ShadowRaytracer.ObjectScope.SelectedObjects:
+                    case ShadowRaytracer.ObjectScope.Objects:
                         EditorGUILayout.PropertyField(so.FindProperty("m_geometryObjects"), true);
                         break;
                 }
