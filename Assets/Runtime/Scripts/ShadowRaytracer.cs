@@ -175,11 +175,12 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_assignGlobalTexture = true;
         [SerializeField] string m_globalTextureName = "_RaytracedHardShadow";
 
+        [SerializeField] bool m_cullBackFace = true;
         [SerializeField] bool m_ignoreSelfShadow = false;
         [SerializeField] bool m_keepSelfDropShadow = false;
         [SerializeField] float m_shadowRayOffset = 0.0001f;
         [SerializeField] float m_selfShadowThreshold = 0.001f;
-        [SerializeField] bool m_cullBackFace = true;
+
         [SerializeField] bool m_GPUSkinning = true;
 
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field

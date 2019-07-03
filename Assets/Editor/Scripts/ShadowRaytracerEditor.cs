@@ -70,6 +70,12 @@ namespace UTJ.RaytracedHardShadowEditor
 
         static readonly int indentSize = 16;
 
+        public static void DrawScenesField(SerializedProperty spScenes)
+        {
+            EditorGUILayout.PropertyField(spScenes, true);
+            AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
+        }
+
         public override void OnInspectorGUI()
         {
             //DrawDefaultInspector();
@@ -77,6 +83,9 @@ namespace UTJ.RaytracedHardShadowEditor
             var t = target as ShadowRaytracer;
             var so = serializedObject;
 
+            // output
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Output", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_generateRenderTexture"));
             if (!t.generateRenderTexture)
             {
@@ -94,6 +103,9 @@ namespace UTJ.RaytracedHardShadowEditor
             }
             EditorGUILayout.Space();
 
+            // shadow
+            EditorGUILayout.LabelField("Shadow", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFace"));
             EditorGUILayout.PropertyField(so.FindProperty("m_ignoreSelfShadow"));
             if (t.ignoreSelfShadow)
             {
@@ -105,17 +117,15 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.PropertyField(so.FindProperty("m_shadowRayOffset"));
             EditorGUILayout.Space();
 
+            // lights
+            EditorGUILayout.LabelField("Lights", EditorStyles.boldLabel);
             {
                 var spLightScope = so.FindProperty("m_lightScope");
                 EditorGUILayout.PropertyField(spLightScope);
                 switch ((ShadowRaytracer.ObjectScope)spLightScope.intValue)
                 {
                     case ShadowRaytracer.ObjectScope.Scenes:
-                        {
-                            var spScenes = so.FindProperty("m_lightScenes");
-                            EditorGUILayout.PropertyField(spScenes, true);
-                            AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
-                        }
+                        DrawScenesField(so.FindProperty("m_lightScenes"));
                         break;
                     case ShadowRaytracer.ObjectScope.Objects:
                         EditorGUILayout.PropertyField(so.FindProperty("m_lightObjects"), true);
@@ -124,6 +134,8 @@ namespace UTJ.RaytracedHardShadowEditor
             }
             EditorGUILayout.Space();
 
+            // geometry
+            EditorGUILayout.LabelField("Geometry", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_separateCastersAndReceivers"));
             if (t.separateCastersAndReceivers)
             {
@@ -157,11 +169,7 @@ namespace UTJ.RaytracedHardShadowEditor
                         switch ((ShadowRaytracer.ObjectScope)spReceiverScope.intValue)
                         {
                             case ShadowRaytracer.ObjectScope.Scenes:
-                                {
-                                    var spScenes = spLayer.FindPropertyRelative("receiverScenes");
-                                    EditorGUILayout.PropertyField(spScenes, true);
-                                    AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
-                                }
+                                DrawScenesField(spLayer.FindPropertyRelative("receiverScenes"));
                                 break;
                             case ShadowRaytracer.ObjectScope.Objects:
                                 EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("receiverObjects"), true);
@@ -175,11 +183,7 @@ namespace UTJ.RaytracedHardShadowEditor
                         switch ((ShadowRaytracer.ObjectScope)spCasterScope.intValue)
                         {
                             case ShadowRaytracer.ObjectScope.Scenes:
-                                {
-                                    var spScenes = spLayer.FindPropertyRelative("casterScenes");
-                                    EditorGUILayout.PropertyField(spScenes, true);
-                                    AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
-                                }
+                                DrawScenesField(spLayer.FindPropertyRelative("casterScenes"));
                                 break;
                             case ShadowRaytracer.ObjectScope.Objects:
                                 EditorGUILayout.PropertyField(spLayer.FindPropertyRelative("casterObjects"), true);
@@ -217,21 +221,17 @@ namespace UTJ.RaytracedHardShadowEditor
                 switch (t.geometryScope)
                 {
                     case ShadowRaytracer.ObjectScope.Scenes:
-                        {
-                            var spScenes = so.FindProperty("m_geometryScenes");
-                            EditorGUILayout.PropertyField(spScenes, true);
-                            AddDroppedScenesFromHierarchy(spScenes, GUILayoutUtility.GetLastRect());
-                        }
+                        DrawScenesField(so.FindProperty("m_geometryScenes"));
                         break;
                     case ShadowRaytracer.ObjectScope.Objects:
                         EditorGUILayout.PropertyField(so.FindProperty("m_geometryObjects"), true);
                         break;
                 }
             }
-
             EditorGUILayout.Space();
 
-            EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFace"));
+            // misc
+            EditorGUILayout.LabelField("Misc", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
 
             so.ApplyModifiedProperties();
