@@ -74,9 +74,6 @@
     <ClInclude Include="rths\DXR\rthsTypesDXR.h">
       <Filter>rths\DXR</Filter>
     </ClInclude>
-    <ClInclude Include="rths\DXR\Shaders\rthsCommonDXR.h">
-      <Filter>rths\DXR\Shaders</Filter>
-    </ClInclude>
     <ClInclude Include="rths\DXR\rthsDeformerDXR.h">
       <Filter>rths\DXR</Filter>
     </ClInclude>

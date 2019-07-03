@@ -40,7 +40,6 @@
     <ClInclude Include="rths\DXR\rthsResourceTranslatorDXR.h" />
     <ClInclude Include="rths\rthsTypes.h" />
     <ClInclude Include="rths\DXR\rthsTypesDXR.h" />
-    <ClInclude Include="rths\DXR\Shaders\rthsCommonDXR.h" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="rths\DXR\Shaders\rthsShadowDXR.hlsl">
