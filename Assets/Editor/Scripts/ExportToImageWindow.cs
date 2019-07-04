@@ -27,8 +27,10 @@ namespace UTJ.RaytracedHardShadowEditor
                 switch(m_format)
                 {
                     case ShadowRaytracer.ImageFormat.PNG: ext = "png"; break;
-                    case ShadowRaytracer.ImageFormat.TGA: ext = "tga"; break;
                     case ShadowRaytracer.ImageFormat.EXR: ext = "exr"; break;
+#if UNITY_2018_3_OR_NEWER
+                    case ShadowRaytracer.ImageFormat.TGA: ext = "tga"; break;
+#endif
                 }
 
                 string path = EditorUtility.SaveFilePanel("Path to export", "", m_raytracer.outputTexture.name + "." + ext, ext);

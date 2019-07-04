@@ -8,11 +8,11 @@ namespace UTJ.RaytracedHardShadowEditor
     public class ShadowCasterLightEditor : Editor
     {
         [MenuItem("GameObject/RaytracedHardShadow/Create Shadow Caster Light", false, 10)]
-        public static void CreateMeshSyncServer(MenuCommand menuCommand)
+        public static void CreateShadowCasterLight(MenuCommand menuCommand)
         {
             var go = new GameObject();
             go.name = "Shadow Caster Light";
-            var srt = go.AddComponent<ShadowCasterLight>();
+            go.AddComponent<ShadowCasterLight>();
             Undo.RegisterCreatedObjectUndo(go, "ShadowRaytracer");
         }
 

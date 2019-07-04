@@ -28,8 +28,10 @@ namespace UTJ.RaytracedHardShadow
         public enum ImageFormat
         {
             PNG,
-            TGA,
             EXR,
+#if UNITY_2018_3_OR_NEWER
+            TGA,
+#endif
         }
 
         [Serializable]
@@ -62,10 +64,7 @@ namespace UTJ.RaytracedHardShadow
                 Release();
 
                 meshData = rthsMeshData.Create();
-
-                int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
                 meshData.SetGPUBuffers(mesh);
-
                 meshData.SetBindpose(mesh.bindposes);
 #if UNITY_2019_1_OR_NEWER
                 meshData.SetSkinWeights(mesh.GetBonesPerVertex(), mesh.GetAllBoneWeights());
@@ -221,7 +220,7 @@ namespace UTJ.RaytracedHardShadow
 
         [SerializeField] bool m_GPUSkinning = true;
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
-        [SerializeField] bool m_clampBlendshapeWeights = false;
+        [SerializeField] bool m_clampBlendshapeWeights = true;
 
         rthsRenderer m_renderer;
         List<ExportRequest> m_exportRequests;
@@ -835,18 +834,12 @@ namespace UTJ.RaytracedHardShadow
 
                 switch (request.format)
                 {
-                    case ImageFormat.PNG:
-                        System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToPNG(tmp2));
-                        break;
-                    case ImageFormat.TGA:
-                        System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToTGA(tmp2));
-                        break;
-                    case ImageFormat.EXR:
-                        System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToEXR(tmp2, exrFlags));
-                        break;
-                    default:
-                        ret = false;
-                        break;
+                    case ImageFormat.PNG: ExportToPNG(request.path, tmp2); break;
+                    case ImageFormat.EXR: ExportToEXR(request.path, tmp2, exrFlags); break;
+#if UNITY_2018_3_OR_NEWER
+                    case ImageFormat.TGA: ExportToTGA(request.path, tmp2); break;
+#endif
+                    default: ret = false; break;
                 }
             }
             catch (Exception e)
@@ -860,6 +853,28 @@ namespace UTJ.RaytracedHardShadow
             if (tmp2 != null)
                 DestroyImmediate(tmp2);
             return ret;
+        }
+        static void ExportToPNG(string path, Texture2D tex)
+        {
+#if UNITY_2018_1_OR_NEWER
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToPNG(tex));
+#else
+            System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
+#endif
+        }
+        static void ExportToTGA(string path, Texture2D tex)
+        {
+#if UNITY_2018_3_OR_NEWER
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToTGA(tex));
+#endif
+        }
+        static void ExportToEXR(string path, Texture2D tex, Texture2D.EXRFlags flags)
+        {
+#if UNITY_2018_1_OR_NEWER
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToEXR(tex, flags));
+#else
+            System.IO.File.WriteAllBytes(path, tex.EncodeToEXR(flags));
+#endif
         }
 
         IEnumerator DoExportToImage()
@@ -903,7 +918,7 @@ namespace UTJ.RaytracedHardShadow
 
         void Update()
         {
-#if UNITY_EDITOR
+#if UNITY_EDITOR && UNITY_2018_3_OR_NEWER
             m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
 #endif
             InitializeRenderer();
