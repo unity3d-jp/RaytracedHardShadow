@@ -393,9 +393,9 @@ namespace UTJ.RaytracedHardShadow
             return ret;
         }
 
-        public void RemoveLayer(Layer l)
+        public bool RemoveLayer(Layer l)
         {
-            m_layers.Remove(l);
+            return m_layers.Remove(l);
         }
 
         // serialize SceneAssets as string paths to use at runtime
@@ -687,9 +687,11 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void EnumerateMeshRenderers(Action<MeshRenderer, byte, byte> bodyMR, Action<SkinnedMeshRenderer, byte, byte> bodySMR)
+        public void EnumerateMeshRenderers(
+            Action<MeshRenderer, rthsHitMask, rthsHitMask> bodyMR,
+            Action<SkinnedMeshRenderer, rthsHitMask, rthsHitMask> bodySMR)
         {
-            Action<GameObject[], byte, byte> processGOs = (gos, rmask, cmask) =>
+            Action<GameObject[], rthsHitMask, rthsHitMask> processGOs = (gos, rmask, cmask) =>
             {
                 foreach (var go in gos)
                 {
@@ -705,7 +707,7 @@ namespace UTJ.RaytracedHardShadow
                 }
             };
 
-            Action<string[], byte, byte> processScenes = (scenePaths, rmask, cmask) => {
+            Action<string[], rthsHitMask, rthsHitMask> processScenes = (scenePaths, rmask, cmask) => {
                 foreach (var scenePath in scenePaths)
                 {
                     if (scenePath == null || scenePath.Length == 0)
@@ -724,7 +726,7 @@ namespace UTJ.RaytracedHardShadow
                 }
             };
 
-            Action<byte, byte> processEntireScene = (rmask, cmask) =>
+            Action<rthsHitMask, rthsHitMask> processEntireScene = (rmask, cmask) =>
             {
                 foreach (var mr in FindObjectsOfType<MeshRenderer>())
                     if (mr.enabled)
@@ -739,8 +741,8 @@ namespace UTJ.RaytracedHardShadow
                 int shift = 0;
                 foreach (var layer in m_layers)
                 {
-                    byte cmask = (byte)((uint)rthsHitMask.Caster << shift);
-                    byte rmask = (byte)((uint)rthsHitMask.Rceiver | (uint)cmask);
+                    var cmask = (rthsHitMask)((uint)rthsHitMask.Caster << shift);
+                    var rmask = (rthsHitMask.Rceiver | cmask);
                     switch (layer.receiverScope)
                     {
                         case ObjectScope.EntireScene: processEntireScene(rmask, 0); break;
@@ -758,7 +760,7 @@ namespace UTJ.RaytracedHardShadow
             }
             else
             {
-                byte mask = (byte)rthsHitMask.Both;
+                var mask = rthsHitMask.Both;
                 switch (m_geometryScope)
                 {
                     case ObjectScope.EntireScene: processEntireScene(mask, mask); break;
@@ -1014,21 +1016,21 @@ namespace UTJ.RaytracedHardShadow
                 return;
 
             {
-                int flags = 0;
+                rthsRenderFlag flags = 0;
                 if (m_cullBackFaces)
-                    flags |= (int)rthsRenderFlag.CullBackFaces;
+                    flags |= rthsRenderFlag.CullBackFaces;
                 if (m_ignoreSelfShadow)
-                    flags |= (int)rthsRenderFlag.IgnoreSelfShadow;
+                    flags |= rthsRenderFlag.IgnoreSelfShadow;
                 if (m_keepSelfDropShadow)
-                    flags |= (int)rthsRenderFlag.KeepSelfDropShadow;
+                    flags |= rthsRenderFlag.KeepSelfDropShadow;
                 if (m_GPUSkinning)
-                    flags |= (int)rthsRenderFlag.GPUSkinning;
+                    flags |= rthsRenderFlag.GPUSkinning;
                 if (m_clampBlendshapeWeights)
-                    flags |= (int)rthsRenderFlag.ClampBlendShapeWights;
+                    flags |= rthsRenderFlag.ClampBlendShapeWights;
                 if (m_dbgTimestamp)
-                    flags |= (int)rthsRenderFlag.DbgTimestamp;
+                    flags |= rthsRenderFlag.DbgTimestamp;
                 if (m_dbgForceUpdateAS)
-                    flags |= (int)rthsRenderFlag.DbgForceUpdateAS;
+                    flags |= rthsRenderFlag.DbgForceUpdateAS;
 
                 m_renderer.BeginScene();
                 m_renderer.SetRaytraceFlags(flags);

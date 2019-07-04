@@ -62,10 +62,7 @@ enum class HitMask : uint8_t
     Receiver    = 0x01,
     Caster      = 0x02,
     Both        = Receiver | Caster,
-
-    AllReceiver = 0x01 | 0x04 | 0x10 | 0x40,
-    AllCaster   = 0x02 | 0x08 | 0x20 | 0x80,
-    ALl         = 0xff,
+    AllCaster   = 0xfe,
 };
 
 enum class RenderTargetFormat : uint32_t

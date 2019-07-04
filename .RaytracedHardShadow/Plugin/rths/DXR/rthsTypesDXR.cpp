@@ -322,6 +322,7 @@ void TimestampDXR::updateLog(ID3D12CommandQueuePtr cq)
         return;
 
     m_log.clear();
+    char name[256];
     char buf[256];
     auto time_samples = getSamples();
     if (!time_samples.empty()) {
@@ -332,32 +333,36 @@ void TimestampDXR::updateLog(ID3D12CommandQueuePtr cq)
         auto base = time_samples[0];
         for (size_t si = 0; si < n; ++si) {
             auto s1 = time_samples[si];
-            auto pos1 = std::get<1>(s1)->find(" begin");
+            auto name1 = std::get<1>(s1);
+            auto pos1 = name1->find(" begin");
             if (pos1 != std::string::npos) {
                 auto it = std::find_if(time_samples.begin() + (si + 1), time_samples.end(),
                     [&](auto& s2) {
-                        auto pos2 = std::get<1>(s2)->find(" end");
+                        auto name2 = std::get<1>(s2);
+                        auto pos2 = name2->find(" end");
                         if (pos2 != std::string::npos) {
                             return pos1 == pos2 &&
-                                std::strncmp(std::get<1>(s1)->c_str(), std::get<1>(s2)->c_str(), pos1) == 0;
+                                std::strncmp(name1->c_str(), name2->c_str(), pos1) == 0;
                         }
                         return false;
                     });
                 if (it != time_samples.end()) {
                     auto& s2 = *it;
+                    std::strncpy(name, name1->c_str(), pos1);
+                    name[pos1] = '\0';
                     auto epalsed = std::get<0>(s2) - std::get<0>(s1);
                     auto epalsed_ms = float(double(epalsed * 1000) / double(freq));
-                    sprintf(buf, "%s %fms\n", std::get<1>(s2)->c_str(), epalsed_ms);
+                    sprintf(buf, "%s: %.2fms\n", name, epalsed_ms);
                     m_log += buf;
                     continue;
                 }
             }
 
-            auto end_pos = std::get<1>(s1)->find(" end");
+            auto end_pos = name1->find(" end");
             if (pos1 == std::string::npos && end_pos == std::string::npos) {
                 auto epalsed = std::get<0>(s1);
                 auto epalsed_ms = float(double(epalsed * 1000) / double(freq));
-                sprintf(buf, "%s %fms\n", std::get<1>(s1)->c_str(), epalsed_ms);
+                sprintf(buf, "%s: %.2fms\n", name1->c_str(), epalsed_ms);
                 m_log += buf;
             }
         }

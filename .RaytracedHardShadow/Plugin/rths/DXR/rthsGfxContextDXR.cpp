@@ -901,7 +901,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     }
     auto& rtex = rd.render_target->texture;
 
-    rthsTimestampQuery(rd.timestamp, rd.cl_rays, "Raytrace begin");
+    rthsTimestampQuery(rd.timestamp, rd.cl_rays, "DispatchRays begin");
 
     size_t shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
     shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
@@ -984,7 +984,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
 
     addResourceBarrier(rd.cl_rays, rd.render_target->texture->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
 
-    rthsTimestampQuery(rd.timestamp, rd.cl_rays, "Raytrace end");
+    rthsTimestampQuery(rd.timestamp, rd.cl_rays, "DispatchRays end");
     rthsTimestampResolve(rd.timestamp, rd.cl_rays);
 
     rd.fv_rays = submitCommandList(rd.cl_rays, rd.ca_rays, rd.fv_tlas);
