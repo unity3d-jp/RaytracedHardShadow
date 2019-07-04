@@ -203,12 +203,6 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] float m_selfShadowThreshold = 0.0001f;
         [SerializeField] float m_shadowRayOffset = 0.0001f;
 
-        [SerializeField] bool m_GPUSkinning = true;
-
-        // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
-        [SerializeField] bool m_clampBlendshapeWeights = false;
-
-        [Tooltip("Light scope for shadow geometries.")]
         [SerializeField] ObjectScope m_lightScope;
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_lightScenes;
@@ -216,7 +210,6 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] string[] m_lightScenePaths;
         [SerializeField] GameObject[] m_lightObjects;
 
-        [Tooltip("Geometry scope for shadow geometries.")]
         [SerializeField] bool m_separateCastersAndReceivers;
         [SerializeField] ObjectScope m_geometryScope;
 #if UNITY_EDITOR
@@ -225,6 +218,10 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] string[] m_geometryScenePaths;
         [SerializeField] GameObject[] m_geometryObjects;
         [SerializeField] List<Layer> m_layers = new List<Layer> { new Layer() };
+
+        [SerializeField] bool m_GPUSkinning = true;
+        // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
+        [SerializeField] bool m_clampBlendshapeWeights = false;
 
         rthsRenderer m_renderer;
         List<ExportRequest> m_exportRequests;
@@ -393,6 +390,9 @@ namespace UTJ.RaytracedHardShadow
         // request export to image. actual export is done at the end of frame.
         public void ExportToImage(string path, ImageFormat format)
         {
+            if (path == null || path.Length == 0)
+                return;
+
             if (m_exportRequests == null)
                 m_exportRequests = new List<ExportRequest>();
             m_exportRequests.Add(new ExportRequest { path = path, format = format });
@@ -763,13 +763,18 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        void DoExportToImage(ExportRequest request)
+        static Material s_matBlit;
+
+        static bool DoExportToImage(RenderTexture texture, ExportRequest request)
         {
+            if (texture == null || !texture.IsCreated() || request.path == null || request.path.Length == 0)
+                return false;
+
             var f1 = RenderTextureFormat.ARGB32;
             var f2 = TextureFormat.ARGB32;
             var exrFlags = Texture2D.EXRFlags.CompressZIP;
 
-            switch (m_outputTexture.format)
+            switch (texture.format)
             {
                 case RenderTextureFormat.R8:
                 case RenderTextureFormat.RG16:
@@ -811,29 +816,50 @@ namespace UTJ.RaytracedHardShadow
                     break;
             }
 
-            // ReadPixels() doesn't handle format conversion. so create intermediate RenderTexture and Blit() to it.
-            var tmp1 = new RenderTexture(m_outputTexture.width, m_outputTexture.height, 0, f1);
-            var tmp2 = new Texture2D(m_outputTexture.width, m_outputTexture.height, f2, false);
-            Graphics.Blit(m_outputTexture, tmp1);
-            RenderTexture.active = tmp1;
-            tmp2.ReadPixels(new Rect(0, 0, tmp2.width, tmp2.height), 0, 0);
-            tmp2.Apply();
-            RenderTexture.active = null;
-
-            switch (request.format)
+            RenderTexture tmp1 = null;
+            Texture2D tmp2 = null;
+            bool ret = true;
+            try
             {
-                case ImageFormat.PNG:
-                    System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToPNG(tmp2));
-                    break;
-                case ImageFormat.TGA:
-                    System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToTGA(tmp2));
-                    break;
-                case ImageFormat.EXR:
-                    System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToEXR(tmp2, exrFlags));
-                    break;
+                if (s_matBlit == null)
+                    s_matBlit = new Material(Shader.Find("Hidden/UTJ/RaytracedHardShadow/Blit"));
+
+                // ReadPixels() doesn't handle format conversion. so create intermediate RenderTexture and Blit() to it.
+                tmp1 = new RenderTexture(texture.width, texture.height, 0, f1);
+                tmp2 = new Texture2D(texture.width, texture.height, f2, false);
+                Graphics.Blit(texture, tmp1, s_matBlit);
+                RenderTexture.active = tmp1;
+                tmp2.ReadPixels(new Rect(0, 0, tmp2.width, tmp2.height), 0, 0);
+                tmp2.Apply();
+                RenderTexture.active = null;
+
+                switch (request.format)
+                {
+                    case ImageFormat.PNG:
+                        System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToPNG(tmp2));
+                        break;
+                    case ImageFormat.TGA:
+                        System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToTGA(tmp2));
+                        break;
+                    case ImageFormat.EXR:
+                        System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToEXR(tmp2, exrFlags));
+                        break;
+                    default:
+                        ret = false;
+                        break;
+                }
             }
-            DestroyImmediate(tmp1);
-            DestroyImmediate(tmp2);
+            catch (Exception e)
+            {
+                Debug.LogError(e);
+                ret = false;
+            }
+
+            if (tmp1 != null)
+                DestroyImmediate(tmp1);
+            if (tmp2 != null)
+                DestroyImmediate(tmp2);
+            return ret;
         }
 
         IEnumerator DoExportToImage()
@@ -843,17 +869,7 @@ namespace UTJ.RaytracedHardShadow
             if (m_outputTexture != null && m_outputTexture.IsCreated())
             {
                 foreach (var request in m_exportRequests)
-                {
-                    try
-                    {
-                        DoExportToImage(request);
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError(e);
-                    }
-
-                }
+                    DoExportToImage(m_outputTexture, request);
             }
             m_exportRequests.Clear();
         }
