@@ -226,7 +226,7 @@ void AnyHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersec
     // this condition means:
     // - always ignore zero-distance shadow
     //   (comparing instance ID is not enough because in some cases meshes are separated but seamlessly continuous. e.g. head and body)
-    // - always ignore shadow cast by self backfaces (relevanet only when back face culling is disabled)
+    // - always ignore shadow cast by self back faces (relevanet only when 'cull back faces' is disabled)
     // - ignore non-zero-distance self shadow if 'keep self drop shadow' is disabled
     if ( RayTCurrent() < SelfShadowThreshold() ||
         (payload.instance_id == InstanceID() && ((RenderFlags() & RF_KEEP_SELF_DROP_SHADOW) == 0 || HitKind() == HIT_KIND_TRIANGLE_BACK_FACE)) )

@@ -303,14 +303,21 @@ rthsAPI void rthsRendererFinishRender(IRenderer *self)
     self->finish();
 }
 
-rthsAPI bool rthsRendererReadbackRenderTarget(rths::IRenderer *self, void *dst)
+rthsAPI bool rthsRendererReadbackRenderTarget(IRenderer *self, void *dst)
 {
     if (!self)
         return false;
     return self->readbackRenderTarget(dst);
 }
 
-rthsAPI GPUResourcePtr rthsRendererGetRenderTexturePtr(rths::IRenderer *self)
+rthsAPI const char* rthsRendererGetTimestampLog(IRenderer *self)
+{
+    if (!self)
+        return nullptr;
+    return self->getTimestampLog();
+}
+
+rthsAPI GPUResourcePtr rthsRendererGetRenderTexturePtr(IRenderer *self)
 {
     if (!self)
         return nullptr;

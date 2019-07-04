@@ -106,7 +106,7 @@ bool DeformerDXR::prepare(RenderDataDXR& rd)
         DbgSetName(rd.cl_deform, L"CL Deform");
     }
 
-    TimestampQuery(rd.timestamp, rd.cl_deform, "DeformerDXR: begin");
+    rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform begin");
     return true;
 }
 
@@ -115,15 +115,18 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
     if (!m_rootsig_deform || !m_pipeline_state || !inst_dxr.mesh)
         return false;
 
-    uint32_t update_flags = inst_dxr.base->update_flags;
-    bool blendshape_updated = update_flags & (int)UpdateFlag::Blendshape;
-    bool bone_updated = update_flags & (int)UpdateFlag::Bone;
-    if (!blendshape_updated && !bone_updated)
-        return false; // no need to deform
-
     auto& inst = *inst_dxr.base;
     auto& mesh = *inst_dxr.mesh->base;
     auto& mesh_dxr = *inst_dxr.mesh;
+
+    bool force_update = (rd.render_flags & (int)RenderFlag::DbgForceUpdateAS) != 0 &&
+        (!inst.blendshape_weights.empty() || !inst.bones.empty());
+
+    uint32_t update_flags = inst_dxr.base->update_flags;
+    bool blendshape_updated = update_flags & (int)UpdateFlag::Blendshape;
+    bool bone_updated = update_flags & (int)UpdateFlag::Bone;
+    if (!force_update && !blendshape_updated && !bone_updated)
+        return false; // no need to deform
 
     bool clamp_blendshape_weights = (rd.render_flags & (int)RenderFlag::ClampBlendShapeWights) != 0;
     int vertex_count = mesh.vertex_count;
@@ -323,7 +326,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
 bool DeformerDXR::close(RenderDataDXR& rd)
 {
     if (rd.cl_deform) {
-        TimestampQuery(rd.timestamp, rd.cl_deform, "DeformerDXR: end");
+        rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform end");
         if (SUCCEEDED(rd.cl_deform->Close())) {
             return true;
         }

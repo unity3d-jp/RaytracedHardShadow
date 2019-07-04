@@ -15,14 +15,13 @@
     // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
     #define rthsEnableD3D12DREAD
 
-    #define rthsEnableTimestamp
-
     #define rthsEnableResourceName
 
     //#define rthsEnableBufferValidation
     //#define rthsEnableRenderTargetValidation
     //#define rthsForceSoftwareDevice
 #endif
+#define rthsEnableTimestamp
 
 
 namespace rths {
@@ -207,34 +206,40 @@ public:
     TimestampDXR(ID3D12DevicePtr device, int max_sample = 64);
 
     bool valid() const;
+    void setEnabled(bool v);
     void reset();
     bool query(ID3D12GraphicsCommandList4Ptr cl, const char *message);
     bool resolve(ID3D12GraphicsCommandList4Ptr cl);
 
     std::vector<std::tuple<uint64_t, std::string*>> getSamples();
-    void printElapsed(ID3D12CommandQueuePtr cq);
+    void updateLog(ID3D12CommandQueuePtr cq);
+    const std::string& getLog() const;
 
 private:
     ID3D12QueryHeapPtr m_query_heap;
     ID3D12ResourcePtr m_timestamp_buffer;
+    bool m_enabled = true;
     int m_max_sample = 0;
     int m_sample_index=0;
     std::vector<std::string> m_messages;
+    std::string m_log;
 };
 using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
 
 #ifdef rthsEnableTimestamp
-    #define TimestampInitialize(q, d) if(!q) { q = std::make_shared<TimestampDXR>(d); }
-    #define TimestampReset(q) q->reset()
-    #define TimestampQuery(q, cl, m) q->query(cl, m)
-    #define TimestampResolve(q, cl) q->resolve(cl)
-    #define TimestampPrint(q, cq) q->printElapsed(cq)
+    #define rthsTimestampInitialize(q, d)   if (!q) { q = std::make_shared<TimestampDXR>(d); }
+    #define rthsTimestampSetEnable(q, e)    q->setEnabled(e)
+    #define rthsTimestampReset(q)           q->reset()
+    #define rthsTimestampQuery(q, cl, m)    q->query(cl, m)
+    #define rthsTimestampResolve(q, cl)     q->resolve(cl)
+    #define rthsTimestampUpdateLog(q, cq)   q->updateLog(cq)
 #else rthsEnableTimestamp
-    #define TimestampInitialize(...)
-    #define TimestampReset(...)
-    #define TimestampQuery(...)
-    #define TimestampResolve(...)
-    #define TimestampPrint(...)
+    #define rthsTimestampInitialize(...)
+    #define rthsTimestampSetEnable(...)
+    #define rthsTimestampReset(...)
+    #define rthsTimestampQuery(...)
+    #define rthsTimestampResolve(...)
+    #define rthsTimestampUpdateLog(...)
 #endif rthsEnableTimestamp
 
 #ifdef rthsEnableResourceName

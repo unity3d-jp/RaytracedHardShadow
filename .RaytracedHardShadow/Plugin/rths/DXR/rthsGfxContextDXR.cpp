@@ -403,8 +403,9 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
         m_device->CreateConstantBufferView(&cbv_desc, rd.scene_data_handle.hcpu);
     }
 
-    TimestampInitialize(rd.timestamp, m_device);
-    TimestampReset(rd.timestamp);
+    rthsTimestampInitialize(rd.timestamp, m_device);
+    rthsTimestampReset(rd.timestamp);
+    rthsTimestampSetEnable(rd.timestamp, (rd.render_flags & (int)RenderFlag::DbgTimestamp) != 0);
 
     // reset fence values
     rd.fv_deform = rd.fv_blas = rd.fv_tlas = rd.fv_rays = 0;
@@ -623,7 +624,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
 
     // build BLAS
-    TimestampQuery(rd.timestamp, rd.cl_blas, "GfxContextDXR: building BLAS begin");
+    rthsTimestampQuery(rd.timestamp, rd.cl_blas, "Building BLAS begin");
+    bool force_update = (rd.render_flags & (int)RenderFlag::DbgForceUpdateAS) != 0;
     int blas_update_count = 0;
     for (auto& geom_dxr : rd.geometries) {
         auto& inst_dxr = *geom_dxr.inst;
@@ -638,7 +640,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         // inst_dxr.blas_updated keeps if blas is updated in the frame.
 
         if (gpu_skinning && inst_dxr.deformed_vertices) {
-            if (!inst_dxr.blas_deformed || inst.update_flags) {
+            if (!inst_dxr.blas_deformed || inst.update_flags || force_update) {
                 // BLAS for deformable meshes
 
                 bool perform_update = inst_dxr.blas_deformed != nullptr;
@@ -690,7 +692,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             }
         }
         else {
-            if (!mesh_dxr.blas) {
+            if (!mesh_dxr.blas || force_update) {
                 // BLAS for static meshes
 
                 D3D12_RAYTRACING_GEOMETRY_DESC geom_desc{};
@@ -713,7 +715,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
                 inputs.pGeometryDescs = &geom_desc;
 
-                {
+                if (!mesh_dxr.blas) {
                     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
                     m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
 
@@ -739,7 +741,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             needs_build_tlas = true;
         inst.update_flags = 0;
     }
-    TimestampQuery(rd.timestamp, rd.cl_blas, "GfxContextDXR: building BLAS end");
+    rthsTimestampQuery(rd.timestamp, rd.cl_blas, "Building BLAS end");
     rd.fv_blas = submitCommandList(rd.cl_blas, rd.ca_blas, rd.fv_deform);
 
     if (!needs_build_tlas) {
@@ -750,7 +752,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
 
     // build TLAS
-    TimestampQuery(rd.timestamp, rd.cl_tlas, "GfxContextDXR: building TLAS begin");
+    rthsTimestampQuery(rd.timestamp, rd.cl_tlas, "Building TLAS begin");
     if (needs_build_tlas) {
         // get the size of the TLAS buffers
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
@@ -846,7 +848,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             rd.cl_tlas->ResourceBarrier(1, &uav_barrier);
         }
     }
-    TimestampQuery(rd.timestamp, rd.cl_tlas, "GfxContextDXR: building TLAS end");
+    rthsTimestampQuery(rd.timestamp, rd.cl_tlas, "Building TLAS end");
     rd.fv_tlas = submitCommandList(rd.cl_tlas, rd.ca_tlas, rd.fv_blas);
 
 
@@ -899,7 +901,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     }
     auto& rtex = rd.render_target->texture;
 
-    TimestampQuery(rd.timestamp, rd.cl_rays, "GfxContextDXR: raytrace begin");
+    rthsTimestampQuery(rd.timestamp, rd.cl_rays, "Raytrace begin");
 
     size_t shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
     shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
@@ -982,8 +984,8 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
 
     addResourceBarrier(rd.cl_rays, rd.render_target->texture->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
 
-    TimestampQuery(rd.timestamp, rd.cl_rays, "GfxContextDXR: raytrace end");
-    TimestampResolve(rd.timestamp, rd.cl_rays);
+    rthsTimestampQuery(rd.timestamp, rd.cl_rays, "Raytrace end");
+    rthsTimestampResolve(rd.timestamp, rd.cl_rays);
 
     rd.fv_rays = submitCommandList(rd.cl_rays, rd.ca_rays, rd.fv_tlas);
     if (rd.fv_rays && rd.render_target && m_resource_translator) {
@@ -1019,7 +1021,7 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
     std::swap(rd.geometries, rd.geometries_prev);
     rd.geometries.clear();
 
-    TimestampPrint(rd.timestamp, m_cmd_queue_direct);
+    rthsTimestampUpdateLog(rd.timestamp, m_cmd_queue_direct);
 
     m_deformer->reset(rd);
 

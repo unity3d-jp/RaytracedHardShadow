@@ -17,6 +17,7 @@ public:
     void finish() override; // called from render thread
 
     bool readbackRenderTarget(void *dst) override;
+    const char* getTimestampLog() override;
     void* getRenderTexturePtr() override;
 
 private:
@@ -72,6 +73,15 @@ bool RendererDXR::readbackRenderTarget(void *dst)
 
     auto ctx = GfxContextDXR::getInstance();
     return ctx->readbackRenderTarget(m_render_data, dst);
+}
+
+const char* RendererDXR::getTimestampLog()
+{
+#ifdef rthsEnableTimestamp
+    if (m_render_data.timestamp)
+        return m_render_data.timestamp->getLog().c_str();
+#endif // rthsEnableTimestamp
+    return nullptr;
 }
 
 void* RendererDXR::getRenderTexturePtr()

@@ -236,6 +236,19 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.LabelField("Misc", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
 
+            // debug
+            var foldDebug = so.FindProperty("m_foldDebug");
+            foldDebug.boolValue = EditorGUILayout.Foldout(foldDebug.boolValue, "Debug");
+            if(foldDebug.boolValue)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(so.FindProperty("m_dbgTimestamp"));
+                EditorGUILayout.PropertyField(so.FindProperty("m_dbgForceUpdateAS"));
+                if (t.dbgTimestamp)
+                    EditorGUILayout.TextArea(t.timestampLog, GUILayout.Height(80));
+                EditorGUI.indentLevel--;
+            }
+
             so.ApplyModifiedProperties();
 
             EditorGUILayout.Space();

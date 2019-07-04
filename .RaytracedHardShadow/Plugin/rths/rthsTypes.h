@@ -20,11 +20,13 @@ struct CameraData
 
 enum class RenderFlag : uint32_t
 {
-    CullBackFaces            = 0x0001,
-    IgnoreSelfShadow        = 0x0002,
-    KeepSelfDropShadow      = 0x0004,
-    GPUSkinning             = 0x0100,
-    ClampBlendShapeWights   = 0x0200,
+    CullBackFaces           = 0x00000001,
+    IgnoreSelfShadow        = 0x00000002,
+    KeepSelfDropShadow      = 0x00000004,
+    GPUSkinning             = 0x00000100,
+    ClampBlendShapeWights   = 0x00000200,
+    DbgTimestamp            = 0x01000000,
+    DbgForceUpdateAS        = 0x02000000,
 };
 
 enum class LightType : uint32_t

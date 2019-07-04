@@ -66,11 +66,13 @@ namespace UTJ.RaytracedHardShadow
 
     public enum rthsRenderFlag
     {
-        CullBackFaces           = 0x0001,
-        IgnoreSelfShadow        = 0x0002,
-        KeepSelfDropShadow      = 0x0004,
-        GPUSkinning             = 0x0100,
-        ClampBlendShapeWights   = 0x0200,
+        CullBackFaces           = 0x00000001,
+        IgnoreSelfShadow        = 0x00000002,
+        KeepSelfDropShadow      = 0x00000004,
+        GPUSkinning             = 0x00000100,
+        ClampBlendShapeWights   = 0x00000200,
+        DbgTimestamp            = 0x01000000,
+        DbgForceUpdateAS        = 0x02000000,
     }
 
     public enum rthsHitMask
@@ -329,6 +331,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRendererAddPointLight(IntPtr self, Vector3 pos, float range);
         [DllImport("rths")] static extern void rthsRendererAddReversePointLight(IntPtr self, Vector3 pos, float range);
         [DllImport("rths")] static extern void rthsRendererAddGeometry(IntPtr self, rthsMeshInstanceData mesh, byte rmask, byte cmask);
+        [DllImport("rths")] static extern IntPtr rthsRendererGetTimestampLog(IntPtr self);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
@@ -341,6 +344,10 @@ namespace UTJ.RaytracedHardShadow
         public static string errorLog
         {
             get { return Misc.CString(rthsGetErrorLog()); }
+        }
+        public string timestampLog
+        {
+            get { return Misc.CString(rthsRendererGetTimestampLog(self)); }
         }
 
         public static rthsRenderer Create()

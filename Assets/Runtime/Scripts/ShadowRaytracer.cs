@@ -222,6 +222,12 @@ namespace UTJ.RaytracedHardShadow
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
         [SerializeField] bool m_clampBlendshapeWeights = true;
 
+#if UNITY_EDITOR
+        [SerializeField] bool m_foldDebug = false;
+#endif
+        [SerializeField] bool m_dbgTimestamp = false;
+        [SerializeField] bool m_dbgForceUpdateAS = false;
+
         rthsRenderer m_renderer;
         List<ExportRequest> m_exportRequests;
 
@@ -255,6 +261,11 @@ namespace UTJ.RaytracedHardShadow
             set { m_globalTextureName = value; }
         }
 
+        public bool cullBackFaces
+        {
+            get { return m_cullBackFaces; }
+            set { m_cullBackFaces = value; }
+        }
         public bool ignoreSelfShadow
         {
             get { return m_ignoreSelfShadow; }
@@ -265,16 +276,17 @@ namespace UTJ.RaytracedHardShadow
             get { return m_keepSelfDropShadow; }
             set { m_keepSelfDropShadow = value; }
         }
-        public bool cullBackFaces
+        public float selfShadowThreshold
         {
-            get { return m_cullBackFaces; }
-            set { m_cullBackFaces = value; }
+            get { return m_selfShadowThreshold; }
+            set { m_selfShadowThreshold = value; }
         }
-        public bool GPUSkinning
+        public float shadowRayOffset
         {
-            get { return m_GPUSkinning; }
-            set { m_GPUSkinning = value; }
+            get { return m_shadowRayOffset; }
+            set { m_shadowRayOffset = value; }
         }
+
 
         public ObjectScope lightScope
         {
@@ -299,7 +311,6 @@ namespace UTJ.RaytracedHardShadow
             get { return m_lightObjects; }
             set { m_lightObjects = value; }
         }
-
 
         public bool separateCastersAndReceivers
         {
@@ -329,10 +340,36 @@ namespace UTJ.RaytracedHardShadow
             get { return m_geometryObjects; }
             set { m_geometryObjects = value; }
         }
-
         public int layerCount
         {
             get { return m_layers.Count; }
+        }
+
+        public bool GPUSkinning
+        {
+            get { return m_GPUSkinning; }
+            set { m_GPUSkinning = value; }
+        }
+#if UNITY_EDITOR
+        public bool foldDebug
+        {
+            get { return m_foldDebug; }
+            set { m_foldDebug = value; }
+        }
+#endif
+        public bool dbgTimestamp
+        {
+            get { return m_dbgTimestamp; }
+            set { m_dbgTimestamp = value; }
+        }
+        public bool dbgForceUpdateAS
+        {
+            get { return m_dbgForceUpdateAS; }
+            set { m_dbgForceUpdateAS = value; }
+        }
+        public string timestampLog
+        {
+            get { return m_renderer.timestampLog; }
         }
         #endregion
 
@@ -988,6 +1025,10 @@ namespace UTJ.RaytracedHardShadow
                     flags |= (int)rthsRenderFlag.GPUSkinning;
                 if (m_clampBlendshapeWeights)
                     flags |= (int)rthsRenderFlag.ClampBlendShapeWights;
+                if (m_dbgTimestamp)
+                    flags |= (int)rthsRenderFlag.DbgTimestamp;
+                if (m_dbgForceUpdateAS)
+                    flags |= (int)rthsRenderFlag.DbgForceUpdateAS;
 
                 m_renderer.BeginScene();
                 m_renderer.SetRaytraceFlags(flags);
