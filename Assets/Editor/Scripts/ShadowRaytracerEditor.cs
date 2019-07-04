@@ -83,10 +83,13 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Output", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_generateRenderTexture"));
-            if (!t.generateRenderTexture)
             {
                 EditorGUI.indentLevel++;
+                if (t.generateRenderTexture)
+                    EditorGUI.BeginDisabledGroup(true);
                 EditorGUILayout.PropertyField(so.FindProperty("m_outputTexture"));
+                if (t.generateRenderTexture)
+                    EditorGUI.EndDisabledGroup();
                 EditorGUI.indentLevel--;
             }
 

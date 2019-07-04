@@ -878,10 +878,6 @@ namespace UTJ.RaytracedHardShadow
 
         #region events
 #if UNITY_EDITOR
-        void Reset()
-        {
-        }
-
         void OnValidate()
         {
             UpdateScenePaths();
@@ -932,25 +928,18 @@ namespace UTJ.RaytracedHardShadow
             if (cam == null)
                 return;
 
-            bool updateGlobalTexture = false;
-#if UNITY_EDITOR
-            if (m_outputTexture != null && AssetDatabase.Contains(m_outputTexture))
-            {
-                if (!m_outputTexture.IsCreated())
-                    m_outputTexture.Create();
-                if (m_assignGlobalTexture)
-                    updateGlobalTexture = true;
-            }
-            else
-#endif
             if (m_generateRenderTexture)
             {
-                // create output buffer if not assigned. fit its size to camera resolution if already assigned.
-
                 var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
                 if (m_outputTexture != null && (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y))
                 {
-                    m_outputTexture.Release();
+                    // resolution was changed. release existing RenderTexture
+#if UNITY_EDITOR
+                    if (!AssetDatabase.Contains(m_outputTexture))
+#endif
+                    {
+                        DestroyImmediate(m_outputTexture);
+                    }
                     m_outputTexture = null;
                 }
                 if (m_outputTexture == null)
@@ -960,14 +949,17 @@ namespace UTJ.RaytracedHardShadow
                     m_outputTexture.enableRandomWrite = true; // enable unordered access
                     m_outputTexture.Create();
                     if (m_assignGlobalTexture)
-                        updateGlobalTexture = true;
+                        Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
                 }
+            }
+            else if (m_outputTexture != null)
+            {
+                if (m_assignGlobalTexture)
+                    Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
             }
 
             if (m_outputTexture == null)
                 return;
-            if (updateGlobalTexture)
-                Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
 
             {
                 int flags = 0;
