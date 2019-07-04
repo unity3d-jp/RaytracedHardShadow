@@ -48,7 +48,7 @@ struct float4x4
 
 enum class RenderFlag : uint32_t
 {
-    CullBackFace            = 0x0001,
+    CullBackFaces           = 0x0001,
     IgnoreSelfShadow        = 0x0002,
     KeepSelfDropShadow      = 0x0004,
     GPUSkinning             = 0x0100,

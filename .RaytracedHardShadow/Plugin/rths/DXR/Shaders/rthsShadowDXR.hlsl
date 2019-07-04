@@ -10,7 +10,7 @@ enum LIGHT_TYPE
 
 enum RENDER_FLAG
 {
-    RF_CULL_BACK_FACE = 0x0001,
+    RF_CULL_BACK_FACES = 0x0001,
     RF_IGNORE_SELF_SHADOW = 0x0002,
     RF_KEEP_SELF_DROP_SHADOW = 0x0004,
 };
@@ -123,7 +123,7 @@ void RayGen()
 
     int render_flags = RenderFlags();
     int ray_flags = RAY_FLAG_FORCE_OPAQUE;
-    if (render_flags & RF_CULL_BACK_FACE)
+    if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
     TraceRay(gRtScene, ray_flags, HM_RECEIVER, 0, 0, 0, ray, payload);
@@ -151,7 +151,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
 
     int render_flags = RenderFlags();
     int ray_flags = 0;
-    if (render_flags & RF_CULL_BACK_FACE)
+    if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
     if (render_flags & RF_IGNORE_SELF_SHADOW)
         ray_flags |= RAY_FLAG_FORCE_NON_OPAQUE; // calling any hit shader require non-opaque flag

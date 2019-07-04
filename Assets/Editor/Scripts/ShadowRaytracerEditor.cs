@@ -101,7 +101,7 @@ namespace UTJ.RaytracedHardShadowEditor
 
             // shadow
             EditorGUILayout.LabelField("Shadow", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFace"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFaces"));
             EditorGUILayout.PropertyField(so.FindProperty("m_ignoreSelfShadow"));
             if (t.ignoreSelfShadow)
             {
@@ -234,6 +234,10 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
 
             so.ApplyModifiedProperties();
+
+            EditorGUILayout.Space();
+            if (GUILayout.Button("Export to image", GUILayout.Width(200)))
+                ExportToImageWindow.Open(t);
         }
     }
 }

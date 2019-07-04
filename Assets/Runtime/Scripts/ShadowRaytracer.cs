@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -22,6 +23,13 @@ namespace UTJ.RaytracedHardShadow
             EntireScene,
             Scenes,
             Objects,
+        }
+
+        public enum ImageFormat
+        {
+            PNG,
+            TGA,
+            EXR,
         }
 
         [Serializable]
@@ -164,6 +172,11 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
+        public class ExportRequest
+        {
+            public string path;
+            public ImageFormat format;
+        }
         #endregion
 
 
@@ -175,7 +188,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_assignGlobalTexture = true;
         [SerializeField] string m_globalTextureName = "_RaytracedHardShadow";
 
-        [SerializeField] bool m_cullBackFace = false;
+        [SerializeField] bool m_cullBackFaces = true;
         [SerializeField] bool m_ignoreSelfShadow = true;
         [SerializeField] bool m_keepSelfDropShadow = true;
         [SerializeField] float m_selfShadowThreshold = 0.0001f;
@@ -205,6 +218,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] List<Layer> m_layers = new List<Layer> { new Layer() };
 
         rthsRenderer m_renderer;
+        List<ExportRequest> m_exportRequests;
 
         static int s_instanceCount, s_updateCount;
         static Dictionary<Mesh, MeshRecord> s_meshDataCache;
@@ -246,10 +260,10 @@ namespace UTJ.RaytracedHardShadow
             get { return m_keepSelfDropShadow; }
             set { m_keepSelfDropShadow = value; }
         }
-        public bool cullBackFace
+        public bool cullBackFaces
         {
-            get { return m_cullBackFace; }
-            set { m_cullBackFace = value; }
+            get { return m_cullBackFaces; }
+            set { m_cullBackFaces = value; }
         }
         public bool GPUSkinning
         {
@@ -314,6 +328,66 @@ namespace UTJ.RaytracedHardShadow
         public int layerCount
         {
             get { return m_layers.Count; }
+        }
+        #endregion
+
+
+        #region public methods
+        // user must call UpdateScenePaths() manually if made changes to the layer
+        public Layer GetLayer(int i)
+        {
+            return m_layers[i];
+        }
+
+        // user must call UpdateScenePaths() manually if made changes to the layer
+        // fail if layer count is already max (kMaxLayers)
+        public Layer AddLayer()
+        {
+            if (m_layers.Count == kMaxLayers)
+                return null;
+
+            var ret = new Layer();
+            m_layers.Add(ret);
+            return ret;
+        }
+
+        public void RemoveLayer(Layer l)
+        {
+            m_layers.Remove(l);
+        }
+
+        // serialize SceneAssets as string paths to use at runtime
+        public void UpdateScenePaths()
+        {
+#if UNITY_EDITOR
+            if (m_lightScope == ObjectScope.Scenes)
+                ToPaths(ref m_lightScenePaths, m_lightScenes);
+
+            if (m_separateCastersAndReceivers)
+            {
+                foreach (var layer in m_layers)
+                {
+                    if (layer.casterScope == ObjectScope.Scenes)
+                        ToPaths(ref layer.casterScenePaths, layer.casterScenes);
+                    if (layer.receiverScope == ObjectScope.Scenes)
+                        ToPaths(ref layer.receiverScenePaths, layer.receiverScenes);
+                }
+            }
+            else
+            {
+                if (m_geometryScope == ObjectScope.Scenes)
+                    ToPaths(ref m_geometryScenePaths, m_geometryScenes);
+            }
+#endif
+        }
+
+        // request export to image. actual export is done at the end of frame.
+        public void ExportToImage(string path, ImageFormat format)
+        {
+            if (m_exportRequests == null)
+                m_exportRequests = new List<ExportRequest>();
+            m_exportRequests.Add(new ExportRequest { path = path, format = format });
+            StartCoroutine(DoExportToImage());
         }
         #endregion
 
@@ -503,57 +577,17 @@ namespace UTJ.RaytracedHardShadow
         }
 
 
-        // user must call UpdateScenePaths() manually if made changes to layer
-        public Layer GetLayer(int i)
-        {
-            return m_layers[i];
-        }
-
-        // user must call UpdateScenePaths() manually if made changes to layer
-        public Layer AddLayer()
-        {
-            var ret = new Layer();
-            m_layers.Add(ret);
-            return ret;
-        }
-        public void RemoveLayer(Layer l)
-        {
-            m_layers.Remove(l);
-        }
-
 #if UNITY_EDITOR
-        void UpdateScenePaths(ref string[] dst, SceneAsset[] src)
+        static void ToPaths(ref string[] dst, SceneAsset[] src)
         {
             dst = Array.ConvertAll(src, s => s != null ? AssetDatabase.GetAssetPath(s) : null);
         }
 #endif
 
-        public void UpdateScenePaths()
-        {
-#if UNITY_EDITOR
-            if (m_lightScope == ObjectScope.Scenes)
-                UpdateScenePaths(ref m_lightScenePaths, m_lightScenes);
-
-            if (m_separateCastersAndReceivers)
-            {
-                foreach(var layer in m_layers)
-                {
-                    if (layer.casterScope == ObjectScope.Scenes)
-                        UpdateScenePaths(ref layer.casterScenePaths, layer.casterScenes);
-                    if (layer.receiverScope == ObjectScope.Scenes)
-                        UpdateScenePaths(ref layer.receiverScenePaths, layer.receiverScenes);
-                }
-            }
-            else
-            {
-                if (m_geometryScope == ObjectScope.Scenes)
-                    UpdateScenePaths(ref m_geometryScenePaths, m_geometryScenes);
-            }
-#endif
-        }
-
         public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
         {
+            // C# 7.0 supports function in function but we stick to the old way for compatibility
+
             Action<GameObject[]> processGOs = (gos) =>
             {
                 foreach (var go in gos)
@@ -610,8 +644,6 @@ namespace UTJ.RaytracedHardShadow
 
         public void EnumerateMeshRenderers(Action<MeshRenderer, byte, byte> bodyMR, Action<SkinnedMeshRenderer, byte, byte> bodySMR)
         {
-            // C# 7.0 supports function in function but we stick to the old way for compatibility
-
             Action<GameObject[], byte, byte> processGOs = (gos, rmask, cmask) =>
             {
                 foreach (var go in gos)
@@ -721,9 +753,104 @@ namespace UTJ.RaytracedHardShadow
                 this.enabled = false;
             }
         }
+
+        void DoExportToImage(ExportRequest request)
+        {
+            var f1 = RenderTextureFormat.ARGB32;
+            var f2 = TextureFormat.ARGB32;
+            var exrFlags = Texture2D.EXRFlags.CompressZIP;
+
+            switch (m_outputTexture.format)
+            {
+                case RenderTextureFormat.R8:
+                case RenderTextureFormat.RG16:
+                case RenderTextureFormat.ARGB32:
+                    f1 = RenderTextureFormat.ARGB32;
+                    f2 = TextureFormat.ARGB32;
+                    break;
+
+                case RenderTextureFormat.RHalf:
+                case RenderTextureFormat.RGHalf:
+                case RenderTextureFormat.ARGBHalf:
+                    if (request.format == ImageFormat.EXR)
+                    {
+                        f1 = RenderTextureFormat.ARGBHalf;
+                        f2 = TextureFormat.RGBAHalf;
+                        exrFlags |= Texture2D.EXRFlags.OutputAsFloat;
+                    }
+                    else
+                    {
+                        f1 = RenderTextureFormat.ARGB32;
+                        f2 = TextureFormat.ARGB32;
+                    }
+                    break;
+
+                case RenderTextureFormat.RFloat:
+                case RenderTextureFormat.RGFloat:
+                case RenderTextureFormat.ARGBFloat:
+                    if (request.format == ImageFormat.EXR)
+                    {
+                        f1 = RenderTextureFormat.ARGBFloat;
+                        f2 = TextureFormat.RGBAFloat;
+                        exrFlags |= Texture2D.EXRFlags.OutputAsFloat;
+                    }
+                    else
+                    {
+                        f1 = RenderTextureFormat.ARGB32;
+                        f2 = TextureFormat.ARGB32;
+                    }
+                    break;
+            }
+
+            var tmp1 = new RenderTexture(m_outputTexture.width, m_outputTexture.height, 0, f1);
+            var tmp2 = new Texture2D(m_outputTexture.width, m_outputTexture.height, f2, false);
+            Graphics.Blit(m_outputTexture, tmp1);
+            RenderTexture.active = tmp1;
+            tmp2.ReadPixels(new Rect(0, 0, tmp2.width, tmp2.height), 0, 0);
+            tmp2.Apply();
+            RenderTexture.active = null;
+
+            switch (request.format)
+            {
+                case ImageFormat.PNG:
+                    System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToPNG(tmp2));
+                    break;
+                case ImageFormat.TGA:
+                    System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToTGA(tmp2));
+                    break;
+                case ImageFormat.EXR:
+                    System.IO.File.WriteAllBytes(request.path, ImageConversion.EncodeToEXR(tmp2, exrFlags));
+                    break;
+            }
+            DestroyImmediate(tmp1);
+            DestroyImmediate(tmp2);
+        }
+
+        IEnumerator DoExportToImage()
+        {
+            yield return new WaitForEndOfFrame();
+
+            if (m_outputTexture != null && m_outputTexture.IsCreated() && m_exportRequests.Count != 0)
+            {
+                foreach (var request in m_exportRequests)
+                {
+                    try
+                    {
+                        DoExportToImage(request);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError(e);
+                    }
+
+                }
+            }
+            m_exportRequests.Clear();
+        }
         #endregion
 
 
+        #region events
 #if UNITY_EDITOR
         void Reset()
         {
@@ -818,8 +945,8 @@ namespace UTJ.RaytracedHardShadow
 
             {
                 int flags = 0;
-                if (m_cullBackFace)
-                    flags |= (int)rthsRenderFlag.CullBackFace;
+                if (m_cullBackFaces)
+                    flags |= (int)rthsRenderFlag.CullBackFaces;
                 if (m_ignoreSelfShadow)
                     flags |= (int)rthsRenderFlag.IgnoreSelfShadow;
                 if (m_keepSelfDropShadow)
@@ -848,10 +975,11 @@ namespace UTJ.RaytracedHardShadow
 
             if (++s_updateCount == s_instanceCount)
             {
-                // last instance issue render event.
+                // last instance issues render event.
                 // all renderers do actual rendering tasks in render thread.
                 rthsRenderer.IssueRender();
             }
         }
+        #endregion
     }
 }
