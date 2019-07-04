@@ -151,6 +151,8 @@ namespace UTJ.RaytracedHardShadow
         public class RenderTargetRecord
         {
             public rthsRenderTarget rtData;
+            public IntPtr nativeTexturePtr;
+
             public int useCount;
 
             public void Update(RenderTexture rtex)
@@ -158,10 +160,17 @@ namespace UTJ.RaytracedHardShadow
                 if (!rtex.IsCreated())
                     rtex.Create();
 
+                var ptr = rtex.GetNativeTexturePtr();
+                if (rtData)
+                {
+                    if (nativeTexturePtr != ptr)
+                        rtData.Release();
+                }
                 if (!rtData)
                 {
                     rtData = rthsRenderTarget.Create();
-                    rtData.Setup(rtex.GetNativeTexturePtr());
+                    rtData.Setup(ptr);
+                    nativeTexturePtr = ptr;
                 }
             }
 
@@ -569,9 +578,9 @@ namespace UTJ.RaytracedHardShadow
             if (!s_renderTargetCache.TryGetValue(rt, out rec))
             {
                 rec = new RenderTargetRecord();
-                rec.Update(rt);
                 s_renderTargetCache.Add(rt, rec);
             }
+            rec.Update(rt);
             rec.useCount++;
             return rec.rtData;
         }
@@ -802,6 +811,7 @@ namespace UTJ.RaytracedHardShadow
                     break;
             }
 
+            // ReadPixels() doesn't handle format conversion. so create intermediate RenderTexture and Blit() to it.
             var tmp1 = new RenderTexture(m_outputTexture.width, m_outputTexture.height, 0, f1);
             var tmp2 = new Texture2D(m_outputTexture.width, m_outputTexture.height, f2, false);
             Graphics.Blit(m_outputTexture, tmp1);
@@ -830,7 +840,7 @@ namespace UTJ.RaytracedHardShadow
         {
             yield return new WaitForEndOfFrame();
 
-            if (m_outputTexture != null && m_outputTexture.IsCreated() && m_exportRequests.Count != 0)
+            if (m_outputTexture != null && m_outputTexture.IsCreated())
             {
                 foreach (var request in m_exportRequests)
                 {
