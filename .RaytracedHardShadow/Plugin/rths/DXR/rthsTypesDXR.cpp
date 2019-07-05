@@ -102,8 +102,9 @@ DescriptorHandleDXR DescriptorHeapAllocatorDXR::allocate()
 
 void MeshInstanceDataDXR::clearBLAS()
 {
-    blas_scratch = nullptr;
-    blas_deformed = nullptr;
+    // not clear BLAS for deformed vertices because update time is what we want to measure in this case.
+    //blas_scratch = nullptr;
+    //blas_deformed = nullptr;
     if (mesh)
         mesh->clearBLAS();
 }

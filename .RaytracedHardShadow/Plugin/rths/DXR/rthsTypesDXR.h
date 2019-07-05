@@ -331,5 +331,26 @@ DXGI_FORMAT GetDXGIFormat(RenderTargetFormat format);
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
 std::string ToString(ID3DBlob *blob);
 
+
+// Body : [](size_t size) -> ID3D12Resource
+// return true if expanded
+template<class Body>
+bool ReuseOrExpandBuffer(ID3D12ResourcePtr &buf, size_t stride, size_t size, size_t minimum, const Body& body)
+{
+    if (buf) {
+        auto capacity_in_byte = buf->GetDesc().Width;
+        if (capacity_in_byte < size * stride)
+            buf = nullptr;
+    }
+    if (!buf) {
+        size_t capacity = minimum;
+        while (capacity < size)
+            capacity *= 2;
+        buf = body(stride * capacity);
+        return true;
+    }
+    return false;
+};
+
 } // namespace rths
 #endif // _WIN32

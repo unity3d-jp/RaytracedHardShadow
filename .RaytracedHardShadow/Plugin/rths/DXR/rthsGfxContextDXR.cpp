@@ -766,48 +766,11 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         inputs.NumDescs = (UINT)geometry_count;
         inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-        m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
-
-        // scratch buffer
-        if (rd.tlas_scratch) {
-            auto capacity_in_bytes = rd.tlas_scratch->GetDesc().Width;
-            if (capacity_in_bytes < info.ScratchDataSizeInBytes)
-                rd.tlas_scratch = nullptr;
-        }
-        if (!rd.tlas_scratch) {
-            rd.tlas_scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
-        }
-
-        // TLAS buffer
-        if(rd.tlas) {
-            auto capacity_in_bytes = rd.tlas->GetDesc().Width;
-            if (capacity_in_bytes < info.ScratchDataSizeInBytes)
-                rd.tlas = nullptr;
-        }
-        if (!rd.tlas) {
-            rd.tlas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
-
-            // TLAS SRV
-            D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-            srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srv_desc.RaytracingAccelerationStructure.Location = rd.tlas->GetGPUVirtualAddress();
-            m_device->CreateShaderResourceView(nullptr, &srv_desc, rd.tlas_handle.hcpu);
-        }
 
         // instance desc buffer
-        if (rd.instance_desc) {
-            auto capacity = rd.instance_desc->GetDesc().Width;
-            if (capacity < geometry_count * sizeof(D3D12_RAYTRACING_INSTANCE_DESC))
-                rd.instance_desc = nullptr;
-        }
-        if (!rd.instance_desc) {
-            size_t capacity = 1024;
-            while (capacity < geometry_count)
-                capacity *= 2;
-            rd.instance_desc = createBuffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-        }
+        ReuseOrExpandBuffer(rd.instance_desc, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), geometry_count, 4096, [this](size_t size) {
+            return createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+        });
 
         // create instance desc
         if (geometry_count > 0) {
@@ -834,6 +797,20 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
         // create TLAS
         {
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+            m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
+
+            // note: reusing existing buffer sometimes causes issues on my machine. so always create new buffers...
+            rd.tlas_scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
+            rd.tlas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+
+            // SRV
+            D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+            srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srv_desc.RaytracingAccelerationStructure.Location = rd.tlas->GetGPUVirtualAddress();
+            m_device->CreateShaderResourceView(nullptr, &srv_desc, rd.tlas_handle.hcpu);
+
             D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
             as_desc.DestAccelerationStructureData = rd.tlas->GetGPUVirtualAddress();
             as_desc.Inputs = inputs;
@@ -842,6 +819,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             if (rd.tlas_scratch)
                 as_desc.ScratchAccelerationStructureData = rd.tlas_scratch->GetGPUVirtualAddress();
 
+            // build
             rd.cl_tlas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
         }
 
@@ -860,25 +838,19 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
     // setup per-instance data
     if (needs_build_tlas) {
-        int stride = sizeof(InstanceData);
-        if (rd.instance_data) {
-            auto capacity_in_bytes = rd.instance_data->GetDesc().Width;
-            if (capacity_in_bytes < geometry_count * stride)
-                rd.instance_data = nullptr;
-        }
-        if (!rd.instance_data) {
-            int capacity = 1024;
-            while (capacity < geometry_count)
-                capacity *= 2;
-            rd.instance_data = createBuffer(capacity * stride, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-
+        size_t stride = sizeof(InstanceData);
+        bool expanded = ReuseOrExpandBuffer(rd.instance_data, stride, geometry_count, 4096, [this, &rd](size_t size) {
+            return createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+        });
+        if (expanded) {
+            auto capacity = rd.instance_data->GetDesc().Width;
             D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
             desc.Format = DXGI_FORMAT_UNKNOWN;
             desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
             desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             desc.Buffer.FirstElement = 0;
-            desc.Buffer.NumElements = capacity;
-            desc.Buffer.StructureByteStride = stride;
+            desc.Buffer.NumElements = UINT(capacity / stride);
+            desc.Buffer.StructureByteStride = UINT(stride);
             desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
             m_device->CreateShaderResourceView(rd.instance_data, &desc, rd.instance_data_handle.hcpu);
         }
@@ -1353,7 +1325,6 @@ void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd)
 
     rd.cl_immediate_copy = nullptr;
 }
-
 
 } // namespace rths
 #endif
