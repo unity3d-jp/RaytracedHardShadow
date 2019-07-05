@@ -219,6 +219,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] List<Layer> m_layers = new List<Layer> { new Layer() };
 
         [SerializeField] bool m_GPUSkinning = true;
+        [SerializeField] bool m_parallelCommandList = false;
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
         [SerializeField] bool m_clampBlendshapeWeights = true;
 
@@ -1025,6 +1026,8 @@ namespace UTJ.RaytracedHardShadow
                     flags |= rthsRenderFlag.KeepSelfDropShadow;
                 if (m_GPUSkinning)
                     flags |= rthsRenderFlag.GPUSkinning;
+                if (m_parallelCommandList)
+                    flags |= rthsRenderFlag.ParallelCommandList;
                 if (m_clampBlendshapeWeights)
                     flags |= rthsRenderFlag.ClampBlendShapeWights;
                 if (m_dbgTimestamp)

@@ -97,8 +97,16 @@ DeformerDXR::~DeformerDXR()
 {
 }
 
+bool DeformerDXR::valid() const
+{
+    return m_device && m_rootsig_deform && m_pipeline_state;
+}
+
 bool DeformerDXR::prepare(RenderDataDXR& rd)
 {
+    if (!valid())
+        return false;
+
     if (!rd.cl_deform) {
         m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&rd.ca_deform));
         m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, rd.ca_deform, m_pipeline_state, IID_PPV_ARGS(&rd.cl_deform));
@@ -112,14 +120,14 @@ bool DeformerDXR::prepare(RenderDataDXR& rd)
 
 bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
 {
-    if (!m_rootsig_deform || !m_pipeline_state || !inst_dxr.mesh)
+    if (!valid() || !inst_dxr.mesh)
         return false;
 
     auto& inst = *inst_dxr.base;
     auto& mesh = *inst_dxr.mesh->base;
     auto& mesh_dxr = *inst_dxr.mesh;
 
-    bool force_update = (rd.render_flags & (int)RenderFlag::DbgForceUpdateAS) != 0 &&
+    bool force_update = rd.hasFlag(RenderFlag::DbgForceUpdateAS) &&
         (!inst.blendshape_weights.empty() || !inst.bones.empty());
 
     uint32_t update_flags = inst_dxr.base->update_flags;
@@ -128,7 +136,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
     if (!force_update && !blendshape_updated && !bone_updated)
         return false; // no need to deform
 
-    bool clamp_blendshape_weights = (rd.render_flags & (int)RenderFlag::ClampBlendShapeWights) != 0;
+    bool clamp_blendshape_weights = rd.hasFlag(RenderFlag::ClampBlendShapeWights) != 0;
     int vertex_count = mesh.vertex_count;
     int blendshape_count = (int)inst.blendshape_weights.size();
     int bone_count = (int)inst.bones.size();
@@ -318,20 +326,42 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
         cl->SetDescriptorHeaps(_countof(heaps), heaps);
         cl->SetComputeRootDescriptorTable(0, hdst_vertices.hgpu);
         cl->Dispatch(mesh.vertex_count, 1, 1);
+
+        // immediate execute if ParallelCommandList is enabled
+        if (rd.hasFlag(RenderFlag::ParallelCommandList)) {
+            rd.cl_deform->Close();
+            ID3D12CommandList* cmd_list[] = { rd.cl_deform.GetInterfacePtr() };
+            getComputeQueue()->ExecuteCommandLists(_countof(cmd_list), cmd_list);
+            rd.cl_deform->Reset(rd.ca_deform, m_pipeline_state);
+        }
     }
 
     return true;
 }
 
-bool DeformerDXR::close(RenderDataDXR& rd)
+uint64_t DeformerDXR::flush(RenderDataDXR& rd)
 {
-    if (rd.cl_deform) {
-        rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform end");
-        if (SUCCEEDED(rd.cl_deform->Close())) {
-            return true;
-        }
+    if (!valid() || !rd.cl_deform)
+        return 0;
+
+    auto cq = getComputeQueue();
+#ifdef rthsEnableTimestamp
+    if (rd.hasFlag(RenderFlag::ParallelCommandList) && rd.timestamp->isEnabled()) {
+        // make sure all deform commands are finished before timestamp is set
+        auto fv = incrementFenceValue();
+        cq->Signal(getFence(), fv);
+        cq->Wait(getFence(), fv);
     }
-    return false;
+#endif
+    rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform end");
+    rd.cl_deform->Close();
+
+    ID3D12CommandList* cmd_list[] = { rd.cl_deform.GetInterfacePtr() };
+    cq->ExecuteCommandLists(_countof(cmd_list), cmd_list);
+
+    rd.fv_deform = incrementFenceValue();
+    cq->Signal(getFence(), rd.fv_deform);
+    return rd.fv_deform;
 }
 
 bool DeformerDXR::reset(RenderDataDXR & rd)
@@ -401,6 +431,19 @@ ID3D12ResourcePtr DeformerDXR::createBuffer(int size, const D3D12_HEAP_PROPERTIE
         SetErrorLog("CreateCommittedResource() failed\n");
     }
     return ret;
+}
+
+ID3D12CommandQueuePtr DeformerDXR::getComputeQueue()
+{
+    return GfxContextDXR::getInstance()->getComputeQueue();
+}
+ID3D12FencePtr DeformerDXR::getFence()
+{
+    return GfxContextDXR::getInstance()->getFence();
+}
+uint64_t DeformerDXR::incrementFenceValue()
+{
+    return GfxContextDXR::getInstance()->incrementFenceValue();
 }
 
 template<class Body>

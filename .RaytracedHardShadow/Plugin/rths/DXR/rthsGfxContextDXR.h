@@ -36,6 +36,8 @@ public:
     bool valid() const;
     bool checkError();
     ID3D12Device5Ptr getDevice();
+    ID3D12CommandQueuePtr getComputeQueue();
+    ID3D12FencePtr getFence();
 
     uint64_t incrementFenceValue();
     void setFenceValue(uint64_t v);

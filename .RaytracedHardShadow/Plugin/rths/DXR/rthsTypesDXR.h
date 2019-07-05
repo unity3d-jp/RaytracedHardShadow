@@ -206,6 +206,7 @@ public:
     TimestampDXR(ID3D12DevicePtr device, int max_sample = 64);
 
     bool valid() const;
+    bool isEnabled() const;
     void setEnabled(bool v);
     void reset();
     bool query(ID3D12GraphicsCommandList4Ptr cl, const char *message);
@@ -278,6 +279,8 @@ public:
 #ifdef rthsEnableTimestamp
     TimestampDXRPtr timestamp;
 #endif // rthsEnableTimestamp
+
+    bool hasFlag(RenderFlag f) const;
 };
 
 class CommandManagerDXR

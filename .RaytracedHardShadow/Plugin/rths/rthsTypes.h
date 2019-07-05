@@ -23,8 +23,11 @@ enum class RenderFlag : uint32_t
     CullBackFaces           = 0x00000001,
     IgnoreSelfShadow        = 0x00000002,
     KeepSelfDropShadow      = 0x00000004,
+    AdaptiveSampling        = 0x00000008,
+    Antialiasing            = 0x00000010,
     GPUSkinning             = 0x00000100,
     ClampBlendShapeWights   = 0x00000200,
+    ParallelCommandList     = 0x00000400,
     DbgTimestamp            = 0x01000000,
     DbgForceUpdateAS        = 0x02000000,
 };
@@ -42,9 +45,7 @@ enum class HitMask : uint8_t
     Receiver    = 0x01,
     Caster      = 0x02,
     Both        = Receiver | Caster,
-
     AllCaster   = 0xfe,
-    ALl         = 0xff,
 };
 
 enum class UpdateFlag : uint32_t

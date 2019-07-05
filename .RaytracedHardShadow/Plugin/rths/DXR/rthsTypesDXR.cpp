@@ -269,6 +269,11 @@ bool TimestampDXR::valid() const
     return m_query_heap && m_timestamp_buffer;
 }
 
+bool TimestampDXR::isEnabled() const
+{
+    return m_enabled;
+}
+
 void TimestampDXR::setEnabled(bool v)
 {
     m_enabled = v;
@@ -437,6 +442,11 @@ std::string ToString(ID3DBlob *blob)
     ret.resize(blob->GetBufferSize());
     memcpy(&ret[0], blob->GetBufferPointer(), blob->GetBufferSize());
     return ret;
+}
+
+bool RenderDataDXR::hasFlag(RenderFlag f) const
+{
+    return (render_flags & (uint32_t)f) != 0;
 }
 
 } // namespace rths

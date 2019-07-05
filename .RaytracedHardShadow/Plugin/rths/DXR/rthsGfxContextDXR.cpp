@@ -405,7 +405,7 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
 
     rthsTimestampInitialize(rd.timestamp, m_device);
     rthsTimestampReset(rd.timestamp);
-    rthsTimestampSetEnable(rd.timestamp, (rd.render_flags & (int)RenderFlag::DbgTimestamp) != 0);
+    rthsTimestampSetEnable(rd.timestamp, rd.hasFlag(RenderFlag::DbgTimestamp));
 
     // reset fence values
     rd.fv_deform = rd.fv_blas = rd.fv_tlas = rd.fv_rays = 0;
@@ -523,7 +523,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         return data;
     };
 
-    bool gpu_skinning = (rd.render_flags & (int)RenderFlag::GPUSkinning) != 0;
+    bool gpu_skinning = rd.hasFlag(RenderFlag::GPUSkinning);
     int deform_count = 0;
     if (gpu_skinning)
         m_deformer->prepare(rd);
@@ -609,23 +609,14 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         }
         rd.geometries.push_back({ inst_dxr, geom.receive_mask, geom.cast_mask });
     }
-
-    size_t geometry_count = rd.geometries.size();
-    if (gpu_skinning) {
-        m_deformer->close(rd);
-
-        ID3D12CommandList* cmd_list[] = { rd.cl_deform.GetInterfacePtr() };
-        m_cmd_queue_compute->ExecuteCommandLists(_countof(cmd_list), cmd_list);
-
-        rd.fv_deform = incrementFenceValue();
-        m_cmd_queue_compute->Signal(m_fence, rd.fv_deform);
-        setFenceValue(rd.fv_deform);
-    }
+    if (gpu_skinning)
+        m_deformer->flush(rd);
 
 
     // build BLAS
+    size_t geometry_count = rd.geometries.size();
     rthsTimestampQuery(rd.timestamp, rd.cl_blas, "Building BLAS begin");
-    bool force_update = (rd.render_flags & (int)RenderFlag::DbgForceUpdateAS) != 0;
+    bool force_update = rd.hasFlag(RenderFlag::DbgForceUpdateAS);
     int blas_update_count = 0;
     for (auto& geom_dxr : rd.geometries) {
         auto& inst_dxr = *geom_dxr.inst;
@@ -638,6 +629,16 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         // so, we need to make sure a BLAS is updated *once* in a frame, but TLAS in all renderers need to be updated if there is any updated object.
         // inst.update_flags indicates the object is updated, and is cleared immediately after processed.
         // inst_dxr.blas_updated keeps if blas is updated in the frame.
+
+        auto immediate_execute = [this, &rd]() {
+            if (rd.hasFlag(RenderFlag::ParallelCommandList)) {
+                rd.cl_blas->Close();
+                ID3D12CommandList* cmd_list[]{ rd.cl_blas.GetInterfacePtr() };
+                m_cmd_queue_direct->ExecuteCommandLists(_countof(cmd_list), cmd_list);
+                // note: d3d12 allows resetting currently executing command lists
+                rd.cl_blas->Reset(rd.ca_blas, nullptr);
+            }
+        };
 
         if (gpu_skinning && inst_dxr.deformed_vertices) {
             if (!inst_dxr.blas_deformed || inst.update_flags || force_update) {
@@ -689,6 +690,9 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 addResourceBarrier(rd.cl_blas, inst_dxr.deformed_vertices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 inst_dxr.is_updated = true;
                 ++blas_update_count;
+
+                // immediate execute if ParallelCommandList is enabled
+                immediate_execute();
             }
         }
         else {
@@ -731,6 +735,9 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 rd.cl_blas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
                 inst_dxr.is_updated = true;
                 ++blas_update_count;
+
+                // immediate execute if ParallelCommandList is enabled
+                immediate_execute();
             }
             else if (inst.update_flags) {
                 // transform was updated. so TLAS needs to be updated.
@@ -741,6 +748,15 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             needs_build_tlas = true;
         inst.update_flags = 0;
     }
+
+#ifdef rthsEnableTimestamp
+    if (rd.hasFlag(RenderFlag::ParallelCommandList) && rd.timestamp->isEnabled()) {
+        // make sure all building BLAS commands are finished before timestamp is set
+        auto fv = incrementFenceValue();
+        m_cmd_queue_direct->Signal(getFence(), fv);
+        m_cmd_queue_direct->Wait(getFence(), fv);
+    }
+#endif
     rthsTimestampQuery(rd.timestamp, rd.cl_blas, "Building BLAS end");
     rd.fv_blas = submitCommandList(rd.cl_blas, rd.ca_blas, rd.fv_deform);
 
@@ -1128,6 +1144,8 @@ bool GfxContextDXR::checkError()
 }
 
 ID3D12Device5Ptr GfxContextDXR::getDevice() { return m_device; }
+ID3D12CommandQueuePtr GfxContextDXR::getComputeQueue() { return m_cmd_queue_compute; }
+ID3D12FencePtr GfxContextDXR::getFence() { return m_fence; }
 
 uint64_t GfxContextDXR::incrementFenceValue()
 {
