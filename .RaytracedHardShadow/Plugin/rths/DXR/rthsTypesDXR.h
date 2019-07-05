@@ -95,6 +95,8 @@ class FenceEventDXR
 {
 public:
     FenceEventDXR();
+    FenceEventDXR(const FenceEventDXR& v);
+    FenceEventDXR& operator=(const FenceEventDXR& v);
     ~FenceEventDXR();
     operator HANDLE() const;
 
@@ -161,6 +163,7 @@ public:
 
     int getVertexStride() const;
     int getIndexStride() const;
+    void clearBLAS();
 };
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
 
@@ -177,6 +180,8 @@ public:
     ID3D12ResourcePtr blas_deformed;
     ID3D12ResourcePtr blas_scratch;
     bool is_updated = false;
+
+    void clearBLAS();
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 
@@ -189,6 +194,7 @@ public:
 
     bool operator==(const GeometryDataDXR& v) const;
     bool operator!=(const GeometryDataDXR& v) const;
+    void clearBLAS();
 };
 
 class RenderTargetDataDXR
@@ -252,7 +258,8 @@ using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
 class CommandListManagerDXR
 {
 public:
-    CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state = nullptr);
+    CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, const wchar_t *name);
+    CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state, const wchar_t *name);
     ID3D12GraphicsCommandList4Ptr get();
     void reset();
 
@@ -275,6 +282,7 @@ private:
     ID3D12PipelineStatePtr m_state;
     std::vector<CommandPtr> m_available, m_in_use;
     std::vector<ID3D12CommandList*> m_raw;
+    std::wstring m_name;
 };
 using CommandListManagerDXRPtr = std::shared_ptr<CommandListManagerDXR>;
 
@@ -310,6 +318,7 @@ public:
 #endif // rthsEnableTimestamp
 
     bool hasFlag(RenderFlag f) const;
+    void clear();
 };
 
 

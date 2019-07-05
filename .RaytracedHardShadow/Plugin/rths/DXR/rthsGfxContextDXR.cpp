@@ -350,15 +350,14 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
 {
     // initialize command lists
     if (!rd.clm_blas) {
-        rd.clm_blas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-        rd.clm_tlas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-        rd.clm_rays = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-        rd.clm_immediate_copy= std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY);
+        rd.clm_blas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"BLAS");
+        rd.clm_tlas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"TLAS");
+        rd.clm_rays = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"Rays");
+        rd.clm_immediate_copy= std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy");
     }
     rd.cl_blas = rd.clm_blas->get();
     rd.cl_tlas = rd.clm_tlas->get();
     rd.cl_rays = rd.clm_rays->get();
-    rd.cl_immediate_copy = rd.clm_immediate_copy->get();
 
     // initialize desc heap
     if (!rd.desc_heap) {
@@ -512,10 +511,15 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         return data;
     };
 
+    if (rd.hasFlag(RenderFlag::DbgForceUpdateAS)) {
+        // mark updated to force update BLAS
+        for (auto& geom : geoms)
+            geom.markUpdated();
+    }
+
     bool gpu_skinning = rd.hasFlag(RenderFlag::GPUSkinning);
     int deform_count = 0;
-    if (gpu_skinning)
-        m_deformer->prepare(rd);
+    m_deformer->prepare(rd);
     rd.geometries.clear();
 
     bool needs_build_tlas = false;
@@ -598,14 +602,12 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         }
         rd.geometries.push_back({ inst_dxr, geom.receive_mask, geom.cast_mask });
     }
-    if (gpu_skinning)
-        m_deformer->flush(rd);
+    m_deformer->flush(rd);
 
 
     // build BLAS
     size_t geometry_count = rd.geometries.size();
     rthsTimestampQuery(rd.timestamp, rd.cl_blas, "Building BLAS begin");
-    bool force_update = rd.hasFlag(RenderFlag::DbgForceUpdateAS);
     int blas_update_count = 0;
     for (auto& geom_dxr : rd.geometries) {
         auto& inst_dxr = *geom_dxr.inst;
@@ -627,7 +629,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         };
 
         if (gpu_skinning && inst_dxr.deformed_vertices) {
-            if (!inst_dxr.blas_deformed || inst.update_flags || force_update) {
+            if (!inst_dxr.blas_deformed || inst.isUpdated(UpdateFlag::Any)) {
                 // BLAS for deformable meshes
 
                 bool perform_update = inst_dxr.blas_deformed != nullptr;
@@ -682,7 +684,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             }
         }
         else {
-            if (!mesh_dxr.blas || force_update) {
+            if (!mesh_dxr.blas) {
                 // BLAS for static meshes
 
                 D3D12_RAYTRACING_GEOMETRY_DESC geom_desc{};
@@ -705,7 +707,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
                 inputs.pGeometryDescs = &geom_desc;
 
-                if (!mesh_dxr.blas) {
+                {
                     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
                     m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
 
@@ -725,14 +727,14 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 // queue command list if ParallelCommandList is enabled
                 queue_command();
             }
-            else if (inst.update_flags) {
+            else if (inst.isUpdated(UpdateFlag::Transform)) {
                 // transform was updated. so TLAS needs to be updated.
                 inst_dxr.is_updated = true;
             }
         }
         if (inst_dxr.is_updated)
             needs_build_tlas = true;
-        inst.update_flags = 0; // prevent other renderers to unnecessary BLAS build
+        inst.update_flags = 0; // prevent other renderers to build BLAS again
     }
 
 #ifdef rthsEnableTimestamp
@@ -1067,6 +1069,15 @@ bool GfxContextDXR::readbackRenderTarget(RenderDataDXR& rd, void *dst)
     return readbackTexture(rd, dst, rtex->resource, desc.Width, desc.Height, desc.Format);
 }
 
+void GfxContextDXR::clearResourceCache()
+{
+    m_texture_records.clear();
+    m_buffer_records.clear();
+    m_mesh_records.clear();
+    m_meshinstance_records.clear();
+    m_rendertarget_records.clear();
+}
+
 void GfxContextDXR::onMeshDelete(MeshData *mesh)
 {
     m_mesh_records.erase(mesh);
@@ -1225,6 +1236,7 @@ uint64_t GfxContextDXR::submitCommandList(ID3D12CommandList *const*cls, size_t n
 
 bool GfxContextDXR::readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t size)
 {
+    rd.cl_immediate_copy = rd.clm_immediate_copy->get();
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
     rd.cl_immediate_copy->CopyBufferRegion(readback_buf, 0, src, 0, size);
     executeImmediateCopy(rd);
@@ -1247,6 +1259,7 @@ bool GfxContextDXR::uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const v
         memcpy(mapped, src, size);
         upload_buf->Unmap(0, nullptr);
 
+        rd.cl_immediate_copy = rd.clm_immediate_copy->get();
         rd.cl_immediate_copy->CopyBufferRegion(dst, 0, upload_buf, 0, size);
         executeImmediateCopy(rd);
         return true;
@@ -1277,6 +1290,7 @@ bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource
     src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     src_loc.SubresourceIndex = 0;
 
+    rd.cl_immediate_copy = rd.clm_immediate_copy->get();
     rd.cl_immediate_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
     executeImmediateCopy(rd);
 
@@ -1318,6 +1332,7 @@ bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const 
         src_loc.PlacedFootprint.Footprint.Depth = 1;
         src_loc.PlacedFootprint.Footprint.RowPitch = (UINT)(width * stride);
 
+        rd.cl_immediate_copy = rd.clm_immediate_copy->get();
         rd.cl_immediate_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
         executeImmediateCopy(rd);
         return true;
@@ -1336,7 +1351,7 @@ void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd)
     m_fence->SetEventOnCompletion(fence_value, rd.fence_event);
     ::WaitForSingleObject(rd.fence_event, INFINITE);
 
-    rd.cl_immediate_copy = rd.clm_immediate_copy->get();
+    rd.cl_immediate_copy = nullptr;
 }
 
 

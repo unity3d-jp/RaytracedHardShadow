@@ -15,6 +15,8 @@ public:
     bool valid() const override;
     void render() override; // called from render thread
     void finish() override; // called from render thread
+    void frameBegin() override; // called from render thread
+    void frameEnd() override; // called from render thread
 
     bool readbackRenderTarget(void *dst) override;
     const char* getTimestampLog() override;
@@ -64,6 +66,22 @@ void RendererDXR::finish()
     auto ctx = GfxContextDXR::getInstance();
     ctx->finish(m_render_data);
     clearMeshInstances();
+}
+
+void RendererDXR::frameBegin()
+{
+    if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
+        //auto ctx = GfxContextDXR::getInstance();
+        //ctx->clearResourceCache();
+        //m_render_data.clear();
+
+        for (auto& geom : m_render_data.geometries_prev)
+            geom.clearBLAS();
+    }
+}
+
+void RendererDXR::frameEnd()
+{
 }
 
 bool RendererDXR::readbackRenderTarget(void *dst)

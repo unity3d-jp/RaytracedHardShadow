@@ -108,7 +108,7 @@ bool DeformerDXR::prepare(RenderDataDXR& rd)
         return false;
 
     if (!rd.clm_deform) {
-        rd.clm_deform = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_pipeline_state);
+        rd.clm_deform = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_pipeline_state, L"Deform");
     }
     rd.cl_deform = rd.clm_deform->get();
 
@@ -125,13 +125,9 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
     auto& mesh = *inst_dxr.mesh->base;
     auto& mesh_dxr = *inst_dxr.mesh;
 
-    bool force_update = rd.hasFlag(RenderFlag::DbgForceUpdateAS) &&
-        (!inst.blendshape_weights.empty() || !inst.bones.empty());
-
-    uint32_t update_flags = inst_dxr.base->update_flags;
-    bool blendshape_updated = update_flags & (int)UpdateFlag::Blendshape;
-    bool bone_updated = update_flags & (int)UpdateFlag::Bone;
-    if (!force_update && !blendshape_updated && !bone_updated)
+    bool blendshape_updated = inst_dxr.base->isUpdated(UpdateFlag::Blendshape);
+    bool bone_updated = inst_dxr.base->isUpdated(UpdateFlag::Bones);
+    if (!blendshape_updated && !bone_updated)
         return false; // no need to deform
 
     bool clamp_blendshape_weights = rd.hasFlag(RenderFlag::ClampBlendShapeWights) != 0;

@@ -27,6 +27,7 @@ public:
     void frameEnd() override;
 
     bool readbackRenderTarget(RenderDataDXR& rd, void *dst);
+    void clearResourceCache();
 
     void onMeshDelete(MeshData *mesh) override;
     void onMeshInstanceDelete(MeshInstanceData *inst) override;

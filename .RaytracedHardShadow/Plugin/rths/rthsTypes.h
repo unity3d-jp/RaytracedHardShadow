@@ -53,7 +53,9 @@ enum class UpdateFlag : uint32_t
     None = 0,
     Transform = 1,
     Blendshape = 2,
-    Bone = 4,
+    Bones = 4,
+
+    Any = Transform | Blendshape | Bones,
 };
 
 enum class RenderTargetFormat : uint32_t
@@ -191,6 +193,12 @@ public:
     MeshInstanceData();
     ~MeshInstanceData();
     bool valid() const;
+    bool isUpdated(UpdateFlag v) const;
+    void markUpdated(UpdateFlag v);
+    void markUpdated(); // for debug
+    void setTransform(const float4x4& v);
+    void setBones(const float4x4 *v, size_t n);
+    void setBlendshapeWeights(const float *v, size_t n);
 };
 using MeshInstanceDataPtr = ref_ptr<MeshInstanceData>;
 
@@ -206,6 +214,7 @@ public:
     uint8_t cast_mask;
 
     bool valid() const;
+    void markUpdated(); // for debug
 };
 
 

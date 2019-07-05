@@ -188,10 +188,14 @@ void MarkFrameBegin()
 {
     for (auto *cb : g_scene_callbacks)
         cb->frameBegin();
+    for (auto renderer : g_renderers)
+        renderer->frameBegin();
 }
 
 void MarkFrameEnd()
 {
+    for (auto renderer : g_renderers)
+        renderer->frameEnd();
     for (auto& cb : g_scene_callbacks)
         cb->frameEnd();
 }

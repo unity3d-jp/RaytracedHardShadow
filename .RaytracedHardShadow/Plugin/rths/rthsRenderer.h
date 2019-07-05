@@ -38,6 +38,8 @@ public:
     virtual void addReversePointLight(const float3& pos, float range) = 0;
     virtual void addGeometry(GeometryData geom) = 0;
 
+    virtual void frameBegin() = 0; // called from render thread
+    virtual void frameEnd() = 0; // called from render thread
     virtual void render() = 0; // called from render thread
     virtual void finish() = 0; // called from render thread
 

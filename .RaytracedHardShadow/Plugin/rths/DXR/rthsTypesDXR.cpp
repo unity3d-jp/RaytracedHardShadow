@@ -33,6 +33,17 @@ FenceEventDXR::FenceEventDXR()
     m_handle = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
 }
 
+FenceEventDXR::FenceEventDXR(const FenceEventDXR &v)
+{
+    *this = v;
+}
+
+FenceEventDXR& FenceEventDXR::operator=(const FenceEventDXR &v)
+{
+    ::DuplicateHandle(::GetCurrentProcess(), v.m_handle, ::GetCurrentProcess(), &m_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+    return *this;
+}
+
 FenceEventDXR::~FenceEventDXR()
 {
     ::CloseHandle(m_handle);
@@ -59,6 +70,12 @@ int MeshDataDXR::getIndexStride() const
         return base->index_stride;
 }
 
+void MeshDataDXR::clearBLAS()
+{
+    blas = nullptr;
+    blas_scratch = nullptr;
+}
+
 
 DescriptorHandleDXR::operator bool() const
 {
@@ -83,6 +100,15 @@ DescriptorHandleDXR DescriptorHeapAllocatorDXR::allocate()
 }
 
 
+void MeshInstanceDataDXR::clearBLAS()
+{
+    blas_scratch = nullptr;
+    blas_deformed = nullptr;
+    if (mesh)
+        mesh->clearBLAS();
+}
+
+
 bool GeometryDataDXR::operator==(const GeometryDataDXR& v) const
 {
     return inst == v.inst && receive_mask == v.receive_mask && cast_mask == v.cast_mask;
@@ -91,6 +117,12 @@ bool GeometryDataDXR::operator==(const GeometryDataDXR& v) const
 bool GeometryDataDXR::operator!=(const GeometryDataDXR& v) const
 {
     return !(*this == v);
+}
+
+void GeometryDataDXR::clearBLAS()
+{
+    if (inst)
+        inst->clearBLAS();
 }
 
 
@@ -107,10 +139,16 @@ void CommandListManagerDXR::Record::reset(ID3D12PipelineStatePtr state)
     list->Reset(allocator, state);
 }
 
-CommandListManagerDXR::CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state)
+CommandListManagerDXR::CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, const wchar_t *name)
+    : CommandListManagerDXR(device, type, nullptr, name)
+{
+}
+
+CommandListManagerDXR::CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state, const wchar_t *name)
     : m_device(device)
     , m_type(type)
     , m_state(state)
+    , m_name(name)
 {
 }
 
@@ -126,6 +164,8 @@ ID3D12GraphicsCommandList4Ptr CommandListManagerDXR::get()
     else
     {
         auto c = std::make_shared<Record>(m_device, m_type, m_state);
+        c->allocator->SetName(m_name.c_str());
+        c->list->SetName(m_name.c_str());
         m_in_use.push_back(c);
         ret = c->list;
     }
@@ -362,6 +402,11 @@ std::string ToString(ID3DBlob *blob)
 bool RenderDataDXR::hasFlag(RenderFlag f) const
 {
     return (render_flags & (uint32_t)f) != 0;
+}
+
+void RenderDataDXR::clear()
+{
+    *this = RenderDataDXR();
 }
 
 } // namespace rths

@@ -71,8 +71,8 @@ struct float4x4
 
     float4& operator[](size_t i) { return v[i]; }
     const float4& operator[](size_t i) const { return v[i]; }
-    bool operator==(float4x4& v) const { return std::memcmp(this, &v, sizeof(*this)) == 0; }
-    bool operator!=(float4x4& v) const { return !(*this == v); }
+    bool operator==(const float4x4& v) const { return std::memcmp(this, &v, sizeof(*this)) == 0; }
+    bool operator!=(const float4x4& v) const { return !(*this == v); }
 
     static float4x4 identity()
     {
