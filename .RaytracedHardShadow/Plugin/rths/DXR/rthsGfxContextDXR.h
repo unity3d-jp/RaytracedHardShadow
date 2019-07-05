@@ -45,8 +45,10 @@ public:
     ID3D12ResourcePtr createBuffer(uint64_t size, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state, const D3D12_HEAP_PROPERTIES& heap_props);
     ID3D12ResourcePtr createTexture(int width, int height, DXGI_FORMAT format);
 
-    void addResourceBarrier(ID3D12GraphicsCommandList4Ptr cl, ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
-    uint64_t submitCommandList(ID3D12GraphicsCommandList4Ptr cl, ID3D12CommandAllocatorPtr ca, uint64_t preceding_fv = 0, bool emit_signal = true);
+    void addResourceBarrier(ID3D12GraphicsCommandList *cl, ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after);
+    uint64_t submitCommandList(ID3D12GraphicsCommandList *cl, uint64_t preceding_fv = 0, bool emit_signal = true);
+    uint64_t submitCommandList(const std::vector<ID3D12CommandList*>& cl, uint64_t preceding_fv = 0, bool emit_signal = true);
+    uint64_t submitCommandList(ID3D12CommandList *const*cl, size_t n, uint64_t preceding_fv = 0, bool emit_signal = true);
 
     bool readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t size);
     bool uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t size);

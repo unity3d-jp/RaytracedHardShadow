@@ -107,12 +107,10 @@ bool DeformerDXR::prepare(RenderDataDXR& rd)
     if (!valid())
         return false;
 
-    if (!rd.cl_deform) {
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&rd.ca_deform));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, rd.ca_deform, m_pipeline_state, IID_PPV_ARGS(&rd.cl_deform));
-        DbgSetName(rd.ca_deform, L"CA Deform");
-        DbgSetName(rd.cl_deform, L"CL Deform");
+    if (!rd.clm_deform) {
+        rd.clm_deform = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_pipeline_state);
     }
+    rd.cl_deform = rd.clm_deform->get();
 
     rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform begin");
     return true;
@@ -327,12 +325,9 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
         cl->SetComputeRootDescriptorTable(0, hdst_vertices.hgpu);
         cl->Dispatch(mesh.vertex_count, 1, 1);
 
-        // immediate execute if ParallelCommandList is enabled
         if (rd.hasFlag(RenderFlag::ParallelCommandList)) {
             rd.cl_deform->Close();
-            ID3D12CommandList* cmd_list[] = { rd.cl_deform.GetInterfacePtr() };
-            getComputeQueue()->ExecuteCommandLists(_countof(cmd_list), cmd_list);
-            rd.cl_deform->Reset(rd.ca_deform, m_pipeline_state);
+            rd.cl_deform = rd.clm_deform->get();
         }
     }
 
@@ -356,8 +351,8 @@ uint64_t DeformerDXR::flush(RenderDataDXR& rd)
     rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform end");
     rd.cl_deform->Close();
 
-    ID3D12CommandList* cmd_list[] = { rd.cl_deform.GetInterfacePtr() };
-    cq->ExecuteCommandLists(_countof(cmd_list), cmd_list);
+    auto& cls = rd.clm_deform->getCommandLists();
+    cq->ExecuteCommandLists((UINT)cls.size(), cls.data());
 
     rd.fv_deform = incrementFenceValue();
     cq->Signal(getFence(), rd.fv_deform);
@@ -366,9 +361,8 @@ uint64_t DeformerDXR::flush(RenderDataDXR& rd)
 
 bool DeformerDXR::reset(RenderDataDXR & rd)
 {
-    if (rd.ca_deform && rd.cl_deform) {
-        rd.ca_deform->Reset();
-        rd.cl_deform->Reset(rd.ca_deform, m_pipeline_state);
+    if (rd.clm_deform) {
+        rd.clm_deform->reset();
         return true;
     }
     return false;

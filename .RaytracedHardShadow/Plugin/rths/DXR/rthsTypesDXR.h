@@ -249,10 +249,39 @@ using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
     #define DbgSetName(...)
 #endif
 
+class CommandListManagerDXR
+{
+public:
+    CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state = nullptr);
+    ID3D12GraphicsCommandList4Ptr get();
+    void reset();
+
+    // command lists to pass ExecuteCommandLists()
+    const std::vector<ID3D12CommandList*>& getCommandLists() const;
+
+private:
+    struct Record
+    {
+        Record(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state);
+        void reset(ID3D12PipelineStatePtr state);
+
+        ID3D12CommandAllocatorPtr allocator;
+        ID3D12GraphicsCommandList4Ptr list;
+    };
+    using CommandPtr = std::shared_ptr<Record>;
+
+    ID3D12DevicePtr m_device;
+    D3D12_COMMAND_LIST_TYPE m_type;
+    ID3D12PipelineStatePtr m_state;
+    std::vector<CommandPtr> m_available, m_in_use;
+    std::vector<ID3D12CommandList*> m_raw;
+};
+using CommandListManagerDXRPtr = std::shared_ptr<CommandListManagerDXR>;
+
 class RenderDataDXR
 {
 public:
-    ID3D12CommandAllocatorPtr ca_deform, ca_blas, ca_tlas, ca_rays, ca_immediate_copy;
+    CommandListManagerDXRPtr clm_deform, clm_blas, clm_tlas, clm_rays, clm_immediate_copy;
     ID3D12GraphicsCommandList4Ptr cl_deform, cl_blas, cl_tlas, cl_rays, cl_immediate_copy;
 
     ID3D12DescriptorHeapPtr desc_heap;
@@ -281,34 +310,6 @@ public:
 #endif // rthsEnableTimestamp
 
     bool hasFlag(RenderFlag f) const;
-};
-
-class CommandManagerDXR
-{
-public:
-    CommandManagerDXR(ID3D12DevicePtr device, ID3D12FencePtr fence);
-    ID3D12CommandAllocatorPtr getAllocator(D3D12_COMMAND_LIST_TYPE type);
-    ID3D12CommandQueuePtr getQueue(D3D12_COMMAND_LIST_TYPE type);
-    ID3D12GraphicsCommandList4Ptr allocCommandList(D3D12_COMMAND_LIST_TYPE type);
-    void releaseCommandList(ID3D12GraphicsCommandList4Ptr cl);
-    uint64_t submit(ID3D12GraphicsCommandList4Ptr cl, ID3D12GraphicsCommandList4Ptr prev = nullptr, ID3D12GraphicsCommandList4Ptr next = nullptr);
-    void wait(uint64_t fence_value);
-
-    void resetQueues();
-    void reset(ID3D12GraphicsCommandList4Ptr cl, ID3D12PipelineStatePtr state = nullptr);
-
-    void setFenceValue(uint64_t v);
-    uint64_t inclementFenceValue();
-
-private:
-    ID3D12DevicePtr m_device;
-    ID3D12FencePtr m_fence;
-
-    ID3D12CommandAllocatorPtr m_allocator_copy, m_allocator_direct, m_allocator_compute;
-    ID3D12CommandQueuePtr m_queue_copy, m_queue_direct, m_queue_compute;
-    std::vector<ID3D12GraphicsCommandList4Ptr> m_list_copy_pool, m_list_direct_pool, m_list_compute_pool;
-    uint64_t m_fence_value = 0;
-    FenceEventDXR m_fence_event;
 };
 
 

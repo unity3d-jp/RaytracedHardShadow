@@ -95,143 +95,58 @@ bool GeometryDataDXR::operator!=(const GeometryDataDXR& v) const
 
 
 
-CommandManagerDXR::CommandManagerDXR(ID3D12DevicePtr device, ID3D12FencePtr fence)
+CommandListManagerDXR::Record::Record(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state)
+{
+    device->CreateCommandAllocator(type, IID_PPV_ARGS(&allocator));
+    device->CreateCommandList(0, type, allocator, state, IID_PPV_ARGS(&list));
+}
+
+void CommandListManagerDXR::Record::reset(ID3D12PipelineStatePtr state)
+{
+    allocator->Reset();
+    list->Reset(allocator, state);
+}
+
+CommandListManagerDXR::CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state)
     : m_device(device)
-    , m_fence(fence)
+    , m_type(type)
+    , m_state(state)
 {
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
-        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_queue_copy));
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&m_allocator_copy));
-    }
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_queue_direct));
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_allocator_direct));
-    }
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_queue_compute));
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&m_allocator_compute));
-    }
 }
 
-ID3D12CommandAllocatorPtr CommandManagerDXR::getAllocator(D3D12_COMMAND_LIST_TYPE type)
-{
-    switch (type) {
-    case D3D12_COMMAND_LIST_TYPE_DIRECT:
-        return m_allocator_direct;
-    case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-        return m_allocator_compute;
-    case D3D12_COMMAND_LIST_TYPE_COPY:
-        return m_allocator_copy;
-    default:
-        return nullptr;
-    }
-}
-
-ID3D12CommandQueuePtr CommandManagerDXR::getQueue(D3D12_COMMAND_LIST_TYPE type)
-{
-    switch (type) {
-    case D3D12_COMMAND_LIST_TYPE_DIRECT:
-        return m_queue_direct;
-    case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-        return m_queue_compute;
-    case D3D12_COMMAND_LIST_TYPE_COPY:
-        return m_queue_copy;
-    default:
-        return nullptr;
-    }
-}
-
-ID3D12GraphicsCommandList4Ptr CommandManagerDXR::allocCommandList(D3D12_COMMAND_LIST_TYPE type)
+ID3D12GraphicsCommandList4Ptr CommandListManagerDXR::get()
 {
     ID3D12GraphicsCommandList4Ptr ret;
-    m_device->CreateCommandList(0, type, getAllocator(type), nullptr, IID_PPV_ARGS(&ret));
+    if (!m_available.empty()) {
+        auto c = m_available.back();
+        m_in_use.push_back(c);
+        m_available.pop_back();
+        ret = c->list;
+    }
+    else
+    {
+        auto c = std::make_shared<Record>(m_device, m_type, m_state);
+        m_in_use.push_back(c);
+        ret = c->list;
+    }
+    m_raw.push_back(ret);
     return ret;
 }
 
-void CommandManagerDXR::releaseCommandList(ID3D12GraphicsCommandList4Ptr cl)
+void CommandListManagerDXR::reset()
 {
-    auto type = cl->GetType();
-    switch (type) {
-    case D3D12_COMMAND_LIST_TYPE_DIRECT:
-        m_list_direct_pool.push_back(cl);
-        break;
-    case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-        m_list_compute_pool.push_back(cl);
-        break;
-    case D3D12_COMMAND_LIST_TYPE_COPY:
-        m_list_copy_pool.push_back(cl);
-        break;
-    default:
-        break;
-    }
+    for(auto& p : m_in_use)
+        p->reset(m_state);
+    m_available.insert(m_available.end(), m_in_use.begin(), m_in_use.end());
+    m_in_use.clear();
+    m_raw.clear();
 }
 
-uint64_t CommandManagerDXR::submit(ID3D12GraphicsCommandList4Ptr cl, ID3D12GraphicsCommandList4Ptr prev, ID3D12GraphicsCommandList4Ptr next)
+const std::vector<ID3D12CommandList*>& CommandListManagerDXR::getCommandLists() const
 {
-    uint64_t fence_value = m_fence_value;
-    auto type = cl->GetType();
-    auto queue = getQueue(type);
-
-    if (prev) {
-        auto type_prev = prev->GetType();
-        auto queue_prev = getQueue(type_prev);
-        queue_prev->Signal(m_fence, fence_value);
-        queue->Wait(m_fence, fence_value);
-        ++fence_value;
-    }
-    {
-        cl->Close();
-        ID3D12CommandList* cmd_list[]{ cl.GetInterfacePtr() };
-        queue->ExecuteCommandLists(_countof(cmd_list), cmd_list);
-    }
-    if (next) {
-        auto type_next = next->GetType();
-        auto queue_next = getQueue(type_next);
-
-        queue->Signal(m_fence, fence_value);
-        queue_next->Wait(m_fence, fence_value);
-        ++fence_value;
-    }
-    m_fence_value = fence_value;
-    return fence_value;
+    return m_raw;
 }
 
-void CommandManagerDXR::resetQueues()
-{
-    m_allocator_copy->Reset();
-    m_allocator_direct->Reset();
-    m_allocator_compute->Reset();
-}
-
-void CommandManagerDXR::reset(ID3D12GraphicsCommandList4Ptr cl, ID3D12PipelineStatePtr state)
-{
-    cl->Reset(getAllocator(cl->GetType()), state);
-}
-
-void CommandManagerDXR::wait(uint64_t fence_value)
-{
-    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
-    ::WaitForSingleObject(m_fence_event, INFINITE);
-}
-
-void CommandManagerDXR::setFenceValue(uint64_t v)
-{
-    m_fence_value = v;
-}
-
-uint64_t CommandManagerDXR::inclementFenceValue()
-{
-    return ++m_fence_value;
-}
 
 
 TimestampDXR::TimestampDXR(ID3D12DevicePtr device, int max_sample)

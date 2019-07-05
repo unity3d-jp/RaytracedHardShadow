@@ -349,27 +349,16 @@ void GfxContextDXR::frameBegin()
 void GfxContextDXR::prepare(RenderDataDXR& rd)
 {
     // initialize command lists
-    if (!rd.ca_blas) {
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&rd.ca_blas));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, rd.ca_blas, nullptr, IID_PPV_ARGS(&rd.cl_blas));
-        DbgSetName(rd.ca_blas, L"CA BLAS");
-        DbgSetName(rd.cl_blas, L"CL BLAS");
-
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&rd.ca_tlas));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, rd.ca_tlas, nullptr, IID_PPV_ARGS(&rd.cl_tlas));
-        DbgSetName(rd.ca_tlas, L"CA TLAS");
-        DbgSetName(rd.cl_tlas, L"CL TLAS");
-
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&rd.ca_rays));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, rd.ca_rays, nullptr, IID_PPV_ARGS(&rd.cl_rays));
-        DbgSetName(rd.ca_rays, L"CA Rays");
-        DbgSetName(rd.cl_rays, L"CL Rays");
-
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&rd.ca_immediate_copy));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, rd.ca_immediate_copy, nullptr, IID_PPV_ARGS(&rd.cl_immediate_copy));
-        DbgSetName(rd.ca_immediate_copy, L"CA Immediate Copy");
-        DbgSetName(rd.cl_immediate_copy, L"CL Immediate Copy");
+    if (!rd.clm_blas) {
+        rd.clm_blas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+        rd.clm_tlas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+        rd.clm_rays = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+        rd.clm_immediate_copy= std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY);
     }
+    rd.cl_blas = rd.clm_blas->get();
+    rd.cl_tlas = rd.clm_tlas->get();
+    rd.cl_rays = rd.clm_rays->get();
+    rd.cl_immediate_copy = rd.clm_immediate_copy->get();
 
     // initialize desc heap
     if (!rd.desc_heap) {
@@ -630,13 +619,10 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         // inst.update_flags indicates the object is updated, and is cleared immediately after processed.
         // inst_dxr.blas_updated keeps if blas is updated in the frame.
 
-        auto immediate_execute = [this, &rd]() {
+        auto queue_command = [this, &rd]() {
             if (rd.hasFlag(RenderFlag::ParallelCommandList)) {
                 rd.cl_blas->Close();
-                ID3D12CommandList* cmd_list[]{ rd.cl_blas.GetInterfacePtr() };
-                m_cmd_queue_direct->ExecuteCommandLists(_countof(cmd_list), cmd_list);
-                // note: d3d12 allows resetting currently executing command lists
-                rd.cl_blas->Reset(rd.ca_blas, nullptr);
+                rd.cl_blas = rd.clm_blas->get();
             }
         };
 
@@ -691,8 +677,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 inst_dxr.is_updated = true;
                 ++blas_update_count;
 
-                // immediate execute if ParallelCommandList is enabled
-                immediate_execute();
+                // queue command list if ParallelCommandList is enabled
+                queue_command();
             }
         }
         else {
@@ -736,8 +722,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 inst_dxr.is_updated = true;
                 ++blas_update_count;
 
-                // immediate execute if ParallelCommandList is enabled
-                immediate_execute();
+                // queue command list if ParallelCommandList is enabled
+                queue_command();
             }
             else if (inst.update_flags) {
                 // transform was updated. so TLAS needs to be updated.
@@ -746,7 +732,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         }
         if (inst_dxr.is_updated)
             needs_build_tlas = true;
-        inst.update_flags = 0;
+        inst.update_flags = 0; // prevent other renderers to unnecessary BLAS build
     }
 
 #ifdef rthsEnableTimestamp
@@ -758,7 +744,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     }
 #endif
     rthsTimestampQuery(rd.timestamp, rd.cl_blas, "Building BLAS end");
-    rd.fv_blas = submitCommandList(rd.cl_blas, rd.ca_blas, rd.fv_deform);
+    rd.cl_blas->Close();
+    rd.fv_blas = submitCommandList(rd.clm_blas->getCommandLists(), rd.fv_deform);
 
     if (!needs_build_tlas) {
         // if there are no BLAS updates, check geometry list is the same as last render.
@@ -865,7 +852,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         }
     }
     rthsTimestampQuery(rd.timestamp, rd.cl_tlas, "Building TLAS end");
-    rd.fv_tlas = submitCommandList(rd.cl_tlas, rd.ca_tlas, rd.fv_blas);
+    rd.cl_tlas->Close();
+    rd.fv_tlas = submitCommandList(rd.clm_tlas->getCommandLists(), rd.fv_blas);
 
 
     // setup per-instance data
@@ -1003,7 +991,8 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     rthsTimestampQuery(rd.timestamp, rd.cl_rays, "DispatchRays end");
     rthsTimestampResolve(rd.timestamp, rd.cl_rays);
 
-    rd.fv_rays = submitCommandList(rd.cl_rays, rd.ca_rays, rd.fv_tlas);
+    rd.cl_rays->Close();
+    rd.fv_rays = submitCommandList(rd.clm_rays->getCommandLists(), rd.fv_tlas);
     if (rd.fv_rays && rd.render_target && m_resource_translator) {
         // copy render target to Unity side
         auto fv = m_resource_translator->syncTexture(*rtex, rd.fv_rays);
@@ -1040,15 +1029,10 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
     rthsTimestampUpdateLog(rd.timestamp, m_cmd_queue_direct);
 
     m_deformer->reset(rd);
-
-    rd.ca_blas->Reset();
-    rd.cl_blas->Reset(rd.ca_blas, nullptr);
-
-    rd.ca_tlas->Reset();
-    rd.cl_tlas->Reset(rd.ca_tlas, nullptr);
-
-    rd.ca_rays->Reset();
-    rd.cl_rays->Reset(rd.ca_rays, nullptr);
+    rd.clm_blas->reset();
+    rd.clm_tlas->reset();
+    rd.clm_rays->reset();
+    rd.clm_immediate_copy->reset();
 }
 
 void GfxContextDXR::frameEnd()
@@ -1199,7 +1183,7 @@ ID3D12ResourcePtr GfxContextDXR::createTexture(int width, int height, DXGI_FORMA
     return ret;
 }
 
-void GfxContextDXR::addResourceBarrier(ID3D12GraphicsCommandList4Ptr cl, ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
+void GfxContextDXR::addResourceBarrier(ID3D12GraphicsCommandList *cl, ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
 {
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -1210,14 +1194,23 @@ void GfxContextDXR::addResourceBarrier(ID3D12GraphicsCommandList4Ptr cl, ID3D12R
     cl->ResourceBarrier(1, &barrier);
 }
 
-uint64_t GfxContextDXR::submitCommandList(ID3D12GraphicsCommandList4Ptr cl, ID3D12CommandAllocatorPtr ca, uint64_t preceding_fv, bool emit_signal)
+uint64_t GfxContextDXR::submitCommandList(ID3D12GraphicsCommandList *cl, uint64_t preceding_fv, bool emit_signal)
+{
+    ID3D12CommandList* cmd_list[]{ cl };
+    return submitCommandList(cmd_list, 1, preceding_fv, emit_signal);
+}
+
+uint64_t GfxContextDXR::submitCommandList(const std::vector<ID3D12CommandList*>& cl, uint64_t preceding_fv, bool emit_signal)
+{
+    return submitCommandList(cl.data(), cl.size(), preceding_fv, emit_signal);
+}
+
+uint64_t GfxContextDXR::submitCommandList(ID3D12CommandList *const*cls, size_t n, uint64_t preceding_fv, bool emit_signal)
 {
     if (preceding_fv != 0)
         m_cmd_queue_direct->Wait(m_fence, preceding_fv);
 
-    cl->Close();
-    ID3D12CommandList* cmd_list[]{ cl.GetInterfacePtr() };
-    m_cmd_queue_direct->ExecuteCommandLists(_countof(cmd_list), cmd_list);
+    m_cmd_queue_direct->ExecuteCommandLists((UINT)n, cls);
 
     if (emit_signal) {
         auto fence_value = incrementFenceValue();
@@ -1334,11 +1327,8 @@ bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const 
 
 void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd)
 {
-    auto& cl = rd.cl_immediate_copy;
-    auto& ca = rd.ca_immediate_copy;
-
-    cl->Close();
-    ID3D12CommandList *cmd_list[]{ cl.GetInterfacePtr() };
+    rd.cl_immediate_copy->Close();
+    ID3D12CommandList *cmd_list[]{ rd.cl_immediate_copy.GetInterfacePtr() };
     m_cmd_queue_immediate_copy->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 
     auto fence_value = incrementFenceValue();
@@ -1346,8 +1336,7 @@ void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd)
     m_fence->SetEventOnCompletion(fence_value, rd.fence_event);
     ::WaitForSingleObject(rd.fence_event, INFINITE);
 
-    ca->Reset();
-    cl->Reset(ca, nullptr);
+    rd.cl_immediate_copy = rd.clm_immediate_copy->get();
 }
 
 
