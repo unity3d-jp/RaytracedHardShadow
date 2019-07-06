@@ -800,16 +800,23 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
             m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
 
-            // note: reusing existing buffer sometimes causes issues on my machine. so always create new buffers...
-            rd.tlas_scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
-            rd.tlas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+            // scratch buffer
+            ReuseOrExpandBuffer(rd.tlas_scratch, 1, info.ScratchDataSizeInBytes, 1024 * 64, [this, &rd](size_t size) {
+                return createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
+            });
 
-            // SRV
-            D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-            srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-            srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srv_desc.RaytracingAccelerationStructure.Location = rd.tlas->GetGPUVirtualAddress();
-            m_device->CreateShaderResourceView(nullptr, &srv_desc, rd.tlas_handle.hcpu);
+            // TLAS buffer
+            bool expanded = ReuseOrExpandBuffer(rd.tlas, 1, info.ResultDataMaxSizeInBytes, 1024 * 256, [this, &rd](size_t size) {
+                return createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+            });
+            if (expanded) {
+                // SRV
+                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+                srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+                srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                srv_desc.RaytracingAccelerationStructure.Location = rd.tlas->GetGPUVirtualAddress();
+                m_device->CreateShaderResourceView(nullptr, &srv_desc, rd.tlas_handle.hcpu);
+            }
 
             D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
             as_desc.DestAccelerationStructureData = rd.tlas->GetGPUVirtualAddress();
