@@ -16,14 +16,16 @@ public:
     static void finalizeInstance();
     static GfxContextDXR* getInstance();
 
-    bool initializeDevice();
+    bool initialize();
+    void clear();
+
     void frameBegin() override;
     void prepare(RenderDataDXR& rd);
     void setSceneData(RenderDataDXR& rd, SceneData& data);
     void setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt);
     void setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geometries);
     void flush(RenderDataDXR& rd);
-    void finish(RenderDataDXR& rd);
+    bool finish(RenderDataDXR& rd);
     void frameEnd() override;
 
     bool readbackRenderTarget(RenderDataDXR& rd, void *dst);

@@ -5,19 +5,6 @@
 
 namespace rths {
 
-struct CameraData
-{
-    float4x4 view;
-    float4x4 proj;
-    union {
-        float3 position;
-        float4 position4;
-    };
-    float near_plane;
-    float far_plane;
-    float2 pad1;
-};
-
 enum class RenderFlag : uint32_t
 {
     CullBackFaces           = 0x00000001,
@@ -72,6 +59,19 @@ enum class RenderTargetFormat : uint32_t
     RGBAf32,
 };
 
+struct CameraData
+{
+    float4x4 view;
+    float4x4 proj;
+    union {
+        float3 position;
+        float4 position4;
+    };
+    float near_plane;
+    float far_plane;
+    float2 pad1;
+};
+
 struct LightData
 {
     LightType light_type{};
@@ -83,21 +83,16 @@ struct LightData
     float spot_angle{}; // radian
 };
 
-
 #define kMaxLights 32
 
 struct SceneData
 {
-    CameraData camera;
-
     uint32_t render_flags; // combination of RenderFlag
     uint32_t light_count;
-    uint32_t pad1[2];
-
     float shadow_ray_offset;
     float self_shadow_threshold;
-    float pad2[2];
 
+    CameraData camera;
     LightData lights[kMaxLights];
 
     bool operator==(SceneData& v) const { return std::memcmp(this, &v, sizeof(*this)) == 0; }

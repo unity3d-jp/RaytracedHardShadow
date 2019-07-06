@@ -45,16 +45,12 @@ struct LightData
 
 struct SceneData
 {
-    CameraData camera;
-
     uint render_flags;
     uint light_count;
-    uint2 pad1;
-
     float shadow_ray_offset;
     float self_shadow_threshold;
-    float2 pad2;
 
+    CameraData camera;
     LightData lights[kMaxLights];
 };
 
@@ -104,6 +100,8 @@ void RayGen()
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
     uint2 screen_dim = DispatchRaysDimensions().xy;
+    //gOutput[screen_idx.xy] = 1.0f;
+    //return;
 
     float aspect_ratio = (float)screen_dim.x / (float)screen_dim.y;
     float2 screen_pos = ((float2(screen_idx) + 0.5f) / float2(screen_dim)) * 2.0f - 1.0f;

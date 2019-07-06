@@ -323,6 +323,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
         [DllImport("rths")] static extern IntPtr rthsRendererCreate();
         [DllImport("rths")] static extern void rthsRendererRelease(IntPtr self);
+        [DllImport("rths")] static extern byte rthsRendererIsValid(IntPtr self);
 
         [DllImport("rths")] static extern void rthsRendererBeginScene(IntPtr self);
         [DllImport("rths")] static extern void rthsRendererEndScene(IntPtr self);
@@ -353,6 +354,10 @@ namespace UTJ.RaytracedHardShadow
         public string timestampLog
         {
             get { return Misc.CString(rthsRendererGetTimestampLog(self)); }
+        }
+        public bool valid
+        {
+            get { return rthsRendererIsValid(self) != 0; }
         }
 
         public static rthsRenderer Create()

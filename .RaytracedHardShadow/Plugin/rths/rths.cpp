@@ -182,6 +182,13 @@ rthsAPI void rthsRendererRelease(IRenderer *self)
     delete self;
 }
 
+rthsAPI bool rthsRendererIsValid(rths::IRenderer *self)
+{
+    if (!self)
+        return false;
+    return self->valid();
+}
+
 rthsAPI void rthsRendererSetRenderTarget(IRenderer *self, RenderTargetData *render_target)
 {
     if (!self || !render_target)

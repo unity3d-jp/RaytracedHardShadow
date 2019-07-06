@@ -797,7 +797,7 @@ namespace UTJ.RaytracedHardShadow
             }
             else
             {
-                Debug.LogWarning("ShadowRaytracer: " + rthsRenderer.errorLog);
+                Debug.LogError("ShadowRaytracer: Initialization failed - " + rthsRenderer.errorLog);
                 this.enabled = false;
             }
         }
@@ -964,6 +964,13 @@ namespace UTJ.RaytracedHardShadow
             InitializeRenderer();
             if (!m_renderer)
                 return;
+            else if(!m_renderer.valid)
+            {
+                Debug.LogError("ShadowRaytracer: Error - " + rthsRenderer.errorLog);
+                m_renderer.Release();
+                this.enabled = false;
+                return;
+            }
 
             // first instance reset update count and clear cache
             if (s_updateCount != 0)

@@ -81,7 +81,7 @@ GfxContextDXR* GfxContextDXR::getInstance()
 
 GfxContextDXR::GfxContextDXR()
 {
-    if (!initializeDevice())
+    if (!initialize())
         return;
 }
 
@@ -89,7 +89,7 @@ GfxContextDXR::~GfxContextDXR()
 {
 }
 
-bool GfxContextDXR::initializeDevice()
+bool GfxContextDXR::initialize()
 {
     // check host d3d12 device
     if (g_host_d3d12_device) {
@@ -313,6 +313,24 @@ bool GfxContextDXR::initializeDevice()
     return true;
 }
 
+void GfxContextDXR::clear()
+{
+    clearResourceCache();
+
+    m_cmd_queue_direct = nullptr;
+    m_cmd_queue_compute = nullptr;
+    m_cmd_queue_immediate_copy = nullptr;
+
+    m_pipeline_state = nullptr;
+    m_rootsig = nullptr;
+    m_fence = nullptr;
+    m_fence_value = m_fv_last_rays = 0;
+
+    m_resource_translator = nullptr;
+    m_deformer = nullptr;
+    m_device = nullptr;
+}
+
 void GfxContextDXR::frameBegin()
 {
     for (auto& kvp : m_meshinstance_records) {
@@ -323,6 +341,9 @@ void GfxContextDXR::frameBegin()
 
 void GfxContextDXR::prepare(RenderDataDXR& rd)
 {
+    if (!valid())
+        return;
+
     // initialize command lists
     if (!rd.clm_blas) {
         rd.clm_blas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"BLAS");
@@ -379,9 +400,9 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
 
 void GfxContextDXR::setSceneData(RenderDataDXR& rd, SceneData& data)
 {
-    if (!rd.scene_data)
+    if (!valid())
         return;
-    if (rd.scene_data_prev == data)
+    if (!rd.scene_data || rd.scene_data_prev == data)
         return;
 
     SceneData *dst;
@@ -398,6 +419,8 @@ void GfxContextDXR::setSceneData(RenderDataDXR& rd, SceneData& data)
 
 void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 {
+    if (!valid())
+        return;
     if (!rt) {
         rd.render_target = nullptr;
         return;
@@ -466,6 +489,8 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 
 void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geoms)
 {
+    if (!valid())
+        return;
     if (rd.fv_blas != 0 || rd.fv_tlas != 0) {
         SetErrorLog("GfxContext::setGeometries(): called before prepare()\n");
         return;
@@ -866,6 +891,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
 void GfxContextDXR::flush(RenderDataDXR& rd)
 {
+    if (!valid())
+        return;
     if (!rd.render_target || !rd.render_target->texture->resource) {
         SetErrorLog("GfxContext::flush(): render target is null\n");
         return;
@@ -981,8 +1008,11 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     m_fv_last_rays = rd.fv_rays;
 }
 
-void GfxContextDXR::finish(RenderDataDXR& rd)
+bool GfxContextDXR::finish(RenderDataDXR& rd)
 {
+    if (!valid())
+        return false;
+
     if (rd.fv_rays != 0) {
         m_fence->SetEventOnCompletion(rd.fv_rays, rd.fence_event);
         ::WaitForSingleObject(rd.fence_event, INFINITE);
@@ -1006,16 +1036,22 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
 #endif // rthsEnableRenderTargetValidation
     }
 
-    std::swap(rd.geometries, rd.geometries_prev);
-    rd.geometries.clear();
+    if (!checkError()) {
+        return false;
+    }
+    else {
+        std::swap(rd.geometries, rd.geometries_prev);
+        rd.geometries.clear();
 
-    rthsTimestampUpdateLog(rd.timestamp, m_cmd_queue_direct);
+        rthsTimestampUpdateLog(rd.timestamp, m_cmd_queue_direct);
 
-    m_deformer->reset(rd);
-    rd.clm_blas->reset();
-    rd.clm_tlas->reset();
-    rd.clm_rays->reset();
-    rd.clm_immediate_copy->reset();
+        m_deformer->reset(rd);
+        rd.clm_blas->reset();
+        rd.clm_tlas->reset();
+        rd.clm_rays->reset();
+        rd.clm_immediate_copy->reset();
+        return true;
+    }
 }
 
 void GfxContextDXR::frameEnd()
@@ -1113,7 +1149,7 @@ bool GfxContextDXR::checkError()
             SetErrorLog(message.c_str());
         }
 
-        m_device = nullptr;
+        clear();
         return false;
     }
     return true;

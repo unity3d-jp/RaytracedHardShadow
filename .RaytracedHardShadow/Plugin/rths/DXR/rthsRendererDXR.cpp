@@ -64,7 +64,8 @@ void RendererDXR::finish()
         return;
 
     auto ctx = GfxContextDXR::getInstance();
-    ctx->finish(m_render_data);
+    if (!ctx->finish(m_render_data))
+        m_render_data.clear();
     clearMeshInstances();
 }
 
