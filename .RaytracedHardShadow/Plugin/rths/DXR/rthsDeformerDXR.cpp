@@ -116,7 +116,7 @@ bool DeformerDXR::prepare(RenderDataDXR& rd)
     return true;
 }
 
-bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
+bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool submit)
 {
     if (!valid() || !inst_dxr.mesh)
         return false;
@@ -321,9 +321,9 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
         cl->SetComputeRootDescriptorTable(0, hdst_vertices.hgpu);
         cl->Dispatch(mesh.vertex_count, 1, 1);
 
-        if (rd.hasFlag(RenderFlag::ParallelCommandList)) {
-            rd.cl_deform->Close();
-            rd.cl_deform = rd.clm_deform->get();
+        if (submit) {
+            cl->Close();
+            cl = rd.clm_deform->get();
         }
     }
 

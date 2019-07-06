@@ -521,6 +521,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     int deform_count = 0;
     m_deformer->prepare(rd);
     rd.geometries.clear();
+    int task_granularity = ceildiv((int)geoms.size(), rd.max_parallel_command_lists);
 
     bool needs_build_tlas = false;
     for (auto& geom : geoms) {
@@ -597,7 +598,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             inst_dxr->mesh = mesh_dxr;
         }
         if (gpu_skinning) {
-            if (m_deformer->deform(rd, *inst_dxr))
+            bool submit = rd.hasFlag(RenderFlag::ParallelCommandList) && deform_count > 0 && (deform_count % task_granularity) == 0;
+            if (m_deformer->deform(rd, *inst_dxr, submit))
                 ++deform_count;
         }
         rd.geometries.push_back({ inst_dxr, geom.receive_mask, geom.cast_mask });
@@ -621,8 +623,9 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         // inst.update_flags indicates the object is updated, and is cleared immediately after processed.
         // inst_dxr.blas_updated keeps if blas is updated in the frame.
 
-        auto queue_command = [this, &rd]() {
-            if (rd.hasFlag(RenderFlag::ParallelCommandList)) {
+        auto queue_command = [this, &rd, &blas_update_count, &task_granularity]() {
+            bool submit = rd.hasFlag(RenderFlag::ParallelCommandList) && (blas_update_count % task_granularity) == 0;
+            if (submit) {
                 rd.cl_blas->Close();
                 rd.cl_blas = rd.clm_blas->get();
             }

@@ -9,7 +9,7 @@ public:
     ~DeformerDXR();
     bool valid() const;
     bool prepare(RenderDataDXR& rd);
-    bool deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst);
+    bool deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst, bool submit);
     uint64_t flush(RenderDataDXR& rd);
     bool reset(RenderDataDXR& rd);
 

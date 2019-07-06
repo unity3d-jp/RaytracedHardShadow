@@ -92,6 +92,8 @@ inline float3 operator+(const float3& l, const float3& r) { return{ l.x + r.x, l
 inline float3 operator-(const float3& l, const float3& r) { return{ l.x - r.x, l.y - r.y, l.z - r.z }; }
 inline float3 operator*(const float3& l, float r) { return{ l.x * r, l.y * r, l.z * r }; }
 inline float3 operator/(const float3& l, float r) { return{ l.x / r, l.y / r, l.z / r }; }
+
+inline int ceildiv(int v, int d) { return (v + (d - 1)) / d; }
 inline float clamp(float v, float vmin, float vmax) { return std::min<float>(std::max<float>(v, vmin), vmax); }
 inline float clamp01(float v) { return clamp(v, 0.0f, 1.0f); }
 inline float clamp11(float v) { return clamp(v, -1.0f, 1.0f); }
