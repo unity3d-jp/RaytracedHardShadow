@@ -55,7 +55,7 @@ public:
     bool uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t size);
     bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, DXGI_FORMAT format);
     bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, DXGI_FORMAT format);
-    void executeImmediateCopy(RenderDataDXR& rd);
+    void executeImmediateCopy(RenderDataDXR& rd, ID3D12GraphicsCommandList4Ptr& cl);
 
 private:
     friend std::unique_ptr<GfxContextDXR> std::make_unique<GfxContextDXR>();

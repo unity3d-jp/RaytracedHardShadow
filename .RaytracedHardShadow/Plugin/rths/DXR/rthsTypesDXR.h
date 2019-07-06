@@ -290,7 +290,7 @@ class RenderDataDXR
 {
 public:
     CommandListManagerDXRPtr clm_deform, clm_blas, clm_tlas, clm_rays, clm_immediate_copy;
-    ID3D12GraphicsCommandList4Ptr cl_deform, cl_blas, cl_tlas, cl_rays, cl_immediate_copy;
+    ID3D12GraphicsCommandList4Ptr cl_deform;
 
     ID3D12DescriptorHeapPtr desc_heap;
     DescriptorHandleDXR render_target_handle;
@@ -331,7 +331,7 @@ size_t SizeOfElement(DXGI_FORMAT rtf);
 DXGI_FORMAT GetDXGIFormat(RenderTargetFormat format);
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
 std::string ToString(ID3DBlob *blob);
-
+void PrintStateObjectDesc(const D3D12_STATE_OBJECT_DESC* desc);
 
 // Body : [](size_t size) -> ID3D12Resource
 // return true if expanded

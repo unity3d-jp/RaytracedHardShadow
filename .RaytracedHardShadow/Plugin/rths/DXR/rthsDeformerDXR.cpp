@@ -359,6 +359,7 @@ bool DeformerDXR::reset(RenderDataDXR & rd)
 {
     if (rd.clm_deform) {
         rd.clm_deform->reset();
+        rd.cl_deform = nullptr;
         return true;
     }
     return false;

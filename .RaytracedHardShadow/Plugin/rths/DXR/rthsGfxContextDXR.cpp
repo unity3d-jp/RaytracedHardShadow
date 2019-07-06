@@ -284,7 +284,6 @@ bool GfxContextDXR::initializeDevice()
             { kClosestHitShader, nullptr, D3D12_EXPORT_FLAG_NONE },
             { kAnyHitShader,     nullptr, D3D12_EXPORT_FLAG_NONE },
         };
-        LPCWSTR exports[] = { kRayGenShader, kMissShader1, kMissShader2, kHitGroup1, kHitGroup2 };
 
         D3D12_DXIL_LIBRARY_DESC dxil_desc{};
         dxil_desc.DXILLibrary.pShaderBytecode = rthsShadowDXR;
@@ -314,20 +313,26 @@ bool GfxContextDXR::initializeDevice()
         rt_shader_desc.MaxAttributeSizeInBytes = sizeof(float) * 2; // size of BuiltInTriangleIntersectionAttributes
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &rt_shader_desc);
 
+        D3D12_LOCAL_ROOT_SIGNATURE local_rootsig{};
+        local_rootsig.pLocalRootSignature = m_local_rootsig;
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local_rootsig);
+
+        D3D12_GLOBAL_ROOT_SIGNATURE global_rootsig{};
+        global_rootsig.pGlobalRootSignature = m_global_rootsig;
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
+
         D3D12_RAYTRACING_PIPELINE_CONFIG rt_pipeline_desc{};
         rt_pipeline_desc.MaxTraceRecursionDepth = rthsMaxBounce;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &rt_pipeline_desc);
-
-        ID3D12RootSignature *local_rootsig = m_local_rootsig.GetInterfacePtr();
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local_rootsig);
-
-        ID3D12RootSignature *global_rootsig = m_global_rootsig.GetInterfacePtr();
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
 
         D3D12_STATE_OBJECT_DESC pso_desc{};
         pso_desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
         pso_desc.pSubobjects = subobjects.data();
         pso_desc.NumSubobjects = (UINT)subobjects.size();
+
+#ifdef rthsDebug
+        PrintStateObjectDesc(&pso_desc);
+#endif // rthsDebug
 
         auto hr = m_device->CreateStateObject(&pso_desc, IID_PPV_ARGS(&m_pipeline_state));
         if (FAILED(hr)) {
@@ -353,16 +358,13 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
         rd.clm_blas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"BLAS");
         rd.clm_tlas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"TLAS");
         rd.clm_rays = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"Rays");
-        rd.clm_immediate_copy= std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy");
+        rd.clm_immediate_copy = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy");
     }
-    rd.cl_blas = rd.clm_blas->get();
-    rd.cl_tlas = rd.clm_tlas->get();
-    rd.cl_rays = rd.clm_rays->get();
 
     // initialize desc heap
     if (!rd.desc_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
-        desc.NumDescriptors = 16;
+        desc.NumDescriptors = 32;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rd.desc_heap));
@@ -407,6 +409,8 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
 
 void GfxContextDXR::setSceneData(RenderDataDXR& rd, SceneData& data)
 {
+    if (!rd.scene_data)
+        return;
     if (rd.scene_data_prev == data)
         return;
 
@@ -435,6 +439,10 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
         data->base = rt;
         if (rt->gpu_texture && m_resource_translator) {
             data->texture = m_resource_translator->createTemporaryTexture(rt->gpu_texture);
+            if (!data->texture) {
+                DebugPrint("GfxContextDXR::setRenderTarget(): failed to translate texture\n");
+                return;
+            }
         }
         else {
             auto dxgifmt = GetDXGIFormat(rt->format);
@@ -445,11 +453,6 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
                 tex->resource = createTexture(rt->width, rt->height, dxgifmt);
             }
         }
-
-        if (!data->texture) {
-            DebugPrint("GfxContextDXR::setRenderTarget(): failed to translate texture\n");
-            return;
-        }
     }
 
     if (rd.render_target != data) {
@@ -459,8 +462,6 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
             uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
             uav_desc.Format = GetTypedFormatDXR(rd.render_target->texture->format); // typeless is not allowed for unordered access view
-            uav_desc.Texture2D.MipSlice = 0;
-            uav_desc.Texture2D.PlaneSlice = 0;
             m_device->CreateUnorderedAccessView(rd.render_target->texture->resource, nullptr, &uav_desc, rd.render_target_handle.hcpu);
         }
     }
@@ -609,7 +610,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
     // build BLAS
     size_t geometry_count = rd.geometries.size();
-    rthsTimestampQuery(rd.timestamp, rd.cl_blas, "Building BLAS begin");
+    auto cl_blas = rd.clm_blas->get();
+    rthsTimestampQuery(rd.timestamp, cl_blas, "Building BLAS begin");
     int blas_update_count = 0;
     for (auto& geom_dxr : rd.geometries) {
         auto& inst_dxr = *geom_dxr.inst;
@@ -623,11 +625,11 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         // inst.update_flags indicates the object is updated, and is cleared immediately after processed.
         // inst_dxr.blas_updated keeps if blas is updated in the frame.
 
-        auto queue_command = [this, &rd, &blas_update_count, &task_granularity]() {
+        auto queue_command = [&]() {
             bool submit = rd.hasFlag(RenderFlag::ParallelCommandList) && (blas_update_count % task_granularity) == 0;
             if (submit) {
-                rd.cl_blas->Close();
-                rd.cl_blas = rd.clm_blas->get();
+                cl_blas->Close();
+                cl_blas = rd.clm_blas->get();
             }
         };
 
@@ -676,9 +678,9 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 as_desc.DestAccelerationStructureData = inst_dxr.blas_deformed->GetGPUVirtualAddress();
                 as_desc.ScratchAccelerationStructureData = inst_dxr.blas_scratch->GetGPUVirtualAddress();
 
-                addResourceBarrier(rd.cl_blas, inst_dxr.deformed_vertices, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                rd.cl_blas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
-                addResourceBarrier(rd.cl_blas, inst_dxr.deformed_vertices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                addResourceBarrier(cl_blas, inst_dxr.deformed_vertices, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                cl_blas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+                addResourceBarrier(cl_blas, inst_dxr.deformed_vertices, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 inst_dxr.is_updated = true;
                 ++blas_update_count;
 
@@ -723,7 +725,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 as_desc.DestAccelerationStructureData = mesh_dxr.blas->GetGPUVirtualAddress();
                 as_desc.ScratchAccelerationStructureData = mesh_dxr.blas_scratch->GetGPUVirtualAddress();
 
-                rd.cl_blas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+                cl_blas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
                 inst_dxr.is_updated = true;
                 ++blas_update_count;
 
@@ -748,8 +750,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         m_cmd_queue_direct->Wait(getFence(), fv);
     }
 #endif
-    rthsTimestampQuery(rd.timestamp, rd.cl_blas, "Building BLAS end");
-    rd.cl_blas->Close();
+    rthsTimestampQuery(rd.timestamp, cl_blas, "Building BLAS end");
+    cl_blas->Close();
     rd.fv_blas = submitCommandList(rd.clm_blas->getCommandLists(), rd.fv_deform);
 
     if (!needs_build_tlas) {
@@ -760,7 +762,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
 
     // build TLAS
-    rthsTimestampQuery(rd.timestamp, rd.cl_tlas, "Building TLAS begin");
+    auto cl_tlas = rd.clm_tlas->get();
+    rthsTimestampQuery(rd.timestamp, cl_tlas, "Building TLAS begin");
     if (needs_build_tlas) {
         // get the size of the TLAS buffers
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
@@ -830,7 +833,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 as_desc.ScratchAccelerationStructureData = rd.tlas_scratch->GetGPUVirtualAddress();
 
             // build
-            rd.cl_tlas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+            cl_tlas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
         }
 
         // add UAV barrier
@@ -838,11 +841,11 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             D3D12_RESOURCE_BARRIER uav_barrier{};
             uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
             uav_barrier.UAV.pResource = rd.tlas;
-            rd.cl_tlas->ResourceBarrier(1, &uav_barrier);
+            cl_tlas->ResourceBarrier(1, &uav_barrier);
         }
     }
-    rthsTimestampQuery(rd.timestamp, rd.cl_tlas, "Building TLAS end");
-    rd.cl_tlas->Close();
+    rthsTimestampQuery(rd.timestamp, cl_tlas, "Building TLAS end");
+    cl_tlas->Close();
     rd.fv_tlas = submitCommandList(rd.clm_tlas->getCommandLists(), rd.fv_blas);
 
 
@@ -889,7 +892,8 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     }
     auto& rtex = rd.render_target->texture;
 
-    rthsTimestampQuery(rd.timestamp, rd.cl_rays, "DispatchRays begin");
+    auto cl_rays = rd.clm_rays->get();
+    rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays begin");
 
     size_t shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
     shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
@@ -897,7 +901,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
 
     // setup shader table
     if (!rd.shader_table) {
-        size_t capacity = 32;
+        const int capacity = 32;
         rd.shader_table = createBuffer(shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
 
         // setup shader table
@@ -907,7 +911,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         ID3D12StateObjectPropertiesPtr sop;
         m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
 
-        auto add_shader_table = [&](void *shader_id) {
+        auto add_shader_record = [&](void *shader_id) {
             auto dst = data;
             memcpy(dst, shader_id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
             dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
@@ -917,21 +921,21 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         };
 
         // ray-gen
-        add_shader_table(sop->GetShaderIdentifier(kRayGenShader));
+        add_shader_record(sop->GetShaderIdentifier(kRayGenShader));
 
         // miss
-        add_shader_table(sop->GetShaderIdentifier(kMissShader1));
-        add_shader_table(sop->GetShaderIdentifier(kMissShader2));
+        add_shader_record(sop->GetShaderIdentifier(kMissShader1));
+        add_shader_record(sop->GetShaderIdentifier(kMissShader2));
 
         // hit
-        add_shader_table(sop->GetShaderIdentifier(kHitGroup1));
-        add_shader_table(sop->GetShaderIdentifier(kHitGroup2));
+        add_shader_record(sop->GetShaderIdentifier(kHitGroup1));
+        add_shader_record(sop->GetShaderIdentifier(kHitGroup2));
 
         rd.shader_table->Unmap(0, nullptr);
     }
 
     D3D12_RESOURCE_STATES prev_state = D3D12_RESOURCE_STATE_COMMON;
-    addResourceBarrier(rd.cl_rays, rtex->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    addResourceBarrier(cl_rays, rtex->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
     // dispatch rays
     {
@@ -944,38 +948,38 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         // ray-gen
         dr_desc.RayGenerationShaderRecord.StartAddress = addr;
         dr_desc.RayGenerationShaderRecord.SizeInBytes = shader_record_size;
-        addr += shader_record_size;
+        addr += dr_desc.RayGenerationShaderRecord.SizeInBytes;
 
         // miss
         dr_desc.MissShaderTable.StartAddress = addr;
         dr_desc.MissShaderTable.StrideInBytes = shader_record_size;
         dr_desc.MissShaderTable.SizeInBytes = shader_record_size * 2;
-        addr += shader_record_size * 2;
+        addr += dr_desc.MissShaderTable.SizeInBytes;
 
         // hit
         dr_desc.HitGroupTable.StartAddress = addr;
         dr_desc.HitGroupTable.StrideInBytes = shader_record_size;
         dr_desc.HitGroupTable.SizeInBytes = shader_record_size * 2;
-        addr += shader_record_size * 2;
+        addr += dr_desc.HitGroupTable.SizeInBytes;
+
 
         // bind root signature and shader resources
-        rd.cl_rays->SetComputeRootSignature(m_global_rootsig);
+        cl_rays->SetComputeRootSignature(m_global_rootsig);
 
-        // descriptor heaps
         ID3D12DescriptorHeap *desc_heaps[] = { rd.desc_heap };
-        rd.cl_rays->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
+        cl_rays->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
 
         // dispatch
-        rd.cl_rays->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
-        rd.cl_rays->DispatchRays(&dr_desc);
+        cl_rays->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
+        cl_rays->DispatchRays(&dr_desc);
     }
 
-    addResourceBarrier(rd.cl_rays, rd.render_target->texture->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
+    addResourceBarrier(cl_rays, rd.render_target->texture->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
 
-    rthsTimestampQuery(rd.timestamp, rd.cl_rays, "DispatchRays end");
-    rthsTimestampResolve(rd.timestamp, rd.cl_rays);
+    rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays end");
+    rthsTimestampResolve(rd.timestamp, cl_rays);
 
-    rd.cl_rays->Close();
+    cl_rays->Close();
     rd.fv_rays = submitCommandList(rd.clm_rays->getCommandLists(), rd.fv_tlas);
     if (rd.fv_rays && rd.render_target && m_resource_translator) {
         // copy render target to Unity side
@@ -1218,10 +1222,10 @@ uint64_t GfxContextDXR::submitCommandList(ID3D12CommandList *const*cls, size_t n
 
 bool GfxContextDXR::readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t size)
 {
-    rd.cl_immediate_copy = rd.clm_immediate_copy->get();
+    auto cl = rd.clm_immediate_copy->get();
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
-    rd.cl_immediate_copy->CopyBufferRegion(readback_buf, 0, src, 0, size);
-    executeImmediateCopy(rd);
+    cl->CopyBufferRegion(readback_buf, 0, src, 0, size);
+    executeImmediateCopy(rd, cl);
 
     float* mapped;
     if (SUCCEEDED(readback_buf->Map(0, nullptr, (void**)&mapped))) {
@@ -1241,9 +1245,9 @@ bool GfxContextDXR::uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const v
         memcpy(mapped, src, size);
         upload_buf->Unmap(0, nullptr);
 
-        rd.cl_immediate_copy = rd.clm_immediate_copy->get();
-        rd.cl_immediate_copy->CopyBufferRegion(dst, 0, upload_buf, 0, size);
-        executeImmediateCopy(rd);
+        auto cl = rd.clm_immediate_copy->get();
+        cl->CopyBufferRegion(dst, 0, upload_buf, 0, size);
+        executeImmediateCopy(rd, cl);
         return true;
     }
     return false;
@@ -1272,9 +1276,9 @@ bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource
     src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     src_loc.SubresourceIndex = 0;
 
-    rd.cl_immediate_copy = rd.clm_immediate_copy->get();
-    rd.cl_immediate_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
-    executeImmediateCopy(rd);
+    auto cl = rd.clm_immediate_copy->get();
+    cl->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
+    executeImmediateCopy(rd, cl);
 
     float* mapped;
     D3D12_RANGE ragne{ 0, size };
@@ -1314,26 +1318,24 @@ bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const 
         src_loc.PlacedFootprint.Footprint.Depth = 1;
         src_loc.PlacedFootprint.Footprint.RowPitch = (UINT)(width * stride);
 
-        rd.cl_immediate_copy = rd.clm_immediate_copy->get();
-        rd.cl_immediate_copy->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
-        executeImmediateCopy(rd);
+        auto cl = rd.clm_immediate_copy->get();
+        cl->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
+        executeImmediateCopy(rd, cl);
         return true;
     }
     return false;
 }
 
-void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd)
+void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd, ID3D12GraphicsCommandList4Ptr& cl)
 {
-    rd.cl_immediate_copy->Close();
-    ID3D12CommandList *cmd_list[]{ rd.cl_immediate_copy.GetInterfacePtr() };
+    cl->Close();
+    ID3D12CommandList *cmd_list[]{ cl.GetInterfacePtr() };
     m_cmd_queue_immediate_copy->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 
     auto fence_value = incrementFenceValue();
     m_cmd_queue_immediate_copy->Signal(m_fence, fence_value);
     m_fence->SetEventOnCompletion(fence_value, rd.fence_event);
     ::WaitForSingleObject(rd.fence_event, INFINITE);
-
-    rd.cl_immediate_copy = nullptr;
 }
 
 } // namespace rths
