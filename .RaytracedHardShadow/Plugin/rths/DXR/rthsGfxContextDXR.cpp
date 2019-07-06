@@ -6,7 +6,7 @@
 #include "rthsResourceTranslatorDXR.h"
 
 // shader binaries
-#include "rthsShadowDXR.h"
+#include "rthsShadowDXR.hlsl.h"
 
 
 namespace rths {
@@ -228,7 +228,9 @@ bool GfxContextDXR::initializeDevice()
         D3D12_ROOT_SIGNATURE_DESC desc{};
         desc.NumParameters = 1;
         desc.pParameters = &param;
+#ifndef rthsEnableGlobalRootsig
         desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
+#endif
 
         ID3DBlobPtr sig_blob, error_blob;
         HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
@@ -257,8 +259,8 @@ bool GfxContextDXR::initializeDevice()
         };
 
         D3D12_DXIL_LIBRARY_DESC dxil_desc{};
-        dxil_desc.DXILLibrary.pShaderBytecode = rthsShadowDXR;
-        dxil_desc.DXILLibrary.BytecodeLength = sizeof(rthsShadowDXR);
+        dxil_desc.DXILLibrary.pShaderBytecode = g_rthsShadowDXR;
+        dxil_desc.DXILLibrary.BytecodeLength = sizeof(g_rthsShadowDXR);
         // zero exports means 'export all'
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &dxil_desc);
 
@@ -279,13 +281,15 @@ bool GfxContextDXR::initializeDevice()
         rt_shader_desc.MaxAttributeSizeInBytes = sizeof(float) * 2; // size of BuiltInTriangleIntersectionAttributes
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &rt_shader_desc);
 
-        //D3D12_GLOBAL_ROOT_SIGNATURE global_rootsig{};
-        //global_rootsig.pGlobalRootSignature = m_rootsig;
-        //add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
-
+#ifdef rthsEnableGlobalRootsig
+        D3D12_GLOBAL_ROOT_SIGNATURE global_rootsig{};
+        global_rootsig.pGlobalRootSignature = m_rootsig;
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
+#else
         D3D12_LOCAL_ROOT_SIGNATURE local_rootsig{};
         local_rootsig.pLocalRootSignature = m_rootsig;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local_rootsig);
+#endif
 
         D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_desc{};
         pipeline_desc.MaxTraceRecursionDepth = rthsMaxBounce;
@@ -414,9 +418,15 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
             auto dxgifmt = GetDXGIFormat(rt->format);
             if (rt->width > 0 && rt->height > 0 && dxgifmt != DXGI_FORMAT_UNKNOWN) {
                 auto tex = std::make_shared<TextureDataDXR>();
-                data->texture = tex;
-                tex->format = dxgifmt;
                 tex->resource = createTexture(rt->width, rt->height, dxgifmt);
+                if (!tex->resource) {
+                    DebugPrint("GfxContextDXR::setRenderTarget(): failed to create texture\n");
+                    return;
+                }
+                tex->width = rt->width;
+                tex->height = rt->height;
+                tex->format = dxgifmt;
+                data->texture = tex;
             }
         }
     }
@@ -942,7 +952,9 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
 
         ID3D12DescriptorHeap *desc_heaps[] = { rd.desc_heap };
         cl_rays->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
-        //cl_rays->SetComputeRootDescriptorTable(0, rd.desc_heap->GetGPUDescriptorHandleForHeapStart());
+#ifdef rthsEnableGlobalRootsig
+        cl_rays->SetComputeRootDescriptorTable(0, rd.desc_heap->GetGPUDescriptorHandleForHeapStart());
+#endif
 
         // dispatch
         cl_rays->SetPipelineState1(m_pipeline_state.GetInterfacePtr());

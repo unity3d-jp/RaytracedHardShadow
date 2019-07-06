@@ -22,6 +22,7 @@
     //#define rthsForceSoftwareDevice
 #endif
 #define rthsEnableTimestamp
+//#define rthsEnableGlobalRootsig
 
 
 namespace rths {

@@ -94,11 +94,11 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="rths\DXR\Shaders\rthsShadowDXR.hlsl">
+    <FxCompile Include="rths\DXR\Shaders\rthsShadowDXR.hlsl">
       <Filter>rths\DXR\Shaders</Filter>
-    </CustomBuild>
-    <CustomBuild Include="rths\DXR\Shaders\rthsDeform.hlsl">
+    </FxCompile>
+    <FxCompile Include="rths\DXR\Shaders\rthsDeform.hlsl">
       <Filter>rths\DXR\Shaders</Filter>
-    </CustomBuild>
+    </FxCompile>
   </ItemGroup>
 </Project>

@@ -6,7 +6,7 @@
 #include "rthsDeformerDXR.h"
 
 // shader binaries
-#include "rthsDeform.h"
+#include "rthsDeform.hlsl.h"
 
 namespace rths {
 
@@ -83,8 +83,8 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
     if (m_rootsig_deform) {
         D3D12_COMPUTE_PIPELINE_STATE_DESC psd {};
         psd.pRootSignature = m_rootsig_deform.GetInterfacePtr();
-        psd.CS.pShaderBytecode = rthsDeform;
-        psd.CS.BytecodeLength = sizeof(rthsDeform);
+        psd.CS.pShaderBytecode = g_rthsDeform;
+        psd.CS.BytecodeLength = sizeof(g_rthsDeform);
 
         HRESULT hr = m_device->CreateComputePipelineState(&psd, IID_PPV_ARGS(&m_pipeline_state));
         if (FAILED(hr)) {

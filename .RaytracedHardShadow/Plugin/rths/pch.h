@@ -12,7 +12,6 @@
 #include <dxgiformat.h>
 #include <dxcapi.h>
 #include <comdef.h>
-#include "dxcapi.use.h"
 #endif // _WIN32
 
 // Unity PluginAPI

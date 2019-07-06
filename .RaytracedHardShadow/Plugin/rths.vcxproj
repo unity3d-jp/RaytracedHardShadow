@@ -42,22 +42,20 @@
     <ClInclude Include="rths\DXR\rthsTypesDXR.h" />
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="rths\DXR\Shaders\rthsShadowDXR.hlsl">
-      <FileType>Document</FileType>
-      <Command>dxc %(FullPath) -T lib_6_3 -Fo "$(IntDir)%(Filename).bin" -nologo
-Externals\bin\File2Obj /in:$(IntDir)%(Filename).bin /out:$(IntDir)%(Filename).obj</Command>
-      <Outputs>$(IntDir)%(Filename).obj</Outputs>
-    </CustomBuild>
-  </ItemGroup>
-  <ItemGroup>
-    <CustomBuild Include="rths\DXR\Shaders\rthsDeform.hlsl">
-      <FileType>Document</FileType>
-      <Command>dxc %(FullPath) -T cs_6_3 -E "main" -Fo "$(IntDir)%(Filename).bin" -nologo
-Externals\bin\File2Obj /in:$(IntDir)%(Filename).bin /out:$(IntDir)%(Filename).obj</Command>
-      <Outputs>$(IntDir)%(Filename).obj</Outputs>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">dxc %(FullPath) -Zi -T cs_6_3 -E "main" -Fo "$(IntDir)%(Filename).bin" -nologo
-Externals\bin\File2Obj /in:$(IntDir)%(Filename).bin /out:$(IntDir)%(Filename).obj</Command>
-    </CustomBuild>
+    <FxCompile Include="rths\DXR\Shaders\rthsShadowDXR.hlsl">
+      <ShaderType>Library</ShaderType>
+      <ShaderModel>6.3</ShaderModel>
+      <VariableName>g_%(Filename)</VariableName>
+      <HeaderFileOutput>$(IntDir)\%(Filename).hlsl.h</HeaderFileOutput>
+      <EntryPointName>
+      </EntryPointName>
+    </FxCompile>
+    <FxCompile Include="rths\DXR\Shaders\rthsDeform.hlsl">
+      <ShaderType>Compute</ShaderType>
+      <ShaderModel>6.3</ShaderModel>
+      <VariableName>g_%(Filename)</VariableName>
+      <HeaderFileOutput>$(IntDir)\%(Filename).hlsl.h</HeaderFileOutput>
+    </FxCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{66397903-6FF2-46C6-B51E-B323FD248FAD}</ProjectGuid>
