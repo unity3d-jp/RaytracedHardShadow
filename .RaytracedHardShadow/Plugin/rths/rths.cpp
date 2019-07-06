@@ -1,7 +1,8 @@
 #include "pch.h"
-#include "rths.h"
+#include "Foundation/rthsMath.h"
 #include "Foundation/rthsLog.h"
 #include "rthsRenderer.h"
+#include "rths.h"
 
 using namespace rths;
 

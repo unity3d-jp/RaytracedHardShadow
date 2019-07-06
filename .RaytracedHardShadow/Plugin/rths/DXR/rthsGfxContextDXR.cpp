@@ -213,7 +213,7 @@ bool GfxContextDXR::initializeDevice()
         m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_immediate_copy));
     }
 
-    // local root signature
+    // root signature
     {
         D3D12_DESCRIPTOR_RANGE ranges[] = {
             { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
@@ -224,40 +224,19 @@ bool GfxContextDXR::initializeDevice()
         param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         param.DescriptorTable.NumDescriptorRanges = _countof(ranges);
         param.DescriptorTable.pDescriptorRanges = ranges;
-        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         D3D12_ROOT_SIGNATURE_DESC desc{};
         desc.NumParameters = 1;
         desc.pParameters = &param;
         desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
 
-        ID3DBlobPtr sig_blob;
-        ID3DBlobPtr error_blob;
+        ID3DBlobPtr sig_blob, error_blob;
         HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
         if (FAILED(hr)) {
             SetErrorLog(ToString(error_blob) + "\n");
         }
         else {
-            hr = m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_local_rootsig));
-            if (FAILED(hr)) {
-                SetErrorLog("CreateRootSignature() failed\n");
-            }
-        }
-    }
-
-    // global root signature
-    {
-        D3D12_ROOT_SIGNATURE_DESC desc{};
-        desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
-
-        ID3DBlobPtr sig_blob;
-        ID3DBlobPtr error_blob;
-        HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
-        if (FAILED(hr)) {
-            SetErrorLog(ToString(error_blob) + "\n");
-        }
-        else {
-            hr = m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_global_rootsig));
+            hr = m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_rootsig));
             if (FAILED(hr)) {
                 SetErrorLog("CreateRootSignature() failed\n");
             }
@@ -277,35 +256,22 @@ bool GfxContextDXR::initializeDevice()
             subobjects.push_back(so);
         };
 
-        D3D12_EXPORT_DESC export_descs[] = {
-            { kRayGenShader,     nullptr, D3D12_EXPORT_FLAG_NONE },
-            { kMissShader1,      nullptr, D3D12_EXPORT_FLAG_NONE },
-            { kMissShader2,      nullptr, D3D12_EXPORT_FLAG_NONE },
-            { kClosestHitShader, nullptr, D3D12_EXPORT_FLAG_NONE },
-            { kAnyHitShader,     nullptr, D3D12_EXPORT_FLAG_NONE },
-        };
-
         D3D12_DXIL_LIBRARY_DESC dxil_desc{};
         dxil_desc.DXILLibrary.pShaderBytecode = rthsShadowDXR;
         dxil_desc.DXILLibrary.BytecodeLength = sizeof(rthsShadowDXR);
-        dxil_desc.NumExports = _countof(export_descs);
-        dxil_desc.pExports = export_descs;
+        // zero exports means 'export all'
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &dxil_desc);
 
         D3D12_HIT_GROUP_DESC hit_desc1{};
         hit_desc1.HitGroupExport = kHitGroup1;
         hit_desc1.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-        hit_desc1.AnyHitShaderImport = nullptr;
         hit_desc1.ClosestHitShaderImport = kClosestHitShader;
-        hit_desc1.IntersectionShaderImport = nullptr;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc1);
 
         D3D12_HIT_GROUP_DESC hit_desc2{};
         hit_desc2.HitGroupExport = kHitGroup2;
         hit_desc2.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
         hit_desc2.AnyHitShaderImport = kAnyHitShader;
-        hit_desc2.ClosestHitShaderImport = nullptr;
-        hit_desc2.IntersectionShaderImport = nullptr;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc2);
 
         D3D12_RAYTRACING_SHADER_CONFIG rt_shader_desc{};
@@ -313,17 +279,17 @@ bool GfxContextDXR::initializeDevice()
         rt_shader_desc.MaxAttributeSizeInBytes = sizeof(float) * 2; // size of BuiltInTriangleIntersectionAttributes
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &rt_shader_desc);
 
+        //D3D12_GLOBAL_ROOT_SIGNATURE global_rootsig{};
+        //global_rootsig.pGlobalRootSignature = m_rootsig;
+        //add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
+
         D3D12_LOCAL_ROOT_SIGNATURE local_rootsig{};
-        local_rootsig.pLocalRootSignature = m_local_rootsig;
+        local_rootsig.pLocalRootSignature = m_rootsig;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local_rootsig);
 
-        D3D12_GLOBAL_ROOT_SIGNATURE global_rootsig{};
-        global_rootsig.pGlobalRootSignature = m_global_rootsig;
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &global_rootsig);
-
-        D3D12_RAYTRACING_PIPELINE_CONFIG rt_pipeline_desc{};
-        rt_pipeline_desc.MaxTraceRecursionDepth = rthsMaxBounce;
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &rt_pipeline_desc);
+        D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_desc{};
+        pipeline_desc.MaxTraceRecursionDepth = rthsMaxBounce;
+        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &pipeline_desc);
 
         D3D12_STATE_OBJECT_DESC pso_desc{};
         pso_desc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
@@ -469,15 +435,21 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 #ifdef rthsEnableRenderTargetValidation
     if (rd.render_target) {
         // fill texture with 0.0-1.0 gradation for debug
+        auto do_fill = [this, &rd](auto& tex, auto&& data) {
+            int n = tex.width * tex.height;
+            float r = 1.0f / (float)n;
+            data.resize(n);
+            for (int i = 0; i < n; ++i)
+                data[i] = r * (float)i;
+            uploadTexture(rd, tex.resource, data.data(), tex.width, tex.height, tex.format);
+        };
 
-        int n = rd.render_target->width * rd.render_target->height;
-        float r = 1.0f / (float)n;
-
-        std::vector<float> data;
-        data.resize(n);
-        for (int i = 0; i < n; ++i)
-            data[i] = r * (float)i;
-        uploadTexture(rd, rd.render_target->resource, data.data(), rd.render_target->width, rd.render_target->height, sizeof(float));
+        auto& tex = *rd.render_target->texture;
+        switch (GetTypedFormatDXR(tex.format)) {
+        case DXGI_FORMAT_R8_UNORM: do_fill(tex, std::vector<unorm8>()); break;
+        case DXGI_FORMAT_R16_FLOAT: do_fill(tex, std::vector<half>()); break;
+        case DXGI_FORMAT_R32_FLOAT: do_fill(tex, std::vector<float>()); break;
+        }
     }
 #endif // rthsEnableRenderTargetValidation
 }
@@ -518,11 +490,12 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             geom.markUpdated();
     }
 
-    bool gpu_skinning = rd.hasFlag(RenderFlag::GPUSkinning);
-    int deform_count = 0;
-    m_deformer->prepare(rd);
-    rd.geometries.clear();
     int task_granularity = ceildiv((int)geoms.size(), rd.max_parallel_command_lists);
+    bool gpu_skinning = rd.hasFlag(RenderFlag::GPUSkinning);
+    if (gpu_skinning)
+        m_deformer->prepare(rd);
+    int deform_count = 0;
+    rd.geometries.clear();
 
     bool needs_build_tlas = false;
     for (auto& geom : geoms) {
@@ -605,7 +578,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         }
         rd.geometries.push_back({ inst_dxr, geom.receive_mask, geom.cast_mask });
     }
-    m_deformer->flush(rd);
+    if (gpu_skinning)
+        m_deformer->flush(rd);
 
 
     // build BLAS
@@ -964,10 +938,11 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
 
 
         // bind root signature and shader resources
-        cl_rays->SetComputeRootSignature(m_global_rootsig);
+        cl_rays->SetComputeRootSignature(m_rootsig);
 
         ID3D12DescriptorHeap *desc_heaps[] = { rd.desc_heap };
         cl_rays->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
+        //cl_rays->SetComputeRootDescriptorTable(0, rd.desc_heap->GetGPUDescriptorHandleForHeapStart());
 
         // dispatch
         cl_rays->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
@@ -1003,10 +978,18 @@ void GfxContextDXR::finish(RenderDataDXR& rd)
 
 #ifdef rthsEnableRenderTargetValidation
         if (rd.render_target) {
-            std::vector<float> data;
-            data.resize(rd.render_target->width * rd.render_target->height, std::numeric_limits<float>::quiet_NaN());
-            readbackTexture(rd, data.data(), rd.render_target->resource, rd.render_target->width, rd.render_target->height, sizeof(float));
-            // break here to inspect data
+            auto do_readback = [this, &rd](auto& tex, auto&& data) {
+                data.resize(tex.width * tex.height, std::numeric_limits<float>::quiet_NaN());
+                readbackTexture(rd, data.data(), tex.resource, tex.width, tex.height, tex.format);
+                // break here to inspect data
+            };
+
+            auto& tex = *rd.render_target->texture;
+            switch (GetTypedFormatDXR(tex.format)) {
+            case DXGI_FORMAT_R8_UNORM: do_readback(tex, std::vector<unorm8>()); break;
+            case DXGI_FORMAT_R16_FLOAT: do_readback(tex, std::vector<half>()); break;
+            case DXGI_FORMAT_R32_FLOAT: do_readback(tex, std::vector<float>()); break;
+            }
         }
 #endif // rthsEnableRenderTargetValidation
     }
@@ -1052,7 +1035,7 @@ bool GfxContextDXR::readbackRenderTarget(RenderDataDXR& rd, void *dst)
 
     auto& rtex = rd.render_target->texture;
     auto desc = rtex->resource->GetDesc();
-    return readbackTexture(rd, dst, rtex->resource, desc.Width, desc.Height, desc.Format);
+    return readbackTexture(rd, dst, rtex->resource, (UINT)desc.Width, (UINT)desc.Height, desc.Format);
 }
 
 void GfxContextDXR::clearResourceCache()
@@ -1082,7 +1065,7 @@ void GfxContextDXR::onRenderTargetDelete(RenderTargetData *rt)
 
 bool GfxContextDXR::valid() const
 {
-    return m_device != nullptr;
+    return this != nullptr && m_device != nullptr;
 }
 
 bool GfxContextDXR::checkError()
@@ -1220,7 +1203,7 @@ uint64_t GfxContextDXR::submitCommandList(ID3D12CommandList *const*cls, size_t n
 }
 
 
-bool GfxContextDXR::readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t size)
+bool GfxContextDXR::readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, UINT64 size)
 {
     auto cl = rd.clm_immediate_copy->get();
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
@@ -1237,7 +1220,7 @@ bool GfxContextDXR::readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource 
     return false;
 }
 
-bool GfxContextDXR::uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t size)
+bool GfxContextDXR::uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, UINT64 size)
 {
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
     void *mapped;
@@ -1253,10 +1236,11 @@ bool GfxContextDXR::uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const v
     return false;
 }
 
-bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, DXGI_FORMAT format)
+bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst_, ID3D12Resource *src, UINT width, UINT height, DXGI_FORMAT format)
 {
-    size_t stride = SizeOfElement(format);
-    size_t size = width * height * stride;
+    UINT stride = SizeOfElement(format);
+    UINT width_a = align_to(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, width);
+    UINT size = width_a * height * stride;
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
     if (!readback_buf)
         return false;
@@ -1265,11 +1249,11 @@ bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource
     dst_loc.pResource = readback_buf;
     dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     dst_loc.PlacedFootprint.Offset = 0;
-    dst_loc.PlacedFootprint.Footprint.Format = format;
-    dst_loc.PlacedFootprint.Footprint.Width = (UINT)width;
-    dst_loc.PlacedFootprint.Footprint.Height = (UINT)height;
+    dst_loc.PlacedFootprint.Footprint.Format = GetTypelessFormatDXR(format);
+    dst_loc.PlacedFootprint.Footprint.Width = width;
+    dst_loc.PlacedFootprint.Footprint.Height = height;
     dst_loc.PlacedFootprint.Footprint.Depth = 1;
-    dst_loc.PlacedFootprint.Footprint.RowPitch = (UINT)(width * stride);
+    dst_loc.PlacedFootprint.Footprint.RowPitch = width_a * stride;
 
     D3D12_TEXTURE_COPY_LOCATION src_loc{};
     src_loc.pResource = src;
@@ -1280,27 +1264,38 @@ bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource
     cl->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
     executeImmediateCopy(rd, cl);
 
-    float* mapped;
+    char *mapped;
     D3D12_RANGE ragne{ 0, size };
     if (SUCCEEDED(readback_buf->Map(0, &ragne, (void**)&mapped))) {
-        memcpy(dst, mapped, size);
+        auto dst = (char*)dst_;
+        for (UINT yi = 0; yi < height; ++yi) {
+            memcpy(dst, mapped, width * stride);
+            dst += width * stride;
+            mapped += width_a * stride;
+        }
         readback_buf->Unmap(0, nullptr);
         return true;
     }
     return false;
 }
 
-bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, DXGI_FORMAT format)
+bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src_, UINT width, UINT height, DXGI_FORMAT format)
 {
-    size_t stride = SizeOfElement(format);
-    size_t size = width * height * stride;
+    UINT stride = SizeOfElement(format);
+    UINT width_a = align_to(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, width);
+    UINT size = width_a * height * stride;
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
     if (!upload_buf)
         return false;
 
-    void *mapped;
-    if (SUCCEEDED(upload_buf->Map(0, nullptr, &mapped))) {
-        memcpy(mapped, src, size);
+    char *mapped;
+    if (SUCCEEDED(upload_buf->Map(0, nullptr, (void**)&mapped))) {
+        auto src = (const char*)src_;
+        for (UINT yi = 0; yi < height; ++yi) {
+            memcpy(mapped, src, width * stride);
+            src += width * stride;
+            mapped += width_a * stride;
+        }
         upload_buf->Unmap(0, nullptr);
 
         D3D12_TEXTURE_COPY_LOCATION dst_loc{};
@@ -1312,11 +1307,11 @@ bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const 
         src_loc.pResource = upload_buf;
         src_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         src_loc.PlacedFootprint.Offset = 0;
-        src_loc.PlacedFootprint.Footprint.Format = format;
-        src_loc.PlacedFootprint.Footprint.Width = (UINT)width;
-        src_loc.PlacedFootprint.Footprint.Height = (UINT)height;
+        src_loc.PlacedFootprint.Footprint.Format = GetTypelessFormatDXR(format);
+        src_loc.PlacedFootprint.Footprint.Width = width;
+        src_loc.PlacedFootprint.Footprint.Height = height;
         src_loc.PlacedFootprint.Footprint.Depth = 1;
-        src_loc.PlacedFootprint.Footprint.RowPitch = (UINT)(width * stride);
+        src_loc.PlacedFootprint.Footprint.RowPitch = width_a * stride;
 
         auto cl = rd.clm_immediate_copy->get();
         cl->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);

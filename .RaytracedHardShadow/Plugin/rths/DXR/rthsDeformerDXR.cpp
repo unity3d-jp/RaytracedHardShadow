@@ -99,7 +99,7 @@ DeformerDXR::~DeformerDXR()
 
 bool DeformerDXR::valid() const
 {
-    return m_device && m_rootsig_deform && m_pipeline_state;
+    return this != nullptr && m_device && m_rootsig_deform && m_pipeline_state;
 }
 
 bool DeformerDXR::prepare(RenderDataDXR& rd)

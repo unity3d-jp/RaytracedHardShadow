@@ -92,14 +92,6 @@ struct BoneWeight4
     float weight[4];
     int index[4];
 };
-#else // rthsImpl
-struct float2;
-struct float3;
-struct float4;
-struct float4x4;
-struct BoneWeight1;
-struct BoneWeight4;
-enum class RenderTargetFormat : uint32_t;
 #endif // rthsImpl
 
 using GPUResourcePtr = const void*;

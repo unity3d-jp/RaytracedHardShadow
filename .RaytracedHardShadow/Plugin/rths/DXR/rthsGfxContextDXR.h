@@ -51,10 +51,10 @@ public:
     uint64_t submitCommandList(const std::vector<ID3D12CommandList*>& cl, uint64_t preceding_fv = 0, bool emit_signal = true);
     uint64_t submitCommandList(ID3D12CommandList *const*cl, size_t n, uint64_t preceding_fv = 0, bool emit_signal = true);
 
-    bool readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t size);
-    bool uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t size);
-    bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, size_t width, size_t height, DXGI_FORMAT format);
-    bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, size_t width, size_t height, DXGI_FORMAT format);
+    bool readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, UINT64 size);
+    bool uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, UINT64 size);
+    bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, UINT width, UINT height, DXGI_FORMAT format);
+    bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, UINT width, UINT height, DXGI_FORMAT format);
     void executeImmediateCopy(RenderDataDXR& rd, ID3D12GraphicsCommandList4Ptr& cl);
 
 private:
@@ -74,8 +74,7 @@ private:
     uint64_t m_fv_last_rays = 0;
 
     ID3D12StateObjectPtr m_pipeline_state;
-    ID3D12RootSignaturePtr m_global_rootsig;
-    ID3D12RootSignaturePtr m_local_rootsig;
+    ID3D12RootSignaturePtr m_rootsig;
 
     std::map<const void*, TextureDataDXRPtr> m_texture_records;
     std::map<const void*, BufferDataDXRPtr> m_buffer_records;

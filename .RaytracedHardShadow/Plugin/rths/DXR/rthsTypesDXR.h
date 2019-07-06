@@ -327,9 +327,10 @@ extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
 extern const D3D12_HEAP_PROPERTIES kReadbackHeapProps;
 
-size_t SizeOfElement(DXGI_FORMAT rtf);
+UINT SizeOfElement(DXGI_FORMAT rtf);
 DXGI_FORMAT GetDXGIFormat(RenderTargetFormat format);
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
+DXGI_FORMAT GetTypelessFormatDXR(DXGI_FORMAT format);
 std::string ToString(ID3DBlob *blob);
 void PrintStateObjectDesc(const D3D12_STATE_OBJECT_DESC* desc);
 
