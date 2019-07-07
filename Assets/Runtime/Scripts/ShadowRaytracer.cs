@@ -219,6 +219,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] List<Layer> m_layers = new List<Layer> { new Layer() };
 
         [SerializeField] bool m_GPUSkinning = true;
+        [SerializeField] bool m_adaptiveSampling = false;
         [SerializeField] bool m_parallelCommandList = false;
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
         [SerializeField] bool m_clampBlendshapeWeights = true;
@@ -350,6 +351,11 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_GPUSkinning; }
             set { m_GPUSkinning = value; }
+        }
+        public bool adaptiveSampling
+        {
+            get { return m_adaptiveSampling; }
+            set { m_adaptiveSampling = value; }
         }
 #if UNITY_EDITOR
         public bool foldDebug
@@ -1033,6 +1039,8 @@ namespace UTJ.RaytracedHardShadow
                     flags |= rthsRenderFlag.KeepSelfDropShadow;
                 if (m_GPUSkinning)
                     flags |= rthsRenderFlag.GPUSkinning;
+                if (m_adaptiveSampling)
+                    flags |= rthsRenderFlag.AdaptiveSampling;
                 if (m_parallelCommandList)
                     flags |= rthsRenderFlag.ParallelCommandList;
                 if (m_clampBlendshapeWeights)

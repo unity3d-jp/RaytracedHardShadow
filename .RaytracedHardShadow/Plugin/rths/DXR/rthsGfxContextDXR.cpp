@@ -20,7 +20,8 @@ extern ID3D12Device *g_host_d3d12_device;
 
 static const int kMaxTraceRecursionLevel = 2;
 
-static const WCHAR* kRayGenShader = L"RayGen";
+static const WCHAR* kRayGenShader1 = L"RayGen";
+static const WCHAR* kRayGenShader2 = L"RayGenWithAdaptiveSampling";
 static const WCHAR* kMissShader1 = L"Miss1";
 static const WCHAR* kMissShader2 = L"Miss2";
 static const WCHAR* kAnyHitShader = L"AnyHit";
@@ -217,19 +218,33 @@ bool GfxContextDXR::initialize()
 
     // root signature
     {
-        D3D12_DESCRIPTOR_RANGE ranges[] = {
+        D3D12_DESCRIPTOR_RANGE ranges1[] = {
             { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+        };
+        D3D12_DESCRIPTOR_RANGE ranges2[] = {
             { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
             { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
-        D3D12_ROOT_PARAMETER param{};
-        param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        param.DescriptorTable.NumDescriptorRanges = _countof(ranges);
-        param.DescriptorTable.pDescriptorRanges = ranges;
+        D3D12_DESCRIPTOR_RANGE ranges3[] = {
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+        };
+
+        D3D12_ROOT_PARAMETER params[3]{};
+        params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[0].DescriptorTable.NumDescriptorRanges = _countof(ranges1);
+        params[0].DescriptorTable.pDescriptorRanges = ranges1;
+
+        params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[1].DescriptorTable.NumDescriptorRanges = _countof(ranges2);
+        params[1].DescriptorTable.pDescriptorRanges = ranges2;
+
+        params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[2].DescriptorTable.NumDescriptorRanges = _countof(ranges3);
+        params[2].DescriptorTable.pDescriptorRanges = ranges3;
 
         D3D12_ROOT_SIGNATURE_DESC desc{};
-        desc.NumParameters = 1;
-        desc.pParameters = &param;
+        desc.NumParameters = _countof(params);
+        desc.pParameters = params;
 
         ID3DBlobPtr sig_blob, error_blob;
         HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
@@ -354,10 +369,13 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rd.desc_heap));
 
         auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, rd.desc_heap);
-        rd.render_target_handle = handle_allocator.allocate();
+        for (int i = 0; i < _countof(rd.render_target_handles); ++i)
+            rd.render_target_handles[i] = handle_allocator.allocate();
         rd.tlas_handle = handle_allocator.allocate();
         rd.instance_data_handle = handle_allocator.allocate();
         rd.scene_data_handle = handle_allocator.allocate();
+        for (int i = 0; i < _countof(rd.prev_result_handles); ++i)
+            rd.prev_result_handles[i] = handle_allocator.allocate();
     }
 
     // initialize scene constant buffer
@@ -445,15 +463,41 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
                 data->texture = tex;
             }
         }
+
+        int w = data->texture->width;
+        int h = data->texture->height;
+        if (w > 32 && h > 32) {
+            data->half_res = createTexture(w / 2, h / 2, DXGI_FORMAT_R16G16_FLOAT);
+            data->quarter_res = createTexture(w / 4, h / 4, DXGI_FORMAT_R16G16_FLOAT);
+        }
     }
 
     if (rd.render_target != data) {
         rd.render_target = data;
         if (data) {
-            D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
-            uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-            uav_desc.Format = GetTypedFormatDXR(rd.render_target->texture->format); // typeless is not allowed for unordered access view
-            m_device->CreateUnorderedAccessView(rd.render_target->texture->resource, nullptr, &uav_desc, rd.render_target_handle.hcpu);
+            auto create_uav = [this](auto& res, auto hcpu) {
+                D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+                uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+                uav_desc.Format = GetTypedFormatDXR(res->GetDesc().Format); // typeless is not allowed for unordered access view
+                m_device->CreateUnorderedAccessView(res, nullptr, &uav_desc, hcpu);
+            };
+
+            auto create_srv = [this](auto& res, auto hcpu) {
+                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+                srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                srv_desc.Texture2D.MipLevels = 1;
+                m_device->CreateShaderResourceView(res, &srv_desc, hcpu);
+            };
+
+            create_uav(data->texture->resource, rd.render_target_handles[0].hcpu);
+            if (data->half_res && data->quarter_res) {
+                create_uav(data->half_res, rd.render_target_handles[1].hcpu);
+                create_uav(data->quarter_res, rd.render_target_handles[2].hcpu);
+
+                create_srv(data->half_res, rd.prev_result_handles[0].hcpu);
+                create_srv(data->quarter_res, rd.prev_result_handles[1].hcpu);
+            }
         }
     }
 
@@ -925,7 +969,8 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         };
 
         // ray-gen
-        add_shader_record(sop->GetShaderIdentifier(kRayGenShader));
+        add_shader_record(sop->GetShaderIdentifier(kRayGenShader1));
+        add_shader_record(sop->GetShaderIdentifier(kRayGenShader2));
 
         // miss
         add_shader_record(sop->GetShaderIdentifier(kMissShader1));
@@ -938,11 +983,15 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         rd.shader_table->Unmap(0, nullptr);
     }
 
-    D3D12_RESOURCE_STATES prev_state = D3D12_RESOURCE_STATE_COMMON;
-    addResourceBarrier(cl_rays, rtex->resource, prev_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-    // dispatch rays
-    {
+    // bind root signature and shader resources
+    cl_rays->SetComputeRootSignature(m_rootsig);
+
+    ID3D12DescriptorHeap *desc_heaps[] = { rd.desc_heap };
+    cl_rays->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
+
+
+    auto do_dispatch_rays = [&](int raygen_index) {
         D3D12_DISPATCH_RAYS_DESC dr_desc{};
         dr_desc.Width = rtex->width;
         dr_desc.Height = rtex->height;
@@ -950,9 +999,9 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
 
         auto addr = rd.shader_table->GetGPUVirtualAddress();
         // ray-gen
-        dr_desc.RayGenerationShaderRecord.StartAddress = addr;
+        dr_desc.RayGenerationShaderRecord.StartAddress = addr + (shader_record_size * raygen_index);
         dr_desc.RayGenerationShaderRecord.SizeInBytes = shader_record_size;
-        addr += dr_desc.RayGenerationShaderRecord.SizeInBytes;
+        addr += shader_record_size * 2;
 
         // miss
         dr_desc.MissShaderTable.StartAddress = addr;
@@ -966,20 +1015,39 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         dr_desc.HitGroupTable.SizeInBytes = shader_record_size * 2;
         addr += dr_desc.HitGroupTable.SizeInBytes;
 
-
-        // bind root signature and shader resources
-        cl_rays->SetComputeRootSignature(m_rootsig);
-
-        ID3D12DescriptorHeap *desc_heaps[] = { rd.desc_heap };
-        cl_rays->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
-        cl_rays->SetComputeRootDescriptorTable(0, rd.desc_heap->GetGPUDescriptorHandleForHeapStart());
-
-        // dispatch
         cl_rays->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
         cl_rays->DispatchRays(&dr_desc);
+    };
+
+    // dispatch
+    if (rd.hasFlag(RenderFlag::AdaptiveSampling) && rd.render_target->quarter_res && rd.render_target->half_res) {
+        // adaptive sampling
+        addResourceBarrier(cl_rays, rd.render_target->quarter_res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handles[2].hgpu);
+        cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_handle.hgpu);
+        do_dispatch_rays(0);
+        addResourceBarrier(cl_rays, rd.render_target->quarter_res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+
+        addResourceBarrier(cl_rays, rd.render_target->half_res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handles[1].hgpu);
+        cl_rays->SetComputeRootDescriptorTable(2, rd.prev_result_handles[1].hgpu);
+        do_dispatch_rays(1);
+        addResourceBarrier(cl_rays, rd.render_target->half_res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+
+        addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handles[0].hgpu);
+        cl_rays->SetComputeRootDescriptorTable(2, rd.prev_result_handles[0].hgpu);
+        do_dispatch_rays(1);
+        addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+    }
+    else {
+        addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handles[0].hgpu);
+        cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_handle.hgpu);
+        do_dispatch_rays(0);
+        addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
     }
 
-    addResourceBarrier(cl_rays, rd.render_target->texture->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, prev_state);
 
     rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays end");
     rthsTimestampResolve(rd.timestamp, cl_rays);

@@ -235,6 +235,7 @@ namespace UTJ.RaytracedHardShadowEditor
             // misc
             EditorGUILayout.LabelField("Misc", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_adaptiveSampling"));
             EditorGUILayout.PropertyField(so.FindProperty("m_parallelCommandList"));
 
             // debug
