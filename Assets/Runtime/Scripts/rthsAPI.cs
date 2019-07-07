@@ -72,6 +72,8 @@ namespace UTJ.RaytracedHardShadow
         KeepSelfDropShadow      = 0x00000004,
         AdaptiveSampling        = 0x00000008,
         Antialiasing            = 0x00000010,
+        AlphaTest               = 0x00000020,
+        Transparent             = 0x00000040,
         GPUSkinning             = 0x00000100,
         ClampBlendShapeWights   = 0x00000200,
         ParallelCommandList     = 0x00000400,

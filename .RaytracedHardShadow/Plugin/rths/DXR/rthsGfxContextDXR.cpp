@@ -525,6 +525,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
             }
         }
 
+        // create textures for adaptive sampling and antialiasing
         int width = data->texture->width;
         int height = data->texture->height;
         auto format = data->texture->format;

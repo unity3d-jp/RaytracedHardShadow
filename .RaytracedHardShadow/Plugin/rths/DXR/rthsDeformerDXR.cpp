@@ -134,13 +134,18 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
     int bone_count = (int)inst.bones.size();
 
     // setup descriptors
+    bool update_descriptors = false;
     if (!inst_dxr.desc_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
         desc.NumDescriptors = 32;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&inst_dxr.desc_heap));
+        update_descriptors = true;
     }
+
+    // note: there are per-mesh resources (e.g. base vertices) and per-instance ones (e.g. deformed vertices).
+    //       these are not 1 on 1. one mesh can have multiple instances.
     auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, inst_dxr.desc_heap);
     auto hdst_vertices = handle_allocator.allocate();
     auto hbase_vertices = handle_allocator.allocate();
@@ -157,17 +162,17 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
         // deformed vertices
         inst_dxr.deformed_vertices = createBuffer(sizeof(float4) * vertex_count, kDefaultHeapProps, true);
     }
-    createUAV(hdst_vertices.hcpu, inst_dxr.deformed_vertices, vertex_count, sizeof(float4));
-
-    // interpret source vertex buffer as just an array of float
-    createSRV(hbase_vertices.hcpu, mesh_dxr.vertex_buffer->resource, mesh_dxr.vertex_buffer->size / 4, 4);
+    if (update_descriptors) {
+        createUAV(hdst_vertices.hcpu, inst_dxr.deformed_vertices, vertex_count, sizeof(float4));
+        // interpret source vertex buffer as just an array of float
+        createSRV(hbase_vertices.hcpu, mesh_dxr.vertex_buffer->resource, mesh_dxr.vertex_buffer->size / 4, 4);
+    }
 
     // blendshape
     if (blendshape_count > 0) {
         int frame_count = 0;
-        for (auto& bs : mesh.blendshapes) {
+        for (auto& bs : mesh.blendshapes)
             frame_count += (int)bs.frames.size();
-        }
 
         if (!mesh_dxr.bs_delta) {
             // delta
@@ -233,10 +238,12 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
             });
         }
 
-        createSRV(hbs_delta.hcpu, mesh_dxr.bs_delta, vertex_count * frame_count, sizeof(float4));
-        createSRV(hbs_frames.hcpu, mesh_dxr.bs_frames, frame_count, sizeof(BlendshapeFrame));
-        createSRV(hbs_info.hcpu, mesh_dxr.bs_info, blendshape_count, sizeof(BlendshapeInfo));
-        createSRV(hbs_weights.hcpu, inst_dxr.bs_weights, blendshape_count, sizeof(float));
+        if (update_descriptors) {
+            createSRV(hbs_delta.hcpu, mesh_dxr.bs_delta, vertex_count * frame_count, sizeof(float4));
+            createSRV(hbs_frames.hcpu, mesh_dxr.bs_frames, frame_count, sizeof(BlendshapeFrame));
+            createSRV(hbs_info.hcpu, mesh_dxr.bs_info, blendshape_count, sizeof(BlendshapeInfo));
+            createSRV(hbs_weights.hcpu, inst_dxr.bs_weights, blendshape_count, sizeof(float));
+        }
     }
 
     // skinning 
@@ -286,10 +293,12 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
             });
         }
 
-        int weight_count = (int)mesh.skin.weights.size();
-        createSRV(hbone_counts.hcpu, mesh_dxr.bone_counts, vertex_count, sizeof(BoneCount));
-        createSRV(hbone_weights.hcpu, mesh_dxr.bone_weights, weight_count, sizeof(BoneWeight));
-        createSRV(hbone_matrices.hcpu, inst_dxr.bone_matrices, bone_count, sizeof(float4x4));
+        if (update_descriptors) {
+            int weight_count = (int)mesh.skin.weights.size();
+            createSRV(hbone_counts.hcpu, mesh_dxr.bone_counts, vertex_count, sizeof(BoneCount));
+            createSRV(hbone_weights.hcpu, mesh_dxr.bone_weights, weight_count, sizeof(BoneWeight));
+            createSRV(hbone_matrices.hcpu, inst_dxr.bone_matrices, bone_count, sizeof(float4x4));
+        }
     }
 
     // mesh info
@@ -308,7 +317,9 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
             *(MeshInfo*)dst_ = info;
         });
     }
-    createCBV(hmesh_info.hcpu, mesh_dxr.mesh_info, mesh_info_size);
+    if (update_descriptors) {
+        createCBV(hmesh_info.hcpu, mesh_dxr.mesh_info, mesh_info_size);
+    }
 
     {
         auto& cl = rd.cl_deform;
