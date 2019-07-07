@@ -225,11 +225,14 @@ namespace UTJ.RaytracedHardShadow
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
         [SerializeField] bool m_clampBlendshapeWeights = true;
 
-#if UNITY_EDITOR
-        [SerializeField] bool m_foldDebug = false;
-#endif
         [SerializeField] bool m_dbgTimestamp = false;
         [SerializeField] bool m_dbgForceUpdateAS = false;
+
+#if UNITY_EDITOR
+#pragma warning disable CS0414
+        [SerializeField] bool m_foldDebug = false;
+#pragma warning restore CS0414 
+#endif
 
         rthsRenderer m_renderer;
         List<ExportRequest> m_exportRequests;
@@ -363,13 +366,12 @@ namespace UTJ.RaytracedHardShadow
             get { return m_antialiasing; }
             set { m_antialiasing = value; }
         }
-#if UNITY_EDITOR
-        public bool foldDebug
+        public bool parallelCommandList
         {
-            get { return m_foldDebug; }
-            set { m_foldDebug = value; }
+            get { return m_parallelCommandList; }
+            set { m_parallelCommandList = value; }
         }
-#endif
+
         public bool dbgTimestamp
         {
             get { return m_dbgTimestamp; }

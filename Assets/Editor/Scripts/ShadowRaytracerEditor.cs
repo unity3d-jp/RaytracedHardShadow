@@ -71,6 +71,27 @@ namespace UTJ.RaytracedHardShadowEditor
 
 
         static readonly int indentSize = 16;
+        static ShadowRaytracer s_target;
+
+        void OnEnable()
+        {
+            s_target = target as ShadowRaytracer;
+            SceneView.duringSceneGui += OnSceneGUI;
+        }
+
+        void OnDisable()
+        {
+            SceneView.duringSceneGui -= OnSceneGUI;
+            s_target = null;
+        }
+
+        static void OnSceneGUI(SceneView sceneView)
+        {
+            if (s_target == null)
+                return;
+            if (s_target.dbgTimestamp)
+                UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+        }
 
         public override void OnInspectorGUI()
         {
@@ -237,7 +258,7 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
             EditorGUILayout.PropertyField(so.FindProperty("m_adaptiveSampling"));
             EditorGUILayout.PropertyField(so.FindProperty("m_antialiasing"));
-            EditorGUILayout.PropertyField(so.FindProperty("m_parallelCommandList"));
+            //EditorGUILayout.PropertyField(so.FindProperty("m_parallelCommandList"));
 
             // debug
             var foldDebug = so.FindProperty("m_foldDebug");
