@@ -90,6 +90,8 @@ uint RelatedCasterMask() { return gInstanceData[InstanceID()].related_caster_mas
 float angle_between(float3 a, float3 b) { return acos(clamp(dot(a, b), 0, 1)); }
 
 
+
+
 struct RayPayload
 {
     float shadow;
@@ -102,7 +104,7 @@ RayDesc GetCameraRay()
     uint2 screen_dim = DispatchRaysDimensions().xy;
 
     float aspect_ratio = (float)screen_dim.x / (float)screen_dim.y;
-    float2 screen_pos = ((float2(screen_idx)+0.5f) / float2(screen_dim)) * 2.0f - 1.0f;
+    float2 screen_pos = ((float2(screen_idx) + 0.5f) / float2(screen_dim)) * 2.0f - 1.0f;
     screen_pos.x *= aspect_ratio;
 
     RayDesc ray;
@@ -139,21 +141,21 @@ void RayGen()
     gOutput[screen_idx] = payload.shadow;
 }
 
-
 [shader("raygeneration")]
 void RayGenWithAdaptiveSampling()
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
     uint2 cur_dim = DispatchRaysDimensions().xy;
     uint2 pre_dim; gPrevResult.GetDimensions(pre_dim.x, pre_dim.y);
-
     int2 pre_idx = (int2)((float2)screen_idx * ((float2)pre_dim / (float2)cur_dim));
+
     float s = gPrevResult[clamp(pre_idx, int2(0, 0), (int2)pre_dim - 1)];
     float diff = 0.0f;
     diff += abs(s - gPrevResult[clamp(pre_idx + int2(-1, 0), int2(0, 0), (int2)pre_dim - 1)]);
     diff += abs(s - gPrevResult[clamp(pre_idx + int2( 1, 0), int2(0, 0), (int2)pre_dim - 1)]);
     diff += abs(s - gPrevResult[clamp(pre_idx + int2( 0,-1), int2(0, 0), (int2)pre_dim - 1)]);
     diff += abs(s - gPrevResult[clamp(pre_idx + int2( 0, 1), int2(0, 0), (int2)pre_dim - 1)]);
+
     if (diff == 0) {
         gOutput[screen_idx] = s;
     }

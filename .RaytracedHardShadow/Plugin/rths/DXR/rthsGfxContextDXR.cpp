@@ -369,11 +369,13 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rd.desc_heap));
 
         auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, rd.desc_heap);
-        for (int i = 0; i < _countof(rd.render_target_handles); ++i)
-            rd.render_target_handles[i] = handle_allocator.allocate();
+        rd.render_target_handle = handle_allocator.allocate();
         rd.tlas_handle = handle_allocator.allocate();
         rd.instance_data_handle = handle_allocator.allocate();
         rd.scene_data_handle = handle_allocator.allocate();
+
+        for (int i = 0; i < _countof(rd.adaptive_res_handles); ++i)
+            rd.adaptive_res_handles[i] = handle_allocator.allocate();
         for (int i = 0; i < _countof(rd.prev_result_handles); ++i)
             rd.prev_result_handles[i] = handle_allocator.allocate();
     }
@@ -467,8 +469,9 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
         int w = data->texture->width;
         int h = data->texture->height;
         if (w > 32 && h > 32) {
-            data->half_res = createTexture(w / 2, h / 2, DXGI_FORMAT_R16G16_FLOAT);
-            data->quarter_res = createTexture(w / 4, h / 4, DXGI_FORMAT_R16G16_FLOAT);
+            data->adaptive_res[0] = createTexture(w / 2, h / 2, DXGI_FORMAT_R16G16_FLOAT);
+            data->adaptive_res[1] = createTexture(w / 4, h / 4, DXGI_FORMAT_R16G16_FLOAT);
+            data->adaptive_res[2] = createTexture(w / 8, h / 8, DXGI_FORMAT_R16G16_FLOAT);
         }
     }
 
@@ -490,13 +493,13 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
                 m_device->CreateShaderResourceView(res, &srv_desc, hcpu);
             };
 
-            create_uav(data->texture->resource, rd.render_target_handles[0].hcpu);
-            if (data->half_res && data->quarter_res) {
-                create_uav(data->half_res, rd.render_target_handles[1].hcpu);
-                create_uav(data->quarter_res, rd.render_target_handles[2].hcpu);
-
-                create_srv(data->half_res, rd.prev_result_handles[0].hcpu);
-                create_srv(data->quarter_res, rd.prev_result_handles[1].hcpu);
+            create_uav(data->texture->resource, rd.render_target_handle.hcpu);
+            for (int i = 0; i < _countof(data->adaptive_res); ++i) {
+                auto& res = data->adaptive_res[i];
+                if (res) {
+                    create_uav(res, rd.adaptive_res_handles[i].hcpu);
+                    create_srv(res, rd.prev_result_handles[i].hcpu);
+                }
             }
         }
     }
@@ -937,10 +940,6 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         SetErrorLog("GfxContext::flush(): called before finish()\n");
         return;
     }
-    auto& rtex = rd.render_target->texture;
-
-    auto cl_rays = rd.clm_rays->get();
-    rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays begin");
 
     UINT64 shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
     shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, shader_record_size);
@@ -983,18 +982,21 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         rd.shader_table->Unmap(0, nullptr);
     }
 
+    auto cl_rays = rd.clm_rays->get();
+    rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays begin");
 
-    // bind root signature and shader resources
     cl_rays->SetComputeRootSignature(m_rootsig);
-
     ID3D12DescriptorHeap *desc_heaps[] = { rd.desc_heap };
     cl_rays->SetDescriptorHeaps(_countof(desc_heaps), desc_heaps);
+    cl_rays->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
 
 
-    auto do_dispatch_rays = [&](int raygen_index) {
+    auto do_dispatch_rays = [&](ID3D12Resource *rt, int raygen_index) {
+        auto rt_desc = rt->GetDesc();
+
         D3D12_DISPATCH_RAYS_DESC dr_desc{};
-        dr_desc.Width = rtex->width;
-        dr_desc.Height = rtex->height;
+        dr_desc.Width = (UINT)rt_desc.Width;
+        dr_desc.Height = (UINT)rt_desc.Height;
         dr_desc.Depth = 1;
 
         auto addr = rd.shader_table->GetGPUVirtualAddress();
@@ -1015,40 +1017,51 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         dr_desc.HitGroupTable.SizeInBytes = shader_record_size * 2;
         addr += dr_desc.HitGroupTable.SizeInBytes;
 
-        cl_rays->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
         cl_rays->DispatchRays(&dr_desc);
     };
 
     // dispatch
-    if (rd.hasFlag(RenderFlag::AdaptiveSampling) && rd.render_target->quarter_res && rd.render_target->half_res) {
+    auto& rtex = rd.render_target->texture;
+    if (rd.hasFlag(RenderFlag::AdaptiveSampling) && rd.render_target->adaptive_res[0]) {
         // adaptive sampling
-        addResourceBarrier(cl_rays, rd.render_target->quarter_res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handles[2].hgpu);
+
+        auto& adaptive_res = rd.render_target->adaptive_res;
+
+        // 1 / 8
+        addResourceBarrier(cl_rays, adaptive_res[2], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_res_handles[2].hgpu);
         cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_handle.hgpu);
-        do_dispatch_rays(0);
-        addResourceBarrier(cl_rays, rd.render_target->quarter_res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+        do_dispatch_rays(adaptive_res[2], 0);
+        addResourceBarrier(cl_rays, adaptive_res[2], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
 
-        addResourceBarrier(cl_rays, rd.render_target->half_res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handles[1].hgpu);
+        // 1 / 4
+        addResourceBarrier(cl_rays, adaptive_res[1], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        cl_rays->SetComputeRootDescriptorTable(2, rd.prev_result_handles[2].hgpu);
+        cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_res_handles[1].hgpu);
+        do_dispatch_rays(adaptive_res[1], 1);
+        addResourceBarrier(cl_rays, adaptive_res[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+
+        // 1 / 2
+        addResourceBarrier(cl_rays, adaptive_res[0], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         cl_rays->SetComputeRootDescriptorTable(2, rd.prev_result_handles[1].hgpu);
-        do_dispatch_rays(1);
-        addResourceBarrier(cl_rays, rd.render_target->half_res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+        cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_res_handles[0].hgpu);
+        do_dispatch_rays(adaptive_res[0], 1);
+        addResourceBarrier(cl_rays, adaptive_res[0], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
 
+        // 1 / 1
         addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handles[0].hgpu);
         cl_rays->SetComputeRootDescriptorTable(2, rd.prev_result_handles[0].hgpu);
-        do_dispatch_rays(1);
+        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handle.hgpu);
+        do_dispatch_rays(rtex->resource, 1);
         addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
     }
     else {
         addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handles[0].hgpu);
+        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_handle.hgpu);
         cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_handle.hgpu);
-        do_dispatch_rays(0);
+        do_dispatch_rays(rtex->resource, 0);
         addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
     }
-
-
     rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays end");
     rthsTimestampResolve(rd.timestamp, cl_rays);
 

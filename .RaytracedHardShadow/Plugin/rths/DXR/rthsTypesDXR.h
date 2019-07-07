@@ -203,7 +203,7 @@ class RenderTargetDataDXR
 public:
     RenderTargetData *base = nullptr;
     TextureDataDXRPtr texture;
-    ID3D12ResourcePtr half_res, quarter_res; // for adaptive sampling
+    ID3D12ResourcePtr adaptive_res[3]; // for adaptive sampling
 };
 using RenderTargetDataDXRPtr = std::shared_ptr<RenderTargetDataDXR>;
 
@@ -295,10 +295,11 @@ public:
     ID3D12GraphicsCommandList4Ptr cl_deform;
 
     ID3D12DescriptorHeapPtr desc_heap;
-    DescriptorHandleDXR render_target_handles[3];
+    DescriptorHandleDXR render_target_handle;
     DescriptorHandleDXR tlas_handle, instance_data_handle;
     DescriptorHandleDXR scene_data_handle;
-    DescriptorHandleDXR prev_result_handles[2];
+    DescriptorHandleDXR adaptive_res_handles[3];
+    DescriptorHandleDXR prev_result_handles[3];
 
     std::vector<GeometryDataDXR> geometries, geometries_prev;
     SceneData scene_data_prev{};
