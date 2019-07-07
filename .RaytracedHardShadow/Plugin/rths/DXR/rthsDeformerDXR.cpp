@@ -60,29 +60,27 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
         param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         param.DescriptorTable.NumDescriptorRanges = _countof(ranges);
         param.DescriptorTable.pDescriptorRanges = ranges;
-        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         D3D12_ROOT_SIGNATURE_DESC desc{};
         desc.NumParameters = 1;
         desc.pParameters = &param;
 
-        ID3DBlobPtr sig_blob;
-        ID3DBlobPtr error_blob;
+        ID3DBlobPtr sig_blob, error_blob;
         HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
         if (FAILED(hr)) {
             SetErrorLog(ToString(error_blob) + "\n");
         }
         else {
-            hr = m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_rootsig_deform));
+            hr = m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_rootsig));
             if (FAILED(hr)) {
                 SetErrorLog("CreateRootSignature() failed\n");
             }
         }
     }
 
-    if (m_rootsig_deform) {
+    if (m_rootsig) {
         D3D12_COMPUTE_PIPELINE_STATE_DESC psd {};
-        psd.pRootSignature = m_rootsig_deform.GetInterfacePtr();
+        psd.pRootSignature = m_rootsig.GetInterfacePtr();
         psd.CS.pShaderBytecode = g_rthsDeform;
         psd.CS.BytecodeLength = sizeof(g_rthsDeform);
 
@@ -99,7 +97,7 @@ DeformerDXR::~DeformerDXR()
 
 bool DeformerDXR::valid() const
 {
-    return this != nullptr && m_device && m_rootsig_deform && m_pipeline_state;
+    return this && m_device && m_rootsig && m_pipeline_state;
 }
 
 bool DeformerDXR::prepare(RenderDataDXR& rd)
@@ -136,14 +134,14 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
     int bone_count = (int)inst.bones.size();
 
     // setup descriptors
-    if (!inst_dxr.srvuav_heap) {
+    if (!inst_dxr.desc_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
         desc.NumDescriptors = 32;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&inst_dxr.srvuav_heap));
+        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&inst_dxr.desc_heap));
     }
-    auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, inst_dxr.srvuav_heap);
+    auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, inst_dxr.desc_heap);
     auto hdst_vertices = handle_allocator.allocate();
     auto hbase_vertices = handle_allocator.allocate();
     auto hbs_delta = handle_allocator.allocate();
@@ -314,11 +312,11 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
 
     {
         auto& cl = rd.cl_deform;
-        cl->SetComputeRootSignature(m_rootsig_deform);
+        cl->SetComputeRootSignature(m_rootsig);
 
-        ID3D12DescriptorHeap* heaps[] = { inst_dxr.srvuav_heap };
+        ID3D12DescriptorHeap* heaps[] = { inst_dxr.desc_heap };
         cl->SetDescriptorHeaps(_countof(heaps), heaps);
-        cl->SetComputeRootDescriptorTable(0, hdst_vertices.hgpu);
+        cl->SetComputeRootDescriptorTable(0, inst_dxr.desc_heap->GetGPUDescriptorHandleForHeapStart());
         cl->Dispatch(mesh.vertex_count, 1, 1);
 
         if (submit) {

@@ -5,8 +5,6 @@
 #include "rthsResourceTranslatorDXR.h"
 #include "rthsDeformerDXR.h"
 
-#define rthsMaxBounce 2
-
 namespace rths {
 
 class GfxContextDXR : public ISceneCallback

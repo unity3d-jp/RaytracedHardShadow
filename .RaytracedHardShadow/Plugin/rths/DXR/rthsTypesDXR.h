@@ -9,7 +9,8 @@
 
     // GPU based validation
     // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/using-d3d12-debug-layer-gpu-based-validation
-    #define rthsEnableD3D12GBV
+    // note: enabling this can cause problems. in our case, shader resources bound by global root sig become invisible.
+    //#define rthsEnableD3D12GBV
 
     // DREAD (this requires Windows SDK 10.0.18362.0 or newer)
     // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
@@ -21,8 +22,9 @@
     //#define rthsEnableRenderTargetValidation
     //#define rthsForceSoftwareDevice
 #endif
+
 #define rthsEnableTimestamp
-//#define rthsEnableGlobalRootsig
+#define rthsEnableGlobalRootsig
 
 
 namespace rths {
@@ -174,7 +176,7 @@ public:
     MeshInstanceData *base = nullptr;
 
     MeshDataDXRPtr mesh;
-    ID3D12DescriptorHeapPtr srvuav_heap;
+    ID3D12DescriptorHeapPtr desc_heap;
     ID3D12ResourcePtr bs_weights;
     ID3D12ResourcePtr bone_matrices;
     ID3D12ResourcePtr deformed_vertices;

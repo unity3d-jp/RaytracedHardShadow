@@ -902,12 +902,6 @@ namespace UTJ.RaytracedHardShadow
             System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
 #endif
         }
-        static void ExportToTGA(string path, Texture2D tex)
-        {
-#if UNITY_2018_3_OR_NEWER
-            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToTGA(tex));
-#endif
-        }
         static void ExportToEXR(string path, Texture2D tex, Texture2D.EXRFlags flags)
         {
 #if UNITY_2018_1_OR_NEWER
@@ -916,6 +910,12 @@ namespace UTJ.RaytracedHardShadow
             System.IO.File.WriteAllBytes(path, tex.EncodeToEXR(flags));
 #endif
         }
+#if UNITY_2018_3_OR_NEWER
+        static void ExportToTGA(string path, Texture2D tex)
+        {
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToTGA(tex));
+        }
+#endif
 
         IEnumerator DoExportToImage()
         {

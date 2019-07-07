@@ -27,7 +27,7 @@ private:
 private:
     ID3D12Device5Ptr m_device;
 
-    ID3D12RootSignaturePtr m_rootsig_deform;
+    ID3D12RootSignaturePtr m_rootsig;
     ID3D12PipelineStatePtr m_pipeline_state;
 };
 using DeformerDXRPtr = std::shared_ptr<DeformerDXR>;

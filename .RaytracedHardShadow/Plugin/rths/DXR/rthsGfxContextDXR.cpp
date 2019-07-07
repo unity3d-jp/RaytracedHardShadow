@@ -18,6 +18,8 @@ struct InstanceData
 
 extern ID3D12Device *g_host_d3d12_device;
 
+static const int kMaxTraceRecursionLevel = 2;
+
 static const WCHAR* kRayGenShader = L"RayGen";
 static const WCHAR* kMissShader1 = L"Miss1";
 static const WCHAR* kMissShader2 = L"Miss2";
@@ -292,7 +294,7 @@ bool GfxContextDXR::initialize()
 #endif
 
         D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_desc{};
-        pipeline_desc.MaxTraceRecursionDepth = rthsMaxBounce;
+        pipeline_desc.MaxTraceRecursionDepth = kMaxTraceRecursionLevel;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &pipeline_desc);
 
         D3D12_STATE_OBJECT_DESC pso_desc{};
@@ -456,8 +458,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 
     if (rd.render_target != data) {
         rd.render_target = data;
-
-        if (rd.render_target) {
+        if (data) {
             D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
             uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
             uav_desc.Format = GetTypedFormatDXR(rd.render_target->texture->format); // typeless is not allowed for unordered access view
@@ -470,7 +471,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
         // fill texture with 0.0-1.0 gradation for debug
         auto do_fill = [this, &rd](auto& tex, auto&& data) {
             int n = tex.width * tex.height;
-            float r = 1.0f / (float)n;
+            float r = 1.0f / (float)(n - 1);
             data.resize(n);
             for (int i = 0; i < n; ++i)
                 data[i] = r * (float)i;
@@ -906,7 +907,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     auto cl_rays = rd.clm_rays->get();
     rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays begin");
 
-    size_t shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+    UINT64 shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
     shader_record_size += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
     shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, shader_record_size);
 
@@ -916,19 +917,23 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         rd.shader_table = createBuffer(shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
 
         // setup shader table
-        uint8_t *data;
-        rd.shader_table->Map(0, nullptr, (void**)&data);
+        uint8_t *addr;
+        rd.shader_table->Map(0, nullptr, (void**)&addr);
 
         ID3D12StateObjectPropertiesPtr sop;
         m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
 
         auto add_shader_record = [&](void *shader_id) {
-            auto dst = data;
+            if (!shader_id)
+                return;
+
+            auto dst = addr;
             memcpy(dst, shader_id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
             dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-            *(UINT64*)(dst) = rd.desc_heap->GetGPUDescriptorHandleForHeapStart().ptr;
+            *(D3D12_GPU_DESCRIPTOR_HANDLE*)dst = rd.desc_heap->GetGPUDescriptorHandleForHeapStart();
+            dst += sizeof(D3D12_GPU_DESCRIPTOR_HANDLE);
 
-            data += shader_record_size;
+            addr += shader_record_size;
         };
 
         // ray-gen
@@ -1113,7 +1118,7 @@ void GfxContextDXR::onRenderTargetDelete(RenderTargetData *rt)
 
 bool GfxContextDXR::valid() const
 {
-    return this != nullptr && m_device != nullptr;
+    return this && m_device && m_rootsig && m_pipeline_state;
 }
 
 bool GfxContextDXR::checkError()
@@ -1173,14 +1178,12 @@ ID3D12ResourcePtr GfxContextDXR::createBuffer(uint64_t size, D3D12_RESOURCE_FLAG
 {
     D3D12_RESOURCE_DESC desc{};
     desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    desc.Alignment = 0;
     desc.Width = size;
     desc.Height = 1;
     desc.DepthOrArraySize = 1;
     desc.MipLevels = 1;
     desc.Format = DXGI_FORMAT_UNKNOWN;
     desc.SampleDesc.Count = 1;
-    desc.SampleDesc.Quality = 0;
     desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     desc.Flags = flags;
 
@@ -1193,14 +1196,12 @@ ID3D12ResourcePtr GfxContextDXR::createTexture(int width, int height, DXGI_FORMA
 {
     D3D12_RESOURCE_DESC desc{};
     desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Alignment = 0;
     desc.Width = width;
     desc.Height = height;
     desc.DepthOrArraySize = 1;
     desc.MipLevels = 1;
     desc.Format = format;
     desc.SampleDesc.Count = 1;
-    desc.SampleDesc.Quality = 0;
     desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE;
