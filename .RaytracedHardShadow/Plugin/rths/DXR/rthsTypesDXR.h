@@ -204,6 +204,7 @@ public:
     RenderTargetData *base = nullptr;
     TextureDataDXRPtr texture;
     ID3D12ResourcePtr adaptive_res[3]; // for adaptive sampling
+    ID3D12ResourcePtr back_buffer; // back buffer for antialiasing
 };
 using RenderTargetDataDXRPtr = std::shared_ptr<RenderTargetDataDXR>;
 
@@ -295,11 +296,11 @@ public:
     ID3D12GraphicsCommandList4Ptr cl_deform;
 
     ID3D12DescriptorHeapPtr desc_heap;
-    DescriptorHandleDXR render_target_handle;
-    DescriptorHandleDXR tlas_handle, instance_data_handle;
-    DescriptorHandleDXR scene_data_handle;
-    DescriptorHandleDXR adaptive_res_handles[3];
-    DescriptorHandleDXR prev_result_handles[3];
+    DescriptorHandleDXR render_target_uav;
+    DescriptorHandleDXR tlas_srv, instance_data_srv;
+    DescriptorHandleDXR scene_data_cbv;
+    DescriptorHandleDXR adaptive_uavs[3], adaptive_srvs[3];
+    DescriptorHandleDXR back_buffer_uav, back_buffer_srv;
 
     std::vector<GeometryDataDXR> geometries, geometries_prev;
     SceneData scene_data_prev{};

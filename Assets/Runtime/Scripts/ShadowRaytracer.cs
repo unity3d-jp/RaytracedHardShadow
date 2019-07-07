@@ -220,6 +220,7 @@ namespace UTJ.RaytracedHardShadow
 
         [SerializeField] bool m_GPUSkinning = true;
         [SerializeField] bool m_adaptiveSampling = false;
+        [SerializeField] bool m_antialiasing = false;
         [SerializeField] bool m_parallelCommandList = false;
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
         [SerializeField] bool m_clampBlendshapeWeights = true;
@@ -356,6 +357,11 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_adaptiveSampling; }
             set { m_adaptiveSampling = value; }
+        }
+        public bool antialiasing
+        {
+            get { return m_antialiasing; }
+            set { m_antialiasing = value; }
         }
 #if UNITY_EDITOR
         public bool foldDebug
@@ -1041,6 +1047,8 @@ namespace UTJ.RaytracedHardShadow
                     flags |= rthsRenderFlag.GPUSkinning;
                 if (m_adaptiveSampling)
                     flags |= rthsRenderFlag.AdaptiveSampling;
+                if (m_antialiasing)
+                    flags |= rthsRenderFlag.Antialiasing;
                 if (m_parallelCommandList)
                     flags |= rthsRenderFlag.ParallelCommandList;
                 if (m_clampBlendshapeWeights)

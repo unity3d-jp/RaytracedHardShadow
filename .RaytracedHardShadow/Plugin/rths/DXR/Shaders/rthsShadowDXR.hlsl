@@ -98,13 +98,13 @@ struct RayPayload
     uint instance_id;     // instance id for first ray
 };
 
-RayDesc GetCameraRay()
+RayDesc GetCameraRay(float2 offset = 0.0f)
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
     uint2 screen_dim = DispatchRaysDimensions().xy;
 
     float aspect_ratio = (float)screen_dim.x / (float)screen_dim.y;
-    float2 screen_pos = ((float2(screen_idx) + 0.5f) / float2(screen_dim)) * 2.0f - 1.0f;
+    float2 screen_pos = ((float2(screen_idx) + offset + 0.5f) / float2(screen_dim)) * 2.0f - 1.0f;
     screen_pos.x *= aspect_ratio;
 
     RayDesc ray;
@@ -118,51 +118,87 @@ RayDesc GetCameraRay()
     return ray;
 }
 
-void ShootCameraRay(inout RayPayload payload)
+RayPayload ShootCameraRay(float2 offset = 0.0f)
 {
+    RayPayload payload;
     payload.shadow = 0.0;
 
-    RayDesc ray = GetCameraRay();
+    RayDesc ray = GetCameraRay(offset);
     int render_flags = RenderFlags();
     int ray_flags = RAY_FLAG_FORCE_OPAQUE;
     if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
     TraceRay(gRtScene, ray_flags, HM_RECEIVER, 0, 0, 0, ray, payload);
+    return payload;
+}
+
+float SampleDifferential(int2 idx, out float center, out float diff)
+{
+    int2 dim;
+    gPrevResult.GetDimensions(dim.x, dim.y);
+
+    center = gPrevResult[idx].x;
+    diff = 0.0f;
+    diff += abs(center - gPrevResult[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x);
+    diff += abs(center - gPrevResult[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x);
+    diff += abs(center - gPrevResult[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x);
+    diff += abs(center - gPrevResult[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x);
+    return diff;
 }
 
 
 [shader("raygeneration")]
-void RayGen()
+void RayGenDefault()
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
-    RayPayload payload;
-    ShootCameraRay(payload);
+    RayPayload payload = ShootCameraRay();
     gOutput[screen_idx] = payload.shadow;
 }
 
 [shader("raygeneration")]
-void RayGenWithAdaptiveSampling()
+void RayGenAdaptiveSampling()
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
     uint2 cur_dim = DispatchRaysDimensions().xy;
     uint2 pre_dim; gPrevResult.GetDimensions(pre_dim.x, pre_dim.y);
     int2 pre_idx = (int2)((float2)screen_idx * ((float2)pre_dim / (float2)cur_dim));
 
-    float s = gPrevResult[clamp(pre_idx, int2(0, 0), (int2)pre_dim - 1)];
-    float diff = 0.0f;
-    diff += abs(s - gPrevResult[clamp(pre_idx + int2(-1, 0), int2(0, 0), (int2)pre_dim - 1)]);
-    diff += abs(s - gPrevResult[clamp(pre_idx + int2( 1, 0), int2(0, 0), (int2)pre_dim - 1)]);
-    diff += abs(s - gPrevResult[clamp(pre_idx + int2( 0,-1), int2(0, 0), (int2)pre_dim - 1)]);
-    diff += abs(s - gPrevResult[clamp(pre_idx + int2( 0, 1), int2(0, 0), (int2)pre_dim - 1)]);
+    float center, diff;
+    SampleDifferential(pre_idx, center, diff);
 
     if (diff == 0) {
-        gOutput[screen_idx] = s;
+        gOutput[screen_idx] = center;
     }
     else {
-        RayPayload payload;
-        ShootCameraRay(payload);
+        RayPayload payload = ShootCameraRay();
         gOutput[screen_idx] = payload.shadow;
+    }
+}
+
+[shader("raygeneration")]
+void RayGenAntialiasing()
+{
+    uint2 idx = DispatchRaysIndex().xy;
+
+    float center, diff;
+    SampleDifferential(idx, center, diff);
+
+    if (diff == 0) {
+        gOutput[idx] = center;
+    }
+    else {
+        float total = center;
+
+        // todo: make offset values shader parameter
+        const int N = 4;
+        float2 offsets[N] = {
+            float2(0.33f, 0.33f), float2(-0.33f, 0.33f), float2(-0.33f, -0.33f), float2(0.33f, -0.33f)
+        };
+        for (int i = 0; i < N; ++i)
+            total += ShootCameraRay(offsets[i]).shadow;
+
+        gOutput[idx] = total / (N + 1);
     }
 }
 
