@@ -12,19 +12,17 @@
     // note: enabling this can cause problems. in our case, shader resources bound by global root sig become invisible.
     //#define rthsEnableD3D12GBV
 
-    // DREAD (this requires Windows SDK 10.0.18362.0 or newer)
-    // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
-    #define rthsEnableD3D12DREAD
-
-    #define rthsEnableResourceName
+    //// DREAD (this requires Windows SDK 10.0.18362.0 or newer)
+    //// https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
+    //#define rthsEnableD3D12DREAD
 
     //#define rthsEnableBufferValidation
     //#define rthsEnableRenderTargetValidation
     //#define rthsForceSoftwareDevice
 #endif
 
+#define rthsEnableResourceName
 #define rthsEnableTimestamp
-#define rthsEnableGlobalRootsig
 
 
 namespace rths {
