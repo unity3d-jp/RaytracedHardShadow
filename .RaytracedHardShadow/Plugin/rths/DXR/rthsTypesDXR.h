@@ -311,8 +311,6 @@ public:
     ID3D12ResourcePtr instance_data;
     RenderTargetDataDXRPtr render_target;
 
-    ID3D12ResourcePtr shader_table;
-
     uint64_t fv_deform = 0, fv_blas = 0, fv_tlas = 0, fv_rays = 0;
     FenceEventDXR fence_event;
     int render_flags = 0;

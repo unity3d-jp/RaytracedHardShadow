@@ -60,31 +60,35 @@ struct InstanceData
 };
 
 
-RWTexture2D<float> gOutput : register(u0);
-RaytracingAccelerationStructure gRtScene : register(t0);
-StructuredBuffer<InstanceData> gInstanceData : register(t1);
-ConstantBuffer<SceneData> gScene : register(b0);
+// slot 0
+RWTexture2D<float> g_output : register(u0);
 
-Texture2D<float> gPrevResult : register(t2);
+// slot 1
+RaytracingAccelerationStructure g_TLAS : register(t0);
+StructuredBuffer<InstanceData> g_instance_data : register(t1);
+ConstantBuffer<SceneData> g_scene_data : register(b0);
+
+// slot 2
+Texture2D<float> g_prev_result : register(t2);
 
 
-float3 CameraPosition() { return gScene.camera.position.xyz; }
-float3 CameraRight() { return gScene.camera.view[0].xyz; }
-float3 CameraUp() { return gScene.camera.view[1].xyz; }
-float3 CameraForward() { return -gScene.camera.view[2].xyz; }
-float CameraFocalLength() { return abs(gScene.camera.proj[1][1]); }
-float CameraNearPlane() { return gScene.camera.near_plane; }
-float CameraFarPlane() { return gScene.camera.far_plane; }
+float3 CameraPosition() { return g_scene_data.camera.position.xyz; }
+float3 CameraRight() { return g_scene_data.camera.view[0].xyz; }
+float3 CameraUp() { return g_scene_data.camera.view[1].xyz; }
+float3 CameraForward() { return -g_scene_data.camera.view[2].xyz; }
+float CameraFocalLength() { return abs(g_scene_data.camera.proj[1][1]); }
+float CameraNearPlane() { return g_scene_data.camera.near_plane; }
+float CameraFarPlane() { return g_scene_data.camera.far_plane; }
 
-int RenderFlags() { return gScene.render_flags; }
-float ShadowRayOffset() { return gScene.shadow_ray_offset; }
-float SelfShadowThreshold() { return gScene.self_shadow_threshold; }
+int RenderFlags() { return g_scene_data.render_flags; }
+float ShadowRayOffset() { return g_scene_data.shadow_ray_offset; }
+float SelfShadowThreshold() { return g_scene_data.self_shadow_threshold; }
 
-int LightCount() { return gScene.light_count; }
-LightData GetLight(int i) { return gScene.lights[i]; }
+int LightCount() { return g_scene_data.light_count; }
+LightData GetLight(int i) { return g_scene_data.lights[i]; }
 
 float3 HitPosition() { return WorldRayOrigin() + WorldRayDirection() * (RayTCurrent() - ShadowRayOffset()); }
-uint RelatedCasterMask() { return gInstanceData[InstanceID()].related_caster_mask; }
+uint RelatedCasterMask() { return g_instance_data[InstanceID()].related_caster_mask; }
 
 // a & b must be normalized
 float angle_between(float3 a, float3 b) { return acos(clamp(dot(a, b), 0, 1)); }
@@ -129,21 +133,21 @@ RayPayload ShootCameraRay(float2 offset = 0.0f)
     if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
-    TraceRay(gRtScene, ray_flags, HM_RECEIVER, 0, 0, 0, ray, payload);
+    TraceRay(g_TLAS, ray_flags, HM_RECEIVER, 0, 0, 0, ray, payload);
     return payload;
 }
 
 float SampleDifferential(int2 idx, out float center, out float diff)
 {
     int2 dim;
-    gPrevResult.GetDimensions(dim.x, dim.y);
+    g_prev_result.GetDimensions(dim.x, dim.y);
 
-    center = gPrevResult[idx].x;
+    center = g_prev_result[idx].x;
     diff = 0.0f;
-    diff += abs(center - gPrevResult[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x);
-    diff += abs(center - gPrevResult[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x);
-    diff += abs(center - gPrevResult[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x);
-    diff += abs(center - gPrevResult[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x);
+    diff += abs(center - g_prev_result[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x);
+    diff += abs(center - g_prev_result[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x);
+    diff += abs(center - g_prev_result[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x);
+    diff += abs(center - g_prev_result[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x);
     return diff;
 }
 
@@ -153,7 +157,7 @@ void RayGenDefault()
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
     RayPayload payload = ShootCameraRay();
-    gOutput[screen_idx] = payload.shadow;
+    g_output[screen_idx] = payload.shadow;
 }
 
 [shader("raygeneration")]
@@ -161,18 +165,18 @@ void RayGenAdaptiveSampling()
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
     uint2 cur_dim = DispatchRaysDimensions().xy;
-    uint2 pre_dim; gPrevResult.GetDimensions(pre_dim.x, pre_dim.y);
+    uint2 pre_dim; g_prev_result.GetDimensions(pre_dim.x, pre_dim.y);
     int2 pre_idx = (int2)((float2)screen_idx * ((float2)pre_dim / (float2)cur_dim));
 
     float center, diff;
     SampleDifferential(pre_idx, center, diff);
 
     if (diff == 0) {
-        gOutput[screen_idx] = center;
+        g_output[screen_idx] = center;
     }
     else {
         RayPayload payload = ShootCameraRay();
-        gOutput[screen_idx] = payload.shadow;
+        g_output[screen_idx] = payload.shadow;
     }
 }
 
@@ -185,7 +189,7 @@ void RayGenAntialiasing()
     SampleDifferential(idx, center, diff);
 
     if (diff == 0) {
-        gOutput[idx] = center;
+        g_output[idx] = center;
     }
     else {
         float total = center;
@@ -198,7 +202,7 @@ void RayGenAntialiasing()
         for (int i = 0; i < N; ++i)
             total += ShootCameraRay(offsets[i]).shadow;
 
-        gOutput[idx] = total / (N + 1);
+        g_output[idx] = total / (N + 1);
     }
 }
 
@@ -242,7 +246,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
             ray.Direction = -light.direction.xyz;
             ray.TMin = 0.0f;
             ray.TMax = CameraFarPlane();
-            TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
+            TraceRay(g_TLAS, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
         }
         else if (light.light_type == LT_SPOT) {
             // spot light
@@ -255,7 +259,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
+                TraceRay(g_TLAS, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_POINT) {
@@ -270,7 +274,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
+                TraceRay(g_TLAS, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_REVERSE_POINT) {
@@ -285,7 +289,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = -dir;
                 ray.TMin = 0.0f;
                 ray.TMax = light.range - distance;
-                TraceRay(gRtScene, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
+                TraceRay(g_TLAS, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
             }
         }
     }

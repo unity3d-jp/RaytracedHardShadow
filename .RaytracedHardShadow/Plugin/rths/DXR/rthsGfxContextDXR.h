@@ -73,8 +73,10 @@ private:
     uint64_t m_fence_value = 0;
     uint64_t m_fv_last_rays = 0;
 
-    ID3D12StateObjectPtr m_pipeline_state;
     ID3D12RootSignaturePtr m_rootsig;
+    ID3D12StateObjectPtr m_pipeline_state;
+    ID3D12ResourcePtr m_shader_table;
+    uint64_t m_shader_record_size = 0;
 
     std::map<const void*, TextureDataDXRPtr> m_texture_records;
     std::map<const void*, BufferDataDXRPtr> m_buffer_records;

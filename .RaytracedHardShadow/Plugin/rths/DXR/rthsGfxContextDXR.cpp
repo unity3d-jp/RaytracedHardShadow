@@ -25,18 +25,23 @@ enum class RayGenType : int
     Default,
     AdaptiveSampling,
     Antialiasing,
-    Count,
 };
 
-static const WCHAR* kRayGenShader1 = L"RayGenDefault";
-static const WCHAR* kRayGenShader2 = L"RayGenAdaptiveSampling";
-static const WCHAR* kRayGenShader3 = L"RayGenAntialiasing";
-static const WCHAR* kMissShader1 = L"Miss1";
-static const WCHAR* kMissShader2 = L"Miss2";
+static const WCHAR* kRayGenShaders[]{
+    L"RayGenDefault",
+    L"RayGenAdaptiveSampling",
+    L"RayGenAntialiasing",
+};
+static const WCHAR* kMissShaders[]{
+    L"Miss1",
+    L"Miss2" ,
+};
+static const WCHAR* kHitGroups[]{
+    L"CameraToObj",
+    L"ObjToLights" ,
+};
 static const WCHAR* kAnyHitShader = L"AnyHit";
 static const WCHAR* kClosestHitShader = L"ClosestHit";
-static const WCHAR* kHitGroup1 = L"HitGroup1";
-static const WCHAR* kHitGroup2 = L"HitGroup2";
 
 const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
 {
@@ -288,13 +293,13 @@ bool GfxContextDXR::initialize()
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &dxil_desc);
 
         D3D12_HIT_GROUP_DESC hit_desc1{};
-        hit_desc1.HitGroupExport = kHitGroup1;
+        hit_desc1.HitGroupExport = kHitGroups[0];
         hit_desc1.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
         hit_desc1.ClosestHitShaderImport = kClosestHitShader;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc1);
 
         D3D12_HIT_GROUP_DESC hit_desc2{};
-        hit_desc2.HitGroupExport = kHitGroup2;
+        hit_desc2.HitGroupExport = kHitGroups[1];
         hit_desc2.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
         hit_desc2.AnyHitShaderImport = kAnyHitShader;
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc2);
@@ -327,7 +332,53 @@ bool GfxContextDXR::initialize()
         }
     }
 
-    return true;
+    // setup shader table
+    {
+        m_shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+        m_shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, m_shader_record_size);
+
+        const int capacity = 32;
+        m_shader_table = createBuffer(m_shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+        uint8_t *addr;
+        if (SUCCEEDED(m_shader_table->Map(0, nullptr, (void**)&addr))) {
+            ID3D12StateObjectPropertiesPtr sop;
+            m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
+
+            int shader_record_count = 0;
+            auto add_shader_record = [&](const WCHAR *name) {
+                if (shader_record_count++ == capacity) {
+                    assert(0 && "shader_record_count exceeded its capacity");
+                }
+                void *sid = sop->GetShaderIdentifier(name);
+                assert(sid && "shader id not found");
+
+                auto dst = addr;
+                memcpy(dst, sid, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+                dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+
+                addr += m_shader_record_size;
+            };
+
+            // ray-gen
+            for (auto name : kRayGenShaders)
+                add_shader_record(name);
+
+            // miss
+            for (auto name : kMissShaders)
+                add_shader_record(name);
+
+            // hit
+            for (auto name : kHitGroups)
+                add_shader_record(name);
+
+            m_shader_table->Unmap(0, nullptr);
+        }
+        else {
+            m_shader_table = nullptr;
+        }
+    }
+
+    return valid();
 }
 
 void GfxContextDXR::clear()
@@ -338,6 +389,7 @@ void GfxContextDXR::clear()
     m_cmd_queue_compute = nullptr;
     m_cmd_queue_immediate_copy = nullptr;
 
+    m_shader_table = nullptr;
     m_pipeline_state = nullptr;
     m_rootsig = nullptr;
     m_fence = nullptr;
@@ -416,8 +468,7 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
     rd.fv_deform = rd.fv_blas = rd.fv_tlas = rd.fv_rays = 0;
 
     if (m_fv_last_rays != 0) {
-        // wait for complete previous renderer's DispatchRays()
-        // because there may be dependencies for the previous renderer. (e.g. building BLAS)
+        // wait for complete previous renderer's DispatchRays() because there may be dependencies. (e.g. building BLAS)
         m_cmd_queue_direct->Wait(m_fence, m_fv_last_rays);
     }
 }
@@ -957,47 +1008,6 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         return;
     }
 
-    UINT64 shader_record_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-    shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, shader_record_size);
-
-    // setup shader table
-    if (!rd.shader_table) {
-        const int capacity = 32;
-        rd.shader_table = createBuffer(shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-
-        // setup shader table
-        uint8_t *addr;
-        rd.shader_table->Map(0, nullptr, (void**)&addr);
-
-        ID3D12StateObjectPropertiesPtr sop;
-        m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
-
-        auto add_shader_record = [&](void *shader_id) {
-            if (!shader_id)
-                return;
-
-            auto dst = addr;
-            memcpy(dst, shader_id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-            dst += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-
-            addr += shader_record_size;
-        };
-
-        // ray-gen
-        add_shader_record(sop->GetShaderIdentifier(kRayGenShader1));
-        add_shader_record(sop->GetShaderIdentifier(kRayGenShader2));
-        add_shader_record(sop->GetShaderIdentifier(kRayGenShader3));
-
-        // miss
-        add_shader_record(sop->GetShaderIdentifier(kMissShader1));
-        add_shader_record(sop->GetShaderIdentifier(kMissShader2));
-
-        // hit
-        add_shader_record(sop->GetShaderIdentifier(kHitGroup1));
-        add_shader_record(sop->GetShaderIdentifier(kHitGroup2));
-
-        rd.shader_table->Unmap(0, nullptr);
-    }
 
     auto cl_rays = rd.clm_rays->get();
     rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays begin");
@@ -1008,7 +1018,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     cl_rays->SetPipelineState1(m_pipeline_state.GetInterfacePtr());
 
 
-    auto do_dispatch_rays = [&](ID3D12Resource *rt, RayGenType raygen_index) {
+    auto do_dispatch_rays = [&](ID3D12Resource *rt, RayGenType raygen_type) {
         auto rt_desc = rt->GetDesc();
 
         D3D12_DISPATCH_RAYS_DESC dr_desc{};
@@ -1016,32 +1026,39 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         dr_desc.Height = (UINT)rt_desc.Height;
         dr_desc.Depth = 1;
 
-        auto addr = rd.shader_table->GetGPUVirtualAddress();
+        auto addr = m_shader_table->GetGPUVirtualAddress();
         // ray-gen
-        dr_desc.RayGenerationShaderRecord.StartAddress = addr + (shader_record_size * (int)raygen_index);
-        dr_desc.RayGenerationShaderRecord.SizeInBytes = shader_record_size;
-        addr += shader_record_size * (int)RayGenType::Count;
+        dr_desc.RayGenerationShaderRecord.StartAddress = addr + (m_shader_record_size * (int)raygen_type);
+        dr_desc.RayGenerationShaderRecord.SizeInBytes = m_shader_record_size;
+        addr += m_shader_record_size * _countof(kRayGenShaders);
 
         // miss
         dr_desc.MissShaderTable.StartAddress = addr;
-        dr_desc.MissShaderTable.StrideInBytes = shader_record_size;
-        dr_desc.MissShaderTable.SizeInBytes = shader_record_size * 2;
+        dr_desc.MissShaderTable.StrideInBytes = m_shader_record_size;
+        dr_desc.MissShaderTable.SizeInBytes = m_shader_record_size * _countof(kMissShaders);
         addr += dr_desc.MissShaderTable.SizeInBytes;
 
         // hit
         dr_desc.HitGroupTable.StartAddress = addr;
-        dr_desc.HitGroupTable.StrideInBytes = shader_record_size;
-        dr_desc.HitGroupTable.SizeInBytes = shader_record_size * 2;
+        dr_desc.HitGroupTable.StrideInBytes = m_shader_record_size;
+        dr_desc.HitGroupTable.SizeInBytes = m_shader_record_size * _countof(kHitGroups);
         addr += dr_desc.HitGroupTable.SizeInBytes;
 
         cl_rays->DispatchRays(&dr_desc);
+    };
+
+    auto dispatch_ray_scope = [&](ID3D12Resource *rt, RayGenType raygen_type, const auto& body) {
+        addResourceBarrier(cl_rays, rt, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        body();
+        do_dispatch_rays(rt, raygen_type);
+        addResourceBarrier(cl_rays, rt, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
     };
 
     // dispatch
     bool antialiasing = rd.hasFlag(RenderFlag::Antialiasing);
     auto& rtex = rd.render_target->texture;
     auto& rt_res = antialiasing ? rd.render_target->back_buffer : rtex->resource;
-    auto rt_handle = antialiasing ? rd.back_buffer_uav : rd.render_target_uav;
+    auto rt_uav = antialiasing ? rd.back_buffer_uav : rd.render_target_uav;
 
     if (rd.hasFlag(RenderFlag::AdaptiveSampling) && rd.render_target->adaptive_res[0]) {
         // adaptive sampling
@@ -1049,48 +1066,43 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         auto& adaptive_res = rd.render_target->adaptive_res;
 
         // 1 / 8
-        addResourceBarrier(cl_rays, adaptive_res[2], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[2].hgpu);
-        cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_srv.hgpu);
-        do_dispatch_rays(adaptive_res[2], RayGenType::Default);
-        addResourceBarrier(cl_rays, adaptive_res[2], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+        dispatch_ray_scope(adaptive_res[2], RayGenType::Default, [&]() {
+            cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[2].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_srv.hgpu);
+        });
 
         // 1 / 4
-        addResourceBarrier(cl_rays, adaptive_res[1], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[1].hgpu);
-        cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[2].hgpu);
-        do_dispatch_rays(adaptive_res[1], RayGenType::AdaptiveSampling);
-        addResourceBarrier(cl_rays, adaptive_res[1], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+        dispatch_ray_scope(adaptive_res[1], RayGenType::AdaptiveSampling, [&]() {
+            cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[1].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[2].hgpu);
+        });
 
         // 1 / 2
-        addResourceBarrier(cl_rays, adaptive_res[0], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[0].hgpu);
-        cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[1].hgpu);
-        do_dispatch_rays(adaptive_res[0], RayGenType::AdaptiveSampling);
-        addResourceBarrier(cl_rays, adaptive_res[0], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+        dispatch_ray_scope(adaptive_res[0], RayGenType::AdaptiveSampling, [&]() {
+            cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[0].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[1].hgpu);
+        });
 
         // 1 / 1
-        addResourceBarrier(cl_rays, rt_res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rt_handle.hgpu);
-        cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[0].hgpu);
-        do_dispatch_rays(rt_res, RayGenType::AdaptiveSampling);
-        addResourceBarrier(cl_rays, rt_res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+        dispatch_ray_scope(rt_res, RayGenType::AdaptiveSampling, [&]() {
+            cl_rays->SetComputeRootDescriptorTable(0, rt_uav.hgpu);
+            cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[0].hgpu);
+        });
     }
     else {
-        addResourceBarrier(cl_rays, rt_res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rt_handle.hgpu);
-        cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_srv.hgpu);
-        do_dispatch_rays(rt_res, RayGenType::Default);
-        addResourceBarrier(cl_rays, rt_res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+        // default
+        dispatch_ray_scope(rt_res, RayGenType::Default, [&]() {
+            cl_rays->SetComputeRootDescriptorTable(0, rt_uav.hgpu);
+            cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_srv.hgpu);
+        });
     }
 
     if (antialiasing) {
         // antialiasing
-        addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_uav.hgpu);
-        cl_rays->SetComputeRootDescriptorTable(2, rd.back_buffer_srv.hgpu);
-        do_dispatch_rays(rtex->resource, RayGenType::Antialiasing);
-        addResourceBarrier(cl_rays, rtex->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON);
+        dispatch_ray_scope(rtex->resource, RayGenType::Antialiasing, [&]() {
+            cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_uav.hgpu);
+            cl_rays->SetComputeRootDescriptorTable(2, rd.back_buffer_srv.hgpu);
+        });
     }
     rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays end");
     rthsTimestampResolve(rd.timestamp, cl_rays);
@@ -1215,7 +1227,7 @@ void GfxContextDXR::onRenderTargetDelete(RenderTargetData *rt)
 
 bool GfxContextDXR::valid() const
 {
-    return this && m_device && m_rootsig && m_pipeline_state;
+    return this && m_device && m_rootsig && m_pipeline_state && m_shader_table;
 }
 
 bool GfxContextDXR::checkError()
