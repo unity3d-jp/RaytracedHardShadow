@@ -51,11 +51,12 @@ public:
     uint64_t submitCommandList(const std::vector<ID3D12CommandList*>& cl, uint64_t preceding_fv = 0, bool emit_signal = true);
     uint64_t submitCommandList(ID3D12CommandList *const*cl, size_t n, uint64_t preceding_fv = 0, bool emit_signal = true);
 
-    bool readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, UINT64 size);
-    bool uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, UINT64 size);
-    bool readbackTexture(RenderDataDXR& rd, void *dst, ID3D12Resource *src, UINT width, UINT height, DXGI_FORMAT format);
-    bool uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, UINT width, UINT height, DXGI_FORMAT format);
-    void executeImmediateCopy(RenderDataDXR& rd, ID3D12GraphicsCommandList4Ptr& cl);
+    uint64_t readbackBuffer(void *dst, ID3D12Resource *src, UINT64 size);
+    uint64_t uploadBuffer(ID3D12Resource *dst, const void *src, UINT64 size, bool immediate = true);
+    uint64_t copyBuffer(ID3D12Resource *dst, ID3D12Resource *src, UINT64 size, bool immediate = true);
+    uint64_t readbackTexture(void *dst, ID3D12Resource *src, UINT width, UINT height, DXGI_FORMAT format);
+    uint64_t uploadTexture(ID3D12Resource *dst, const void *src, UINT width, UINT height, DXGI_FORMAT format, bool immediate = true);
+    uint64_t submitCopy(ID3D12GraphicsCommandList4Ptr& cl, bool immediate);
 
 private:
     friend std::unique_ptr<GfxContextDXR> std::make_unique<GfxContextDXR>();
@@ -68,10 +69,14 @@ private:
     DeformerDXRPtr m_deformer;
 
     ID3D12Device5Ptr m_device;
-    ID3D12CommandQueuePtr m_cmd_queue_direct, m_cmd_queue_compute, m_cmd_queue_immediate_copy;
+    ID3D12CommandQueuePtr m_cmd_queue_direct, m_cmd_queue_compute, m_cmd_queue_copy;
     ID3D12FencePtr m_fence;
     uint64_t m_fence_value = 0;
     uint64_t m_fv_last_rays = 0;
+
+    CommandListManagerDXRPtr clm_copy;
+    FenceEventDXR m_event_copy;
+    std::vector<ID3D12ResourcePtr> m_tmp_resources;
 
     ID3D12RootSignaturePtr m_rootsig;
     ID3D12StateObjectPtr m_pipeline_state;

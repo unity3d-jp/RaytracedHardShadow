@@ -20,6 +20,12 @@ namespace UTJ.RaytracedHardShadowEditor
 
         private void OnGUI()
         {
+            if (m_raytracer == null)
+            {
+                Close();
+                return;
+            }
+
             m_format = (ShadowRaytracer.ImageFormat)EditorGUILayout.EnumPopup("Format", m_format);
             if (GUILayout.Button("Export"))
             {
@@ -36,6 +42,7 @@ namespace UTJ.RaytracedHardShadowEditor
                 string path = EditorUtility.SaveFilePanel("Path to export", "", m_raytracer.outputTexture.name + "." + ext, ext);
                 m_raytracer.ExportToImage(path, m_format);
                 SceneView.RepaintAll();
+                Close();
             }
         }
     }

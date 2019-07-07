@@ -73,15 +73,15 @@ Texture2D<float> g_prev_result : register(t2);
 
 
 float3 CameraPosition() { return g_scene_data.camera.position.xyz; }
-float3 CameraRight() { return g_scene_data.camera.view[0].xyz; }
-float3 CameraUp() { return g_scene_data.camera.view[1].xyz; }
-float3 CameraForward() { return -g_scene_data.camera.view[2].xyz; }
-float CameraFocalLength() { return abs(g_scene_data.camera.proj[1][1]); }
-float CameraNearPlane() { return g_scene_data.camera.near_plane; }
-float CameraFarPlane() { return g_scene_data.camera.far_plane; }
+float3 CameraRight()    { return g_scene_data.camera.view[0].xyz; }
+float3 CameraUp()       { return g_scene_data.camera.view[1].xyz; }
+float3 CameraForward()  { return -g_scene_data.camera.view[2].xyz; }
+float CameraFocalLength()   { return abs(g_scene_data.camera.proj[1][1]); }
+float CameraNearPlane()     { return g_scene_data.camera.near_plane; }
+float CameraFarPlane()      { return g_scene_data.camera.far_plane; }
 
-int RenderFlags() { return g_scene_data.render_flags; }
-float ShadowRayOffset() { return g_scene_data.shadow_ray_offset; }
+int   RenderFlags()         { return g_scene_data.render_flags; }
+float ShadowRayOffset()     { return g_scene_data.shadow_ray_offset; }
 float SelfShadowThreshold() { return g_scene_data.self_shadow_threshold; }
 
 int LightCount() { return g_scene_data.light_count; }
@@ -144,10 +144,15 @@ float SampleDifferential(int2 idx, out float center, out float diff)
 
     center = g_prev_result[idx].x;
     diff = 0.0f;
-    diff += abs(center - g_prev_result[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x);
-    diff += abs(center - g_prev_result[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x);
-    diff += abs(center - g_prev_result[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x);
-    diff += abs(center - g_prev_result[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x);
+    diff += abs(g_prev_result[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x - center);
+    diff += abs(g_prev_result[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x - center);
+    diff += abs(g_prev_result[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x - center);
+    diff += abs(g_prev_result[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x - center);
+    //// 4 samples should be enough
+    //diff += abs(g_prev_result[clamp(idx + int2(-1,-1), int2(0, 0), dim - 1)].x - center);
+    //diff += abs(g_prev_result[clamp(idx + int2( 1,-1), int2(0, 0), dim - 1)].x - center);
+    //diff += abs(g_prev_result[clamp(idx + int2( 1, 1), int2(0, 0), dim - 1)].x - center);
+    //diff += abs(g_prev_result[clamp(idx + int2(-1, 1), int2(0, 0), dim - 1)].x - center);
     return diff;
 }
 
@@ -196,8 +201,9 @@ void RayGenAntialiasing()
 
         // todo: make offset values shader parameter
         const int N = 4;
+        const float d = 0.333f;
         float2 offsets[N] = {
-            float2(0.33f, 0.33f), float2(-0.33f, 0.33f), float2(-0.33f, -0.33f), float2(0.33f, -0.33f)
+            float2(d, d), float2(-d, d), float2(-d, -d), float2(d, -d)
         };
         for (int i = 0; i < N; ++i)
             total += ShootCameraRay(offsets[i]).shadow;

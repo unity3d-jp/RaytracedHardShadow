@@ -292,7 +292,7 @@ using CommandListManagerDXRPtr = std::shared_ptr<CommandListManagerDXR>;
 class RenderDataDXR
 {
 public:
-    CommandListManagerDXRPtr clm_deform, clm_blas, clm_tlas, clm_rays, clm_immediate_copy;
+    CommandListManagerDXRPtr clm_deform, clm_blas, clm_tlas, clm_rays;
     ID3D12GraphicsCommandList4Ptr cl_deform;
 
     ID3D12DescriptorHeapPtr desc_heap;

@@ -192,9 +192,20 @@ bool GfxContextDXR::initialize()
 
     // failed to create device (DXR is not supported)
     if (!m_device) {
-        SetErrorLog("DXR is not supported on this device");
+        SetErrorLog("DXR is not supported on this system");
         return false;
     }
+
+    // command queues
+    auto create_command_queue = [this](ID3D12CommandQueuePtr& dst, D3D12_COMMAND_LIST_TYPE type) {
+        D3D12_COMMAND_QUEUE_DESC desc{};
+        desc.Type = type;
+        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&dst));
+    };
+    create_command_queue(m_cmd_queue_direct, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    create_command_queue(m_cmd_queue_compute, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+    create_command_queue(m_cmd_queue_copy, D3D12_COMMAND_LIST_TYPE_COPY);
+    clm_copy = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy");
 
     // resource translator (null if there is no host device)
     m_resource_translator = CreateResourceTranslator();
@@ -207,54 +218,35 @@ bool GfxContextDXR::initialize()
     else
         m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
 
-
     // deformer
     m_deformer = std::make_shared<DeformerDXR>(m_device);
 
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_direct));
-    }
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_compute));
-    }
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
-        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_immediate_copy));
-    }
 
     // root signature
     {
-        D3D12_DESCRIPTOR_RANGE ranges1[] = {
+        D3D12_DESCRIPTOR_RANGE ranges0[] = {
             { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
-        D3D12_DESCRIPTOR_RANGE ranges2[] = {
+        D3D12_DESCRIPTOR_RANGE ranges1[] = {
             { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
             { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
-        D3D12_DESCRIPTOR_RANGE ranges3[] = {
+        D3D12_DESCRIPTOR_RANGE ranges2[] = {
             { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
 
         D3D12_ROOT_PARAMETER params[3]{};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params[0].DescriptorTable.NumDescriptorRanges = _countof(ranges1);
-        params[0].DescriptorTable.pDescriptorRanges = ranges1;
+        params[0].DescriptorTable.NumDescriptorRanges = _countof(ranges0);
+        params[0].DescriptorTable.pDescriptorRanges = ranges0;
 
         params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params[1].DescriptorTable.NumDescriptorRanges = _countof(ranges2);
-        params[1].DescriptorTable.pDescriptorRanges = ranges2;
+        params[1].DescriptorTable.NumDescriptorRanges = _countof(ranges1);
+        params[1].DescriptorTable.pDescriptorRanges = ranges1;
 
         params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params[2].DescriptorTable.NumDescriptorRanges = _countof(ranges3);
-        params[2].DescriptorTable.pDescriptorRanges = ranges3;
+        params[2].DescriptorTable.NumDescriptorRanges = _countof(ranges2);
+        params[2].DescriptorTable.pDescriptorRanges = ranges2;
 
         D3D12_ROOT_SIGNATURE_DESC desc{};
         desc.NumParameters = _countof(params);
@@ -271,6 +263,8 @@ bool GfxContextDXR::initialize()
                 SetErrorLog("CreateRootSignature() failed\n");
             }
         }
+        if (!m_rootsig)
+            return false;
     }
 
     // setup pipeline state
@@ -329,6 +323,7 @@ bool GfxContextDXR::initialize()
         auto hr = m_device->CreateStateObject(&pso_desc, IID_PPV_ARGS(&m_pipeline_state));
         if (FAILED(hr)) {
             SetErrorLog("CreateStateObject() failed\n");
+            return false;
         }
     }
 
@@ -338,9 +333,9 @@ bool GfxContextDXR::initialize()
         m_shader_record_size = align_to(D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT, m_shader_record_size);
 
         const int capacity = 32;
-        m_shader_table = createBuffer(m_shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+        auto tmp_buf = createBuffer(m_shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
         uint8_t *addr;
-        if (SUCCEEDED(m_shader_table->Map(0, nullptr, (void**)&addr))) {
+        if (SUCCEEDED(tmp_buf->Map(0, nullptr, (void**)&addr))) {
             ID3D12StateObjectPropertiesPtr sop;
             m_pipeline_state->QueryInterface(IID_PPV_ARGS(&sop));
 
@@ -371,11 +366,14 @@ bool GfxContextDXR::initialize()
             for (auto name : kHitGroups)
                 add_shader_record(name);
 
-            m_shader_table->Unmap(0, nullptr);
+            tmp_buf->Unmap(0, nullptr);
+
+            m_shader_table = createBuffer(m_shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, kDefaultHeapProps);
+            if (!copyBuffer(m_shader_table, tmp_buf, m_shader_record_size * capacity))
+                m_shader_table = nullptr;
         }
-        else {
-            m_shader_table = nullptr;
-        }
+        if (!m_shader_table)
+            return false;
     }
 
     return valid();
@@ -387,7 +385,7 @@ void GfxContextDXR::clear()
 
     m_cmd_queue_direct = nullptr;
     m_cmd_queue_compute = nullptr;
-    m_cmd_queue_immediate_copy = nullptr;
+    m_cmd_queue_copy = nullptr;
 
     m_shader_table = nullptr;
     m_pipeline_state = nullptr;
@@ -418,7 +416,6 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
         rd.clm_blas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"BLAS");
         rd.clm_tlas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"TLAS");
         rd.clm_rays = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"Rays");
-        rd.clm_immediate_copy = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy");
     }
 
     // initialize desc heap
@@ -611,16 +608,11 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
     auto upload_cpu_buffer = [this](const void *buffer, int size) {
         auto& data = m_buffer_records[buffer];
-        if (!data)
-        {
+        if (!data) {
             data = std::make_shared<BufferDataDXR>();
-            data->resource = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            data->resource = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, kDefaultHeapProps);
             data->size = size;
-
-            void *dst;
-            data->resource->Map(0, nullptr, &dst);
-            std::memcpy(dst, buffer, size);
-            data->resource->Unmap(0, nullptr);
+            uploadBuffer(data->resource, buffer, size);
         }
         return data;
     };
@@ -632,7 +624,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     }
 
     int task_granularity = ceildiv((int)geoms.size(), rd.max_parallel_command_lists);
-    bool gpu_skinning = rd.hasFlag(RenderFlag::GPUSkinning);
+    bool gpu_skinning = rd.hasFlag(RenderFlag::GPUSkinning) && m_deformer;
     if (gpu_skinning)
         m_deformer->prepare(rd);
     int deform_count = 0;
@@ -671,7 +663,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 // inspect buffer
                 std::vector<float> vertex_buffer_data;
                 vertex_buffer_data.resize(mesh_dxr->vertex_buffer->size / sizeof(float), std::numeric_limits<float>::quiet_NaN());
-                readbackBuffer(rd, vertex_buffer_data.data(), mesh_dxr->vertex_buffer->resource, mesh_dxr->vertex_buffer->size);
+                readbackBuffer(vertex_buffer_data.data(), mesh_dxr->vertex_buffer->resource, mesh_dxr->vertex_buffer->size);
             }
 #endif // rthsEnableBufferValidation
         }
@@ -696,11 +688,11 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 std::vector<uint16_t> index_buffer_data16;
                 if (mesh_dxr->getIndexStride() == 2) {
                     index_buffer_data16.resize(mesh_dxr->index_buffer->size / sizeof(uint16_t), std::numeric_limits<uint16_t>::max());
-                    readbackBuffer(rd, index_buffer_data16.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
+                    readbackBuffer(index_buffer_data16.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
                 }
                 else {
                     index_buffer_data32.resize(mesh_dxr->index_buffer->size / sizeof(uint32_t), std::numeric_limits<uint32_t>::max());
-                    readbackBuffer(rd, index_buffer_data32.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
+                    readbackBuffer(index_buffer_data32.data(), mesh_dxr->index_buffer->resource, mesh_dxr->index_buffer->size);
                 }
             }
 #endif // rthsEnableBufferValidation
@@ -1163,13 +1155,15 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
         rd.clm_blas->reset();
         rd.clm_tlas->reset();
         rd.clm_rays->reset();
-        rd.clm_immediate_copy->reset();
         return true;
     }
 }
 
 void GfxContextDXR::frameEnd()
 {
+    clm_copy->reset();
+    m_tmp_resources.clear();
+
     // erase unused texture / buffer resources
     auto erase_unused_records = [](auto& records, const char *message) {
         int num_erased = 0;
@@ -1197,7 +1191,7 @@ bool GfxContextDXR::readbackRenderTarget(RenderDataDXR& rd, void *dst)
 
     auto& rtex = rd.render_target->texture;
     auto desc = rtex->resource->GetDesc();
-    return readbackTexture(rd, dst, rtex->resource, (UINT)desc.Width, (UINT)desc.Height, desc.Format);
+    return readbackTexture(dst, rtex->resource, (UINT)desc.Width, (UINT)desc.Height, desc.Format);
 }
 
 void GfxContextDXR::clearResourceCache()
@@ -1361,47 +1355,53 @@ uint64_t GfxContextDXR::submitCommandList(ID3D12CommandList *const*cls, size_t n
 }
 
 
-bool GfxContextDXR::readbackBuffer(RenderDataDXR& rd, void *dst, ID3D12Resource *src, UINT64 size)
+uint64_t GfxContextDXR::readbackBuffer(void *dst, ID3D12Resource *src, UINT64 size)
 {
-    auto cl = rd.clm_immediate_copy->get();
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
-    cl->CopyBufferRegion(readback_buf, 0, src, 0, size);
-    executeImmediateCopy(rd, cl);
+    auto ret = copyBuffer(readback_buf, src, size, true);
+    if (ret == 0)
+        return 0;
 
-    float* mapped;
-    if (SUCCEEDED(readback_buf->Map(0, nullptr, (void**)&mapped))) {
+    void *mapped;
+    if (SUCCEEDED(readback_buf->Map(0, nullptr, &mapped))) {
         memcpy(dst, mapped, size);
-        // * break here to check data *
         readback_buf->Unmap(0, nullptr);
-        return true;
     }
-    return false;
+    return ret;
 }
 
-bool GfxContextDXR::uploadBuffer(RenderDataDXR& rd, ID3D12Resource *dst, const void *src, UINT64 size)
+uint64_t GfxContextDXR::uploadBuffer(ID3D12Resource *dst, const void *src, UINT64 size, bool immediate)
 {
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
     void *mapped;
     if (SUCCEEDED(upload_buf->Map(0, nullptr, &mapped))) {
         memcpy(mapped, src, size);
         upload_buf->Unmap(0, nullptr);
-
-        auto cl = rd.clm_immediate_copy->get();
-        cl->CopyBufferRegion(dst, 0, upload_buf, 0, size);
-        executeImmediateCopy(rd, cl);
-        return true;
+        if (!immediate)
+            m_tmp_resources.push_back(upload_buf);
+        return copyBuffer(dst, upload_buf, size, immediate);
     }
-    return false;
+    return 0;
 }
 
-bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst_, ID3D12Resource *src, UINT width, UINT height, DXGI_FORMAT format)
+uint64_t GfxContextDXR::copyBuffer(ID3D12Resource *dst, ID3D12Resource *src, UINT64 size, bool immediate)
+{
+    if (!dst || !src || size == 0)
+        return 0;
+
+    auto cl = clm_copy->get();
+    cl->CopyBufferRegion(dst, 0, src, 0, size);
+    return submitCopy(cl, immediate);
+}
+
+uint64_t GfxContextDXR::readbackTexture(void *dst_, ID3D12Resource *src, UINT width, UINT height, DXGI_FORMAT format)
 {
     UINT stride = SizeOfElement(format);
     UINT width_a = align_to(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, width);
     UINT size = width_a * height * stride;
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
     if (!readback_buf)
-        return false;
+        return 0;
 
     D3D12_TEXTURE_COPY_LOCATION dst_loc{};
     dst_loc.pResource = readback_buf;
@@ -1418,9 +1418,9 @@ bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst_, ID3D12Resourc
     src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     src_loc.SubresourceIndex = 0;
 
-    auto cl = rd.clm_immediate_copy->get();
+    auto cl = clm_copy->get();
     cl->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
-    executeImmediateCopy(rd, cl);
+    auto ret = submitCopy(cl, true);
 
     char *mapped;
     D3D12_RANGE ragne{ 0, size };
@@ -1432,19 +1432,18 @@ bool GfxContextDXR::readbackTexture(RenderDataDXR& rd, void *dst_, ID3D12Resourc
             mapped += width_a * stride;
         }
         readback_buf->Unmap(0, nullptr);
-        return true;
     }
-    return false;
+    return ret;
 }
 
-bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const void *src_, UINT width, UINT height, DXGI_FORMAT format)
+uint64_t GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src_, UINT width, UINT height, DXGI_FORMAT format, bool immediate)
 {
     UINT stride = SizeOfElement(format);
     UINT width_a = align_to(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, width);
     UINT size = width_a * height * stride;
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
     if (!upload_buf)
-        return false;
+        return 0;
 
     char *mapped;
     if (SUCCEEDED(upload_buf->Map(0, nullptr, (void**)&mapped))) {
@@ -1455,6 +1454,8 @@ bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const 
             mapped += width_a * stride;
         }
         upload_buf->Unmap(0, nullptr);
+        if (!immediate)
+            m_tmp_resources.push_back(upload_buf);
 
         D3D12_TEXTURE_COPY_LOCATION dst_loc{};
         dst_loc.pResource = dst;
@@ -1471,24 +1472,26 @@ bool GfxContextDXR::uploadTexture(RenderDataDXR& rd, ID3D12Resource *dst, const 
         src_loc.PlacedFootprint.Footprint.Depth = 1;
         src_loc.PlacedFootprint.Footprint.RowPitch = width_a * stride;
 
-        auto cl = rd.clm_immediate_copy->get();
+        auto cl = clm_copy->get();
         cl->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
-        executeImmediateCopy(rd, cl);
-        return true;
+        return submitCopy(cl, immediate);
     }
-    return false;
+    return 0;
 }
 
-void GfxContextDXR::executeImmediateCopy(RenderDataDXR& rd, ID3D12GraphicsCommandList4Ptr& cl)
+uint64_t GfxContextDXR::submitCopy(ID3D12GraphicsCommandList4Ptr& cl, bool immediate)
 {
     cl->Close();
     ID3D12CommandList *cmd_list[]{ cl.GetInterfacePtr() };
-    m_cmd_queue_immediate_copy->ExecuteCommandLists(_countof(cmd_list), cmd_list);
+    m_cmd_queue_copy->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 
     auto fence_value = incrementFenceValue();
-    m_cmd_queue_immediate_copy->Signal(m_fence, fence_value);
-    m_fence->SetEventOnCompletion(fence_value, rd.fence_event);
-    ::WaitForSingleObject(rd.fence_event, INFINITE);
+    m_cmd_queue_copy->Signal(m_fence, fence_value);
+    if (immediate) {
+        m_fence->SetEventOnCompletion(fence_value, m_event_copy);
+        ::WaitForSingleObject(m_event_copy, INFINITE);
+    }
+    return fence_value;
 }
 
 } // namespace rths
