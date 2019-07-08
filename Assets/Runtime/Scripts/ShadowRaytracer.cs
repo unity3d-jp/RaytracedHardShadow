@@ -791,6 +791,9 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
+#if UNITY_EDITOR
+        int m_initializeWaitCount = 1;
+#endif
         void InitializeRenderer()
         {
             if (m_renderer)
@@ -800,6 +803,11 @@ namespace UTJ.RaytracedHardShadow
             // initializing renderer on scene load causes a crash in GI baking. so wait until GI bake is completed.
             if (Lightmapping.isRunning)
                 return;
+            if (m_initializeWaitCount > 0)
+            {
+                --m_initializeWaitCount;
+                return;
+            }
 #endif
 
             m_renderer = rthsRenderer.Create();
