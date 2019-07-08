@@ -52,7 +52,7 @@ bool MeshInstanceData::isUpdated(UpdateFlag v) const
 
 void MeshInstanceData::markUpdated(UpdateFlag v)
 {
-    update_flags |= (uint32_t)UpdateFlag::Bones;
+    update_flags |= (uint32_t)v;
 }
 
 void MeshInstanceData::markUpdated()
