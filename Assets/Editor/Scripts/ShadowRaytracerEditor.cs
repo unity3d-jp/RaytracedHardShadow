@@ -71,6 +71,27 @@ namespace UTJ.RaytracedHardShadowEditor
 
 
         static readonly int indentSize = 16;
+        static ShadowRaytracer s_target;
+
+        void OnEnable()
+        {
+            s_target = target as ShadowRaytracer;
+            SceneView.duringSceneGui += OnSceneGUI;
+        }
+
+        void OnDisable()
+        {
+            SceneView.duringSceneGui -= OnSceneGUI;
+            s_target = null;
+        }
+
+        static void OnSceneGUI(SceneView sceneView)
+        {
+            if (s_target == null)
+                return;
+            if (s_target.dbgTimestamp)
+                UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+        }
 
         public override void OnInspectorGUI()
         {
@@ -83,10 +104,13 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Output", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_generateRenderTexture"));
-            if (!t.generateRenderTexture)
             {
                 EditorGUI.indentLevel++;
+                if (t.generateRenderTexture)
+                    EditorGUI.BeginDisabledGroup(true);
                 EditorGUILayout.PropertyField(so.FindProperty("m_outputTexture"));
+                if (t.generateRenderTexture)
+                    EditorGUI.EndDisabledGroup();
                 EditorGUI.indentLevel--;
             }
 
@@ -101,7 +125,13 @@ namespace UTJ.RaytracedHardShadowEditor
 
             // shadow
             EditorGUILayout.LabelField("Shadow", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFace"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFaces"));
+            if (t.cullBackFaces)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(so.FindProperty("m_flipCasterFaces"));
+                EditorGUI.indentLevel--;
+            }
             EditorGUILayout.PropertyField(so.FindProperty("m_ignoreSelfShadow"));
             if (t.ignoreSelfShadow)
             {
@@ -232,8 +262,28 @@ namespace UTJ.RaytracedHardShadowEditor
             // misc
             EditorGUILayout.LabelField("Misc", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_adaptiveSampling"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_antialiasing"));
+            //EditorGUILayout.PropertyField(so.FindProperty("m_parallelCommandList"));
+
+            // debug
+            var foldDebug = so.FindProperty("m_foldDebug");
+            foldDebug.boolValue = EditorGUILayout.Foldout(foldDebug.boolValue, "Debug");
+            if(foldDebug.boolValue)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(so.FindProperty("m_dbgTimestamp"));
+                EditorGUILayout.PropertyField(so.FindProperty("m_dbgForceUpdateAS"));
+                if (t.dbgTimestamp)
+                    EditorGUILayout.TextArea(t.timestampLog, GUILayout.Height(80));
+                EditorGUI.indentLevel--;
+            }
 
             so.ApplyModifiedProperties();
+
+            EditorGUILayout.Space();
+            if (GUILayout.Button("Export to image", GUILayout.Width(200)))
+                ExportToImageWindow.Open(t);
         }
     }
 }

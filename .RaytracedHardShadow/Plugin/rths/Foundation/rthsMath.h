@@ -1,4 +1,5 @@
 #pragma once
+#include "rthsHalf.h"
 
 #define align_to(_alignment, _val) (((_val + _alignment - 1) / _alignment) * _alignment)
 
@@ -8,82 +9,191 @@ constexpr float PI = 3.14159265358979323846264338327950288419716939937510f;
 constexpr float DegToRad = PI / 180.0f;
 constexpr float RadToDeg = 1.0f / (PI / 180.0f);
 
-struct int2
+template<class T>
+struct tvec2
 {
-    int x, y;
+    using scalar_t = T;
+    static const int vector_length = 2;
 
-    int& operator[](size_t i) { return ((int*)this)[i]; }
-    const int& operator[](size_t i) const { return ((int*)this)[i]; }
+    T x, y;
+    T& operator[](int i) { return ((T*)this)[i]; }
+    const T& operator[](int i) const { return ((T*)this)[i]; }
+    bool operator==(const tvec2& v) const { return x == v.x && y == v.y; }
+    bool operator!=(const tvec2& v) const { return !((*this) == v); }
+
+    template<class U> void assign(const U *v) { *this = { (T)v[0], (T)v[1] }; }
+    template<class U> void assign(const tvec2<U>& v) { assign((const U*)&v); }
+
+    static constexpr tvec2 zero() { return{ (T)0, (T)0 }; }
+    static constexpr tvec2 one() { return{ (T)1, (T)1 }; }
+    static constexpr tvec2 set(T v) { return{ v, v }; }
 };
 
-struct int3
+template<class T>
+struct tvec3
 {
-    int x, y, z;
+    using scalar_t = T;
+    static const int vector_length = 3;
 
-    int& operator[](size_t i) { return ((int*)this)[i]; }
-    const int& operator[](size_t i) const { return ((int*)this)[i]; }
+    T x, y, z;
+    T& operator[](int i) { return ((T*)this)[i]; }
+    const T& operator[](int i) const { return ((T*)this)[i]; }
+    bool operator==(const tvec3& v) const { return x == v.x && y == v.y && z == v.z; }
+    bool operator!=(const tvec3& v) const { return !((*this) == v); }
+
+    template<class U> void assign(const U *v) { *this = { (T)v[0], (T)v[1], (T)v[2] }; }
+    template<class U> void assign(const tvec3<U>& v) { assign((const U*)&v); }
+
+    static constexpr tvec3 zero() { return{ (T)0, (T)0, (T)0 }; }
+    static constexpr tvec3 one() { return{ (T)1, (T)1, (T)1 }; }
+    static constexpr tvec3 set(T v) { return{ v, v, v }; }
 };
 
-struct int4
+template<class T>
+struct tvec4
 {
-    int x, y, z, w;
+    using scalar_t = T;
+    static const int vector_length = 4;
 
-    int& operator[](size_t i) { return ((int*)this)[i]; }
-    const int& operator[](size_t i) const { return ((int*)this)[i]; }
+    T x, y, z, w;
+    T& operator[](int i) { return ((T*)this)[i]; }
+    const T& operator[](int i) const { return ((T*)this)[i]; }
+    bool operator==(const tvec4& v) const { return x == v.x && y == v.y && z == v.z && w == v.w; }
+    bool operator!=(const tvec4& v) const { return !((*this) == v); }
+
+    template<class U> void assign(const U *v) { *this = { (T)v[0], (T)v[1], (T)v[2], (T)v[3] }; }
+    template<class U> void assign(const tvec4<U>& v) { assign((const U*)&v); }
+
+    static constexpr tvec4 zero() { return{ (T)0, (T)0, (T)0, (T)0 }; }
+    static constexpr tvec4 one() { return{ (T)1, (T)1, (T)1, (T)1 }; }
+    static constexpr tvec4 set(T v) { return{ v, v, v, v }; }
 };
 
-#ifndef rthsTestImpl
-struct float2
+template<class T>
+struct tmat3x3
 {
-    float x, y;
+    using scalar_t = T;
+    using vector_t = tvec3<T>;
+    static const int vector_length = 9;
 
-    float& operator[](size_t i) { return ((float*)this)[i]; }
-    const float& operator[](size_t i) const { return ((float*)this)[i]; }
-};
+    tvec3<T> m[3];
+    tvec3<T>& operator[](int i) { return m[i]; }
+    const tvec3<T>& operator[](int i) const { return m[i]; }
+    bool operator==(const tmat3x3& v) const { return memcmp(m, v.m, sizeof(*this)) == 0; }
+    bool operator!=(const tmat3x3& v) const { return !((*this) == v); }
 
-struct float3
-{
-    float x, y, z;
+    template<class U> void assign(const U *v)
+    {
+        *this = { {
+            { (T)v[0], (T)v[1], (T)v[2] },
+            { (T)v[3], (T)v[4], (T)v[5] },
+            { (T)v[6], (T)v[7], (T)v[8] }
+        } };
+    }
+    template<class U> void assign(const tmat3x3<U>& v) { assign((U*)&v); }
 
-    float& operator[](size_t i) { return ((float*)this)[i]; }
-    const float& operator[](size_t i) const { return ((float*)this)[i]; }
-};
-
-struct float4
-{
-    float x, y, z, w;
-
-    float& operator[](size_t i) { return ((float*)this)[i]; }
-    const float& operator[](size_t i) const { return ((float*)this)[i]; }
-};
-
-struct float3x4
-{
-    float4 v[3];
-
-    float4& operator[](size_t i) { return v[i]; }
-    const float4& operator[](size_t i) const { return v[i]; }
-};
-
-struct float4x4
-{
-    float4 v[4];
-
-    float4& operator[](size_t i) { return v[i]; }
-    const float4& operator[](size_t i) const { return v[i]; }
-    bool operator==(float4x4& v) const { return std::memcmp(this, &v, sizeof(*this)) == 0; }
-    bool operator!=(float4x4& v) const { return !(*this == v); }
-
-    static float4x4 identity()
+    static constexpr tmat3x3 identity()
     {
         return{ {
-             { 1, 0, 0, 0 },
-             { 0, 1, 0, 0 },
-             { 0, 0, 1, 0 },
-             { 0, 0, 0, 1 },
-         } };
+            { T(1.0), T(0.0), T(0.0) },
+            { T(0.0), T(1.0), T(0.0) },
+            { T(0.0), T(0.0), T(1.0) },
+        } };
     }
 };
+
+template<class T>
+struct tmat3x4
+{
+    using scalar_t = T;
+    using vector_t = tvec4<T>;
+    static const int vector_length = 12;
+
+    tvec4<T> m[3];
+    tvec4<T>& operator[](int i) { return m[i]; }
+    const tvec4<T>& operator[](int i) const { return m[i]; }
+    bool operator==(const tmat3x4& v) const { return memcmp(m, v.m, sizeof(*this)) == 0; }
+    bool operator!=(const tmat3x4& v) const { return !((*this) == v); }
+
+    void assign(const T *v)
+    {
+        memcpy(this, v, sizeof(*this));
+    }
+    template<class U> void assign(const U *v)
+    {
+        *this = { {
+            { (T)v[0], (T)v[1], (T)v[2], (T)v[3] },
+            { (T)v[4], (T)v[5], (T)v[6], (T)v[7] },
+            { (T)v[8], (T)v[9], (T)v[10],(T)v[11]}
+        } };
+    }
+    template<class U> void assign(const tmat3x4<U>& v) { assign((U*)&v); }
+
+    static constexpr tmat3x4 identity()
+    {
+        return{ {
+            { (T)1, (T)0, (T)0, (T)0 },
+            { (T)0, (T)1, (T)0, (T)0 },
+            { (T)0, (T)0, (T)1, (T)0 }
+        } };
+    }
+};
+
+template<class T>
+struct tmat4x4
+{
+    using scalar_t = T;
+    using vector_t = tvec4<T>;
+    static const int vector_length = 16;
+
+    tvec4<T> m[4];
+    tvec4<T>& operator[](int i) { return m[i]; }
+    const tvec4<T>& operator[](int i) const { return m[i]; }
+    bool operator==(const tmat4x4& v) const { return memcmp(m, v.m, sizeof(*this)) == 0; }
+    bool operator!=(const tmat4x4& v) const { return !((*this) == v); }
+
+    void assign(const T *v)
+    {
+        memcpy(this, v, sizeof(*this));
+    }
+    template<class U> void assign(const U *v)
+    {
+        *this = { {
+            { (T)v[0], (T)v[1], (T)v[2], (T)v[3] },
+            { (T)v[4], (T)v[5], (T)v[6], (T)v[7] },
+            { (T)v[8], (T)v[9], (T)v[10],(T)v[11]},
+            { (T)v[12],(T)v[13],(T)v[14],(T)v[15]}
+        } };
+    }
+    template<class U> void assign(const tmat4x4<U>& v) { assign((U*)&v); }
+
+    static constexpr tmat4x4 identity()
+    {
+        return{ {
+            { (T)1, (T)0, (T)0, (T)0 },
+            { (T)0, (T)1, (T)0, (T)0 },
+            { (T)0, (T)0, (T)1, (T)0 },
+            { (T)0, (T)0, (T)0, (T)1 },
+        } };
+    }
+};
+
+using int2 = tvec2<int>;
+using int3 = tvec3<int>;
+using int4 = tvec4<int>;
+using unorm8x2 = tvec2<unorm8>;
+using unorm8x3 = tvec3<unorm8>;
+using unorm8x4 = tvec4<unorm8>;
+using half2 = tvec2<half>;
+using half3 = tvec3<half>;
+using half4 = tvec4<half>;
+#ifndef rthsTestImpl
+using float2 = tvec2<float>;
+using float3 = tvec3<float>;
+using float4 = tvec4<float>;
+using float3x3 = tmat3x3<float>;
+using float3x4 = tmat3x4<float>;
+using float4x4 = tmat4x4<float>;
 #endif // rthsTestImpl
 
 
@@ -92,6 +202,8 @@ inline float3 operator+(const float3& l, const float3& r) { return{ l.x + r.x, l
 inline float3 operator-(const float3& l, const float3& r) { return{ l.x - r.x, l.y - r.y, l.z - r.z }; }
 inline float3 operator*(const float3& l, float r) { return{ l.x * r, l.y * r, l.z * r }; }
 inline float3 operator/(const float3& l, float r) { return{ l.x / r, l.y / r, l.z / r }; }
+
+inline int ceildiv(int v, int d) { return (v + (d - 1)) / d; }
 inline float clamp(float v, float vmin, float vmax) { return std::min<float>(std::max<float>(v, vmin), vmax); }
 inline float clamp01(float v) { return clamp(v, 0.0f, 1.0f); }
 inline float clamp11(float v) { return clamp(v, -1.0f, 1.0f); }

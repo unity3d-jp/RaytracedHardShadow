@@ -48,11 +48,19 @@ struct float4x4
 
 enum class RenderFlag : uint32_t
 {
-    CullBackFace            = 0x0001,
-    IgnoreSelfShadow        = 0x0002,
-    KeepSelfDropShadow      = 0x0004,
-    GPUSkinning             = 0x0100,
-    ClampBlendShapeWights   = 0x0200,
+    CullBackFaces           = 0x00000001,
+    FlipCasterFaces         = 0x00000002,
+    IgnoreSelfShadow        = 0x00000004,
+    KeepSelfDropShadow      = 0x00000008,
+    AlphaTest               = 0x00000010,
+    Transparent             = 0x00000020,
+    AdaptiveSampling        = 0x00000100,
+    Antialiasing            = 0x00000200,
+    GPUSkinning             = 0x00010000,
+    ClampBlendShapeWights   = 0x00020000,
+    ParallelCommandList     = 0x00040000,
+    DbgTimestamp            = 0x01000000,
+    DbgForceUpdateAS        = 0x02000000,
 };
 
 enum class HitMask : uint8_t
@@ -60,10 +68,7 @@ enum class HitMask : uint8_t
     Receiver    = 0x01,
     Caster      = 0x02,
     Both        = Receiver | Caster,
-
-    AllReceiver = 0x01 | 0x04 | 0x10 | 0x40,
-    AllCaster   = 0x02 | 0x08 | 0x20 | 0x80,
-    ALl         = 0xff,
+    AllCaster   = 0xfe,
 };
 
 enum class RenderTargetFormat : uint32_t
@@ -90,14 +95,6 @@ struct BoneWeight4
     float weight[4];
     int index[4];
 };
-#else // rthsImpl
-struct float2;
-struct float3;
-struct float4;
-struct float4x4;
-struct BoneWeight1;
-struct BoneWeight4;
-enum class RenderTargetFormat : uint32_t;
 #endif // rthsImpl
 
 using GPUResourcePtr = const void*;
@@ -144,6 +141,7 @@ rthsAPI void rthsRenderTargetSetup(rths::RenderTargetData *self, int width, int 
 // renderer interface
 rthsAPI rths::IRenderer* rthsRendererCreate();
 rthsAPI void rthsRendererRelease(rths::IRenderer *self);
+rthsAPI bool rthsRendererIsValid(rths::IRenderer *self);
 rthsAPI void rthsRendererSetName(rths::IRenderer *self, const char *name);
 rthsAPI void rthsRendererSetRenderTarget(rths::IRenderer *self, rths::RenderTargetData *render_target);
 rthsAPI void rthsRendererBeginScene(rths::IRenderer *self);
@@ -160,6 +158,7 @@ rthsAPI void rthsRendererAddGeometry(rths::IRenderer *self, rths::MeshInstanceDa
 rthsAPI void rthsRendererStartRender(rths::IRenderer *self);
 rthsAPI void rthsRendererFinishRender(rths::IRenderer *self);
 rthsAPI bool rthsRendererReadbackRenderTarget(rths::IRenderer *self, void *dst);
+rthsAPI const char* rthsRendererGetTimestampLog(rths::IRenderer *self);
 rthsAPI rths::GPUResourcePtr rthsRendererGetRenderTexturePtr(rths::IRenderer *self); // return raw texture ptr (ID3D12Resouce* etc)
 
 rthsAPI void rthsMarkFrameBegin();

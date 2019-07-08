@@ -33,6 +33,17 @@ FenceEventDXR::FenceEventDXR()
     m_handle = ::CreateEvent(nullptr, FALSE, FALSE, nullptr);
 }
 
+FenceEventDXR::FenceEventDXR(const FenceEventDXR &v)
+{
+    *this = v;
+}
+
+FenceEventDXR& FenceEventDXR::operator=(const FenceEventDXR &v)
+{
+    ::DuplicateHandle(::GetCurrentProcess(), v.m_handle, ::GetCurrentProcess(), &m_handle, 0, TRUE, DUPLICATE_SAME_ACCESS);
+    return *this;
+}
+
 FenceEventDXR::~FenceEventDXR()
 {
     ::CloseHandle(m_handle);
@@ -59,6 +70,12 @@ int MeshDataDXR::getIndexStride() const
         return base->index_stride;
 }
 
+void MeshDataDXR::clearBLAS()
+{
+    blas = nullptr;
+    blas_scratch = nullptr;
+}
+
 
 DescriptorHandleDXR::operator bool() const
 {
@@ -83,6 +100,16 @@ DescriptorHandleDXR DescriptorHeapAllocatorDXR::allocate()
 }
 
 
+void MeshInstanceDataDXR::clearBLAS()
+{
+    // not clear BLAS for deformed vertices because update time is what we want to measure in this case.
+    //blas_scratch = nullptr;
+    //blas_deformed = nullptr;
+    if (mesh)
+        mesh->clearBLAS();
+}
+
+
 bool GeometryDataDXR::operator==(const GeometryDataDXR& v) const
 {
     return inst == v.inst && receive_mask == v.receive_mask && cast_mask == v.cast_mask;
@@ -93,145 +120,74 @@ bool GeometryDataDXR::operator!=(const GeometryDataDXR& v) const
     return !(*this == v);
 }
 
+void GeometryDataDXR::clearBLAS()
+{
+    if (inst)
+        inst->clearBLAS();
+}
 
 
-CommandManagerDXR::CommandManagerDXR(ID3D12DevicePtr device, ID3D12FencePtr fence)
+
+CommandListManagerDXR::Record::Record(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state)
+{
+    device->CreateCommandAllocator(type, IID_PPV_ARGS(&allocator));
+    device->CreateCommandList(0, type, allocator, state, IID_PPV_ARGS(&list));
+}
+
+void CommandListManagerDXR::Record::reset(ID3D12PipelineStatePtr state)
+{
+    allocator->Reset();
+    list->Reset(allocator, state);
+}
+
+CommandListManagerDXR::CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, const wchar_t *name)
+    : CommandListManagerDXR(device, type, nullptr, name)
+{
+}
+
+CommandListManagerDXR::CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state, const wchar_t *name)
     : m_device(device)
-    , m_fence(fence)
+    , m_type(type)
+    , m_state(state)
+    , m_name(name)
 {
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
-        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_queue_copy));
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&m_allocator_copy));
-    }
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_queue_direct));
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_allocator_direct));
-    }
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-        m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_queue_compute));
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&m_allocator_compute));
-    }
 }
 
-ID3D12CommandAllocatorPtr CommandManagerDXR::getAllocator(D3D12_COMMAND_LIST_TYPE type)
-{
-    switch (type) {
-    case D3D12_COMMAND_LIST_TYPE_DIRECT:
-        return m_allocator_direct;
-    case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-        return m_allocator_compute;
-    case D3D12_COMMAND_LIST_TYPE_COPY:
-        return m_allocator_copy;
-    default:
-        return nullptr;
-    }
-}
-
-ID3D12CommandQueuePtr CommandManagerDXR::getQueue(D3D12_COMMAND_LIST_TYPE type)
-{
-    switch (type) {
-    case D3D12_COMMAND_LIST_TYPE_DIRECT:
-        return m_queue_direct;
-    case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-        return m_queue_compute;
-    case D3D12_COMMAND_LIST_TYPE_COPY:
-        return m_queue_copy;
-    default:
-        return nullptr;
-    }
-}
-
-ID3D12GraphicsCommandList4Ptr CommandManagerDXR::allocCommandList(D3D12_COMMAND_LIST_TYPE type)
+ID3D12GraphicsCommandList4Ptr CommandListManagerDXR::get()
 {
     ID3D12GraphicsCommandList4Ptr ret;
-    m_device->CreateCommandList(0, type, getAllocator(type), nullptr, IID_PPV_ARGS(&ret));
+    if (!m_available.empty()) {
+        auto c = m_available.back();
+        m_in_use.push_back(c);
+        m_available.pop_back();
+        ret = c->list;
+    }
+    else
+    {
+        auto c = std::make_shared<Record>(m_device, m_type, m_state);
+        c->allocator->SetName(m_name.c_str());
+        c->list->SetName(m_name.c_str());
+        m_in_use.push_back(c);
+        ret = c->list;
+    }
+    m_raw.push_back(ret);
     return ret;
 }
 
-void CommandManagerDXR::releaseCommandList(ID3D12GraphicsCommandList4Ptr cl)
+void CommandListManagerDXR::reset()
 {
-    auto type = cl->GetType();
-    switch (type) {
-    case D3D12_COMMAND_LIST_TYPE_DIRECT:
-        m_list_direct_pool.push_back(cl);
-        break;
-    case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-        m_list_compute_pool.push_back(cl);
-        break;
-    case D3D12_COMMAND_LIST_TYPE_COPY:
-        m_list_copy_pool.push_back(cl);
-        break;
-    default:
-        break;
-    }
+    for(auto& p : m_in_use)
+        p->reset(m_state);
+    m_available.insert(m_available.end(), m_in_use.begin(), m_in_use.end());
+    m_in_use.clear();
+    m_raw.clear();
 }
 
-uint64_t CommandManagerDXR::submit(ID3D12GraphicsCommandList4Ptr cl, ID3D12GraphicsCommandList4Ptr prev, ID3D12GraphicsCommandList4Ptr next)
+const std::vector<ID3D12CommandList*>& CommandListManagerDXR::getCommandLists() const
 {
-    uint64_t fence_value = m_fence_value;
-    auto type = cl->GetType();
-    auto queue = getQueue(type);
-
-    if (prev) {
-        auto type_prev = prev->GetType();
-        auto queue_prev = getQueue(type_prev);
-        queue_prev->Signal(m_fence, fence_value);
-        queue->Wait(m_fence, fence_value);
-        ++fence_value;
-    }
-    {
-        cl->Close();
-        ID3D12CommandList* cmd_list[]{ cl.GetInterfacePtr() };
-        queue->ExecuteCommandLists(_countof(cmd_list), cmd_list);
-    }
-    if (next) {
-        auto type_next = next->GetType();
-        auto queue_next = getQueue(type_next);
-
-        queue->Signal(m_fence, fence_value);
-        queue_next->Wait(m_fence, fence_value);
-        ++fence_value;
-    }
-    m_fence_value = fence_value;
-    return fence_value;
+    return m_raw;
 }
 
-void CommandManagerDXR::resetQueues()
-{
-    m_allocator_copy->Reset();
-    m_allocator_direct->Reset();
-    m_allocator_compute->Reset();
-}
-
-void CommandManagerDXR::reset(ID3D12GraphicsCommandList4Ptr cl, ID3D12PipelineStatePtr state)
-{
-    cl->Reset(getAllocator(cl->GetType()), state);
-}
-
-void CommandManagerDXR::wait(uint64_t fence_value)
-{
-    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
-    ::WaitForSingleObject(m_fence_event, INFINITE);
-}
-
-void CommandManagerDXR::setFenceValue(uint64_t v)
-{
-    m_fence_value = v;
-}
-
-uint64_t CommandManagerDXR::inclementFenceValue()
-{
-    return ++m_fence_value;
-}
 
 
 TimestampDXR::TimestampDXR(ID3D12DevicePtr device, int max_sample)
@@ -269,6 +225,16 @@ bool TimestampDXR::valid() const
     return m_query_heap && m_timestamp_buffer;
 }
 
+bool TimestampDXR::isEnabled() const
+{
+    return m_enabled;
+}
+
+void TimestampDXR::setEnabled(bool v)
+{
+    m_enabled = v;
+}
+
 void TimestampDXR::reset()
 {
     m_sample_index = 0;
@@ -276,7 +242,7 @@ void TimestampDXR::reset()
 
 bool TimestampDXR::query(ID3D12GraphicsCommandList4Ptr cl, const char *message)
 {
-    if (!valid() || m_sample_index == m_max_sample)
+    if (!valid() || !m_enabled || m_sample_index == m_max_sample)
         return false;
     int si = m_sample_index++;
     cl->EndQuery(m_query_heap, D3D12_QUERY_TYPE_TIMESTAMP, si);
@@ -286,7 +252,7 @@ bool TimestampDXR::query(ID3D12GraphicsCommandList4Ptr cl, const char *message)
 
 bool TimestampDXR::resolve(ID3D12GraphicsCommandList4Ptr cl)
 {
-    if (!valid())
+    if (!valid() || !m_enabled)
         return false;
     cl->ResolveQueryData(m_query_heap, D3D12_QUERY_TYPE_TIMESTAMP, 0, m_sample_index, m_timestamp_buffer, 0);
     return true;
@@ -295,7 +261,7 @@ bool TimestampDXR::resolve(ID3D12GraphicsCommandList4Ptr cl)
 std::vector<std::tuple<uint64_t, std::string*>> TimestampDXR::getSamples()
 {
     std::vector<std::tuple<uint64_t, std::string*>> ret;
-    if (!valid())
+    if (!valid() || !m_enabled)
         return ret;
 
     ret.resize(m_sample_index);
@@ -311,11 +277,14 @@ std::vector<std::tuple<uint64_t, std::string*>> TimestampDXR::getSamples()
     return ret;
 }
 
-void TimestampDXR::printElapsed(ID3D12CommandQueuePtr cq)
+void TimestampDXR::updateLog(ID3D12CommandQueuePtr cq)
 {
-    if (!valid() || !cq)
+    if (!valid() || !m_enabled || !cq)
         return;
 
+    m_log.clear();
+    char name[256];
+    char buf[256];
     auto time_samples = getSamples();
     if (!time_samples.empty()) {
         uint64_t freq = 0;
@@ -325,38 +294,60 @@ void TimestampDXR::printElapsed(ID3D12CommandQueuePtr cq)
         auto base = time_samples[0];
         for (size_t si = 0; si < n; ++si) {
             auto s1 = time_samples[si];
-            auto pos1 = std::get<1>(s1)->find(" begin");
+            auto name1 = std::get<1>(s1);
+            auto pos1 = name1->find(" begin");
             if (pos1 != std::string::npos) {
                 auto it = std::find_if(time_samples.begin() + (si + 1), time_samples.end(),
                     [&](auto& s2) {
-                        auto pos2 = std::get<1>(s2)->find(" end");
+                        auto name2 = std::get<1>(s2);
+                        auto pos2 = name2->find(" end");
                         if (pos2 != std::string::npos) {
                             return pos1 == pos2 &&
-                                std::strncmp(std::get<1>(s1)->c_str(), std::get<1>(s2)->c_str(), pos1) == 0;
+                                std::strncmp(name1->c_str(), name2->c_str(), pos1) == 0;
                         }
                         return false;
                     });
                 if (it != time_samples.end()) {
                     auto& s2 = *it;
+                    std::strncpy(name, name1->c_str(), pos1);
+                    name[pos1] = '\0';
                     auto epalsed = std::get<0>(s2) - std::get<0>(s1);
                     auto epalsed_ms = float(double(epalsed * 1000) / double(freq));
-                    DebugPrint("%s %f\n", std::get<1>(s2)->c_str(), epalsed_ms);
+                    sprintf(buf, "%s: %.2fms\n", name, epalsed_ms);
+                    m_log += buf;
                     continue;
                 }
             }
 
-            auto end_pos = std::get<1>(s1)->find(" end");
+            auto end_pos = name1->find(" end");
             if (pos1 == std::string::npos && end_pos == std::string::npos) {
                 auto epalsed = std::get<0>(s1);
                 auto epalsed_ms = float(double(epalsed * 1000) / double(freq));
-                DebugPrint("%s %f\n", std::get<1>(s1)->c_str(), epalsed_ms);
+                sprintf(buf, "%s: %.2fms\n", name1->c_str(), epalsed_ms);
+                m_log += buf;
             }
         }
     }
 }
 
+const std::string& TimestampDXR::getLog() const
+{
+    return m_log;
+}
 
-size_t SizeOfElement(DXGI_FORMAT rtf)
+
+bool RenderDataDXR::hasFlag(RenderFlag f) const
+{
+    return (render_flags & (uint32_t)f) != 0;
+}
+
+void RenderDataDXR::clear()
+{
+    *this = RenderDataDXR();
+}
+
+
+UINT SizeOfElement(DXGI_FORMAT rtf)
 {
     switch (rtf) {
     case DXGI_FORMAT_R8_TYPELESS: return 1;
@@ -412,12 +403,177 @@ DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format)
     }
 }
 
+DXGI_FORMAT GetTypelessFormatDXR(DXGI_FORMAT format)
+{
+    switch (format) {
+    case DXGI_FORMAT_R8_SINT:
+    case DXGI_FORMAT_R8_UINT:
+    case DXGI_FORMAT_R8_SNORM:
+    case DXGI_FORMAT_R8_UNORM: return DXGI_FORMAT_R8_TYPELESS;
+
+    case DXGI_FORMAT_R8G8_SINT:
+    case DXGI_FORMAT_R8G8_UINT:
+    case DXGI_FORMAT_R8G8_SNORM:
+    case DXGI_FORMAT_R8G8_UNORM: return DXGI_FORMAT_R8G8_TYPELESS;
+
+    case DXGI_FORMAT_R8G8B8A8_SINT:
+    case DXGI_FORMAT_R8G8B8A8_UINT:
+    case DXGI_FORMAT_R8G8B8A8_SNORM:
+    case DXGI_FORMAT_R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_TYPELESS;
+
+    case DXGI_FORMAT_R16_SINT:
+    case DXGI_FORMAT_R16_UINT:
+    case DXGI_FORMAT_R16_SNORM:
+    case DXGI_FORMAT_R16_UNORM:
+    case DXGI_FORMAT_R16_FLOAT: return DXGI_FORMAT_R16_TYPELESS;
+
+    case DXGI_FORMAT_R16G16_SINT:
+    case DXGI_FORMAT_R16G16_UINT:
+    case DXGI_FORMAT_R16G16_SNORM:
+    case DXGI_FORMAT_R16G16_UNORM:
+    case DXGI_FORMAT_R16G16_FLOAT: return DXGI_FORMAT_R16G16_TYPELESS;
+
+    case DXGI_FORMAT_R16G16B16A16_SINT:
+    case DXGI_FORMAT_R16G16B16A16_UINT:
+    case DXGI_FORMAT_R16G16B16A16_SNORM:
+    case DXGI_FORMAT_R16G16B16A16_UNORM:
+    case DXGI_FORMAT_R16G16B16A16_FLOAT: return DXGI_FORMAT_R16G16B16A16_TYPELESS;
+
+    case DXGI_FORMAT_R32_SINT:
+    case DXGI_FORMAT_R32_UINT:
+    case DXGI_FORMAT_R32_FLOAT: return DXGI_FORMAT_R32_TYPELESS;
+
+    case DXGI_FORMAT_R32G32_SINT:
+    case DXGI_FORMAT_R32G32_UINT:
+    case DXGI_FORMAT_R32G32_FLOAT: return DXGI_FORMAT_R32G32_TYPELESS;
+
+    case DXGI_FORMAT_R32G32B32A32_SINT:
+    case DXGI_FORMAT_R32G32B32A32_UINT:
+    case DXGI_FORMAT_R32G32B32A32_FLOAT: return DXGI_FORMAT_R32G32B32A32_TYPELESS;
+
+    default: return format;
+    }
+}
+
+
 std::string ToString(ID3DBlob *blob)
 {
     std::string ret;
     ret.resize(blob->GetBufferSize());
     memcpy(&ret[0], blob->GetBufferPointer(), blob->GetBufferSize());
     return ret;
+}
+
+// thanks: https://github.com/microsoft/DirectX-Graphics-Samples
+void PrintStateObjectDesc(const D3D12_STATE_OBJECT_DESC* desc)
+{
+    std::wstringstream wstr;
+    wstr << L"\n";
+    wstr << L"--------------------------------------------------------------------\n";
+    wstr << L"| D3D12 State Object 0x" << static_cast<const void*>(desc) << L": ";
+    if (desc->Type == D3D12_STATE_OBJECT_TYPE_COLLECTION) wstr << L"Collection\n";
+    if (desc->Type == D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE) wstr << L"Raytracing Pipeline\n";
+
+    auto ExportTree = [](UINT depth, UINT numExports, const D3D12_EXPORT_DESC* exports)
+    {
+        std::wostringstream woss;
+        for (UINT i = 0; i < numExports; i++)
+        {
+            woss << L"|";
+            if (depth > 0)
+            {
+                for (UINT j = 0; j < 2 * depth - 1; j++) woss << L" ";
+            }
+            woss << L" [" << i << L"]: ";
+            if (exports[i].ExportToRename) woss << exports[i].ExportToRename << L" --> ";
+            woss << exports[i].Name << L"\n";
+        }
+        return woss.str();
+    };
+
+    for (UINT i = 0; i < desc->NumSubobjects; i++)
+    {
+        wstr << L"| [" << i << L"]: ";
+        switch (desc->pSubobjects[i].Type)
+        {
+        case D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE:
+            wstr << L"Global Root Signature 0x" << desc->pSubobjects[i].pDesc << L"\n";
+            break;
+        case D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE:
+            wstr << L"Local Root Signature 0x" << desc->pSubobjects[i].pDesc << L"\n";
+            break;
+        case D3D12_STATE_SUBOBJECT_TYPE_NODE_MASK:
+            wstr << L"Node Mask: 0x" << std::hex << std::setfill(L'0') << std::setw(8) << *static_cast<const UINT*>(desc->pSubobjects[i].pDesc) << std::setw(0) << std::dec << L"\n";
+            break;
+        case D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY:
+        {
+            wstr << L"DXIL Library 0x";
+            auto lib = static_cast<const D3D12_DXIL_LIBRARY_DESC*>(desc->pSubobjects[i].pDesc);
+            wstr << lib->DXILLibrary.pShaderBytecode << L", " << lib->DXILLibrary.BytecodeLength << L" bytes\n";
+            wstr << ExportTree(1, lib->NumExports, lib->pExports);
+            break;
+        }
+        case D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION:
+        {
+            wstr << L"Existing Library 0x";
+            auto collection = static_cast<const D3D12_EXISTING_COLLECTION_DESC*>(desc->pSubobjects[i].pDesc);
+            wstr << collection->pExistingCollection << L"\n";
+            wstr << ExportTree(1, collection->NumExports, collection->pExports);
+            break;
+        }
+        case D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION:
+        {
+            wstr << L"Subobject to Exports Association (Subobject [";
+            auto association = static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(desc->pSubobjects[i].pDesc);
+            UINT index = static_cast<UINT>(association->pSubobjectToAssociate - desc->pSubobjects);
+            wstr << index << L"])\n";
+            for (UINT j = 0; j < association->NumExports; j++)
+            {
+                wstr << L"|  [" << j << L"]: " << association->pExports[j] << L"\n";
+            }
+            break;
+        }
+        case D3D12_STATE_SUBOBJECT_TYPE_DXIL_SUBOBJECT_TO_EXPORTS_ASSOCIATION:
+        {
+            wstr << L"DXIL Subobjects to Exports Association (";
+            auto association = static_cast<const D3D12_DXIL_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(desc->pSubobjects[i].pDesc);
+            wstr << association->SubobjectToAssociate << L")\n";
+            for (UINT j = 0; j < association->NumExports; j++)
+            {
+                wstr << L"|  [" << j << L"]: " << association->pExports[j] << L"\n";
+            }
+            break;
+        }
+        case D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG:
+        {
+            wstr << L"Raytracing Shader Config\n";
+            auto config = static_cast<const D3D12_RAYTRACING_SHADER_CONFIG*>(desc->pSubobjects[i].pDesc);
+            wstr << L"|  [0]: Max Payload Size: " << config->MaxPayloadSizeInBytes << L" bytes\n";
+            wstr << L"|  [1]: Max Attribute Size: " << config->MaxAttributeSizeInBytes << L" bytes\n";
+            break;
+        }
+        case D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG:
+        {
+            wstr << L"Raytracing Pipeline Config\n";
+            auto config = static_cast<const D3D12_RAYTRACING_PIPELINE_CONFIG*>(desc->pSubobjects[i].pDesc);
+            wstr << L"|  [0]: Max Recursion Depth: " << config->MaxTraceRecursionDepth << L"\n";
+            break;
+        }
+        case D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP:
+        {
+            wstr << L"Hit Group (";
+            auto hitGroup = static_cast<const D3D12_HIT_GROUP_DESC*>(desc->pSubobjects[i].pDesc);
+            wstr << (hitGroup->HitGroupExport ? hitGroup->HitGroupExport : L"[none]") << L")\n";
+            wstr << L"|  [0]: Any Hit Import: " << (hitGroup->AnyHitShaderImport ? hitGroup->AnyHitShaderImport : L"[none]") << L"\n";
+            wstr << L"|  [1]: Closest Hit Import: " << (hitGroup->ClosestHitShaderImport ? hitGroup->ClosestHitShaderImport : L"[none]") << L"\n";
+            wstr << L"|  [2]: Intersection Import: " << (hitGroup->IntersectionShaderImport ? hitGroup->IntersectionShaderImport : L"[none]") << L"\n";
+            break;
+        }
+        }
+        wstr << L"|--------------------------------------------------------------------\n";
+    }
+    wstr << L"\n";
+    OutputDebugStringW(wstr.str().c_str());
 }
 
 } // namespace rths

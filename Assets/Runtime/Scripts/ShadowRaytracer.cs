@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -22,6 +23,15 @@ namespace UTJ.RaytracedHardShadow
             EntireScene,
             Scenes,
             Objects,
+        }
+
+        public enum ImageFormat
+        {
+            PNG,
+            EXR,
+#if UNITY_2018_3_OR_NEWER
+            TGA,
+#endif
         }
 
         [Serializable]
@@ -54,10 +64,7 @@ namespace UTJ.RaytracedHardShadow
                 Release();
 
                 meshData = rthsMeshData.Create();
-
-                int indexStride = mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 ? 2 : 4;
                 meshData.SetGPUBuffers(mesh);
-
                 meshData.SetBindpose(mesh.bindposes);
 #if UNITY_2019_1_OR_NEWER
                 meshData.SetSkinWeights(mesh.GetBonesPerVertex(), mesh.GetAllBoneWeights());
@@ -143,6 +150,8 @@ namespace UTJ.RaytracedHardShadow
         public class RenderTargetRecord
         {
             public rthsRenderTarget rtData;
+            public IntPtr nativeTexturePtr;
+
             public int useCount;
 
             public void Update(RenderTexture rtex)
@@ -150,10 +159,17 @@ namespace UTJ.RaytracedHardShadow
                 if (!rtex.IsCreated())
                     rtex.Create();
 
+                var ptr = rtex.GetNativeTexturePtr();
+                if (rtData)
+                {
+                    if (nativeTexturePtr != ptr)
+                        rtData.Release();
+                }
                 if (!rtData)
                 {
                     rtData = rthsRenderTarget.Create();
-                    rtData.Setup(rtex.GetNativeTexturePtr());
+                    rtData.Setup(ptr);
+                    nativeTexturePtr = ptr;
                 }
             }
 
@@ -164,6 +180,11 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
+        public class ExportRequest
+        {
+            public string path;
+            public ImageFormat format;
+        }
         #endregion
 
 
@@ -175,18 +196,13 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_assignGlobalTexture = true;
         [SerializeField] string m_globalTextureName = "_RaytracedHardShadow";
 
-        [SerializeField] bool m_cullBackFace = false;
+        [SerializeField] bool m_cullBackFaces = true;
+        [SerializeField] bool m_flipCasterFaces = false;
         [SerializeField] bool m_ignoreSelfShadow = true;
         [SerializeField] bool m_keepSelfDropShadow = true;
         [SerializeField] float m_selfShadowThreshold = 0.0001f;
         [SerializeField] float m_shadowRayOffset = 0.0001f;
 
-        [SerializeField] bool m_GPUSkinning = true;
-
-        // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
-        [SerializeField] bool m_clampBlendshapeWeights = false;
-
-        [Tooltip("Light scope for shadow geometries.")]
         [SerializeField] ObjectScope m_lightScope;
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_lightScenes;
@@ -194,7 +210,6 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] string[] m_lightScenePaths;
         [SerializeField] GameObject[] m_lightObjects;
 
-        [Tooltip("Geometry scope for shadow geometries.")]
         [SerializeField] bool m_separateCastersAndReceivers;
         [SerializeField] ObjectScope m_geometryScope;
 #if UNITY_EDITOR
@@ -204,7 +219,24 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] GameObject[] m_geometryObjects;
         [SerializeField] List<Layer> m_layers = new List<Layer> { new Layer() };
 
+        [SerializeField] bool m_GPUSkinning = true;
+        [SerializeField] bool m_adaptiveSampling = false;
+        [SerializeField] bool m_antialiasing = false;
+        [SerializeField] bool m_parallelCommandList = false;
+        // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
+        [SerializeField] bool m_clampBlendshapeWeights = true;
+
+        [SerializeField] bool m_dbgTimestamp = false;
+        [SerializeField] bool m_dbgForceUpdateAS = false;
+
+#if UNITY_EDITOR
+#pragma warning disable CS0414
+        [SerializeField] bool m_foldDebug = false;
+#pragma warning restore CS0414 
+#endif
+
         rthsRenderer m_renderer;
+        List<ExportRequest> m_exportRequests;
 
         static int s_instanceCount, s_updateCount;
         static Dictionary<Mesh, MeshRecord> s_meshDataCache;
@@ -236,6 +268,16 @@ namespace UTJ.RaytracedHardShadow
             set { m_globalTextureName = value; }
         }
 
+        public bool cullBackFaces
+        {
+            get { return m_cullBackFaces; }
+            set { m_cullBackFaces = value; }
+        }
+        public bool flipCasterFaces
+        {
+            get { return m_flipCasterFaces; }
+            set { m_flipCasterFaces = value; }
+        }
         public bool ignoreSelfShadow
         {
             get { return m_ignoreSelfShadow; }
@@ -246,16 +288,17 @@ namespace UTJ.RaytracedHardShadow
             get { return m_keepSelfDropShadow; }
             set { m_keepSelfDropShadow = value; }
         }
-        public bool cullBackFace
+        public float selfShadowThreshold
         {
-            get { return m_cullBackFace; }
-            set { m_cullBackFace = value; }
+            get { return m_selfShadowThreshold; }
+            set { m_selfShadowThreshold = value; }
         }
-        public bool GPUSkinning
+        public float shadowRayOffset
         {
-            get { return m_GPUSkinning; }
-            set { m_GPUSkinning = value; }
+            get { return m_shadowRayOffset; }
+            set { m_shadowRayOffset = value; }
         }
+
 
         public ObjectScope lightScope
         {
@@ -280,7 +323,6 @@ namespace UTJ.RaytracedHardShadow
             get { return m_lightObjects; }
             set { m_lightObjects = value; }
         }
-
 
         public bool separateCastersAndReceivers
         {
@@ -310,10 +352,108 @@ namespace UTJ.RaytracedHardShadow
             get { return m_geometryObjects; }
             set { m_geometryObjects = value; }
         }
-
         public int layerCount
         {
             get { return m_layers.Count; }
+        }
+
+        public bool GPUSkinning
+        {
+            get { return m_GPUSkinning; }
+            set { m_GPUSkinning = value; }
+        }
+        public bool adaptiveSampling
+        {
+            get { return m_adaptiveSampling; }
+            set { m_adaptiveSampling = value; }
+        }
+        public bool antialiasing
+        {
+            get { return m_antialiasing; }
+            set { m_antialiasing = value; }
+        }
+        public bool parallelCommandList
+        {
+            get { return m_parallelCommandList; }
+            set { m_parallelCommandList = value; }
+        }
+
+        public bool dbgTimestamp
+        {
+            get { return m_dbgTimestamp; }
+            set { m_dbgTimestamp = value; }
+        }
+        public bool dbgForceUpdateAS
+        {
+            get { return m_dbgForceUpdateAS; }
+            set { m_dbgForceUpdateAS = value; }
+        }
+        public string timestampLog
+        {
+            get { return m_renderer.timestampLog; }
+        }
+        #endregion
+
+
+        #region public methods
+        // user must call UpdateScenePaths() manually if made changes to the layer
+        public Layer GetLayer(int i)
+        {
+            return m_layers[i];
+        }
+
+        // user must call UpdateScenePaths() manually if made changes to the layer
+        // fail if layer count is already max (kMaxLayers)
+        public Layer AddLayer()
+        {
+            if (m_layers.Count == kMaxLayers)
+                return null;
+
+            var ret = new Layer();
+            m_layers.Add(ret);
+            return ret;
+        }
+
+        public bool RemoveLayer(Layer l)
+        {
+            return m_layers.Remove(l);
+        }
+
+        // serialize SceneAssets as string paths to use at runtime
+        public void UpdateScenePaths()
+        {
+#if UNITY_EDITOR
+            if (m_lightScope == ObjectScope.Scenes)
+                ToPaths(ref m_lightScenePaths, m_lightScenes);
+
+            if (m_separateCastersAndReceivers)
+            {
+                foreach (var layer in m_layers)
+                {
+                    if (layer.casterScope == ObjectScope.Scenes)
+                        ToPaths(ref layer.casterScenePaths, layer.casterScenes);
+                    if (layer.receiverScope == ObjectScope.Scenes)
+                        ToPaths(ref layer.receiverScenePaths, layer.receiverScenes);
+                }
+            }
+            else
+            {
+                if (m_geometryScope == ObjectScope.Scenes)
+                    ToPaths(ref m_geometryScenePaths, m_geometryScenes);
+            }
+#endif
+        }
+
+        // request export to image. actual export is done at the end of frame.
+        public void ExportToImage(string path, ImageFormat format)
+        {
+            if (path == null || path.Length == 0)
+                return;
+
+            if (m_exportRequests == null)
+                m_exportRequests = new List<ExportRequest>();
+            m_exportRequests.Add(new ExportRequest { path = path, format = format });
+            StartCoroutine(DoExportToImage());
         }
         #endregion
 
@@ -495,65 +635,25 @@ namespace UTJ.RaytracedHardShadow
             if (!s_renderTargetCache.TryGetValue(rt, out rec))
             {
                 rec = new RenderTargetRecord();
-                rec.Update(rt);
                 s_renderTargetCache.Add(rt, rec);
             }
+            rec.Update(rt);
             rec.useCount++;
             return rec.rtData;
         }
 
 
-        // user must call UpdateScenePaths() manually if made changes to layer
-        public Layer GetLayer(int i)
-        {
-            return m_layers[i];
-        }
-
-        // user must call UpdateScenePaths() manually if made changes to layer
-        public Layer AddLayer()
-        {
-            var ret = new Layer();
-            m_layers.Add(ret);
-            return ret;
-        }
-        public void RemoveLayer(Layer l)
-        {
-            m_layers.Remove(l);
-        }
-
 #if UNITY_EDITOR
-        void UpdateScenePaths(ref string[] dst, SceneAsset[] src)
+        static void ToPaths(ref string[] dst, SceneAsset[] src)
         {
             dst = Array.ConvertAll(src, s => s != null ? AssetDatabase.GetAssetPath(s) : null);
         }
 #endif
 
-        public void UpdateScenePaths()
-        {
-#if UNITY_EDITOR
-            if (m_lightScope == ObjectScope.Scenes)
-                UpdateScenePaths(ref m_lightScenePaths, m_lightScenes);
-
-            if (m_separateCastersAndReceivers)
-            {
-                foreach(var layer in m_layers)
-                {
-                    if (layer.casterScope == ObjectScope.Scenes)
-                        UpdateScenePaths(ref layer.casterScenePaths, layer.casterScenes);
-                    if (layer.receiverScope == ObjectScope.Scenes)
-                        UpdateScenePaths(ref layer.receiverScenePaths, layer.receiverScenes);
-                }
-            }
-            else
-            {
-                if (m_geometryScope == ObjectScope.Scenes)
-                    UpdateScenePaths(ref m_geometryScenePaths, m_geometryScenes);
-            }
-#endif
-        }
-
         public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
         {
+            // C# 7.0 supports function in function but we stick to the old way for compatibility
+
             Action<GameObject[]> processGOs = (gos) =>
             {
                 foreach (var go in gos)
@@ -608,11 +708,11 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void EnumerateMeshRenderers(Action<MeshRenderer, byte, byte> bodyMR, Action<SkinnedMeshRenderer, byte, byte> bodySMR)
+        public void EnumerateMeshRenderers(
+            Action<MeshRenderer, rthsHitMask, rthsHitMask> bodyMR,
+            Action<SkinnedMeshRenderer, rthsHitMask, rthsHitMask> bodySMR)
         {
-            // C# 7.0 supports function in function but we stick to the old way for compatibility
-
-            Action<GameObject[], byte, byte> processGOs = (gos, rmask, cmask) =>
+            Action<GameObject[], rthsHitMask, rthsHitMask> processGOs = (gos, rmask, cmask) =>
             {
                 foreach (var go in gos)
                 {
@@ -628,7 +728,7 @@ namespace UTJ.RaytracedHardShadow
                 }
             };
 
-            Action<string[], byte, byte> processScenes = (scenePaths, rmask, cmask) => {
+            Action<string[], rthsHitMask, rthsHitMask> processScenes = (scenePaths, rmask, cmask) => {
                 foreach (var scenePath in scenePaths)
                 {
                     if (scenePath == null || scenePath.Length == 0)
@@ -647,7 +747,7 @@ namespace UTJ.RaytracedHardShadow
                 }
             };
 
-            Action<byte, byte> processEntireScene = (rmask, cmask) =>
+            Action<rthsHitMask, rthsHitMask> processEntireScene = (rmask, cmask) =>
             {
                 foreach (var mr in FindObjectsOfType<MeshRenderer>())
                     if (mr.enabled)
@@ -662,8 +762,8 @@ namespace UTJ.RaytracedHardShadow
                 int shift = 0;
                 foreach (var layer in m_layers)
                 {
-                    byte cmask = (byte)((uint)rthsHitMask.Caster << shift);
-                    byte rmask = (byte)((uint)rthsHitMask.Rceiver | (uint)cmask);
+                    var cmask = (rthsHitMask)((uint)rthsHitMask.Caster << shift);
+                    var rmask = (rthsHitMask.Rceiver | cmask);
                     switch (layer.receiverScope)
                     {
                         case ObjectScope.EntireScene: processEntireScene(rmask, 0); break;
@@ -681,7 +781,7 @@ namespace UTJ.RaytracedHardShadow
             }
             else
             {
-                byte mask = (byte)rthsHitMask.Both;
+                var mask = rthsHitMask.Both;
                 switch (m_geometryScope)
                 {
                     case ObjectScope.EntireScene: processEntireScene(mask, mask); break;
@@ -717,18 +817,142 @@ namespace UTJ.RaytracedHardShadow
             }
             else
             {
-                Debug.LogWarning("ShadowRaytracer: " + rthsRenderer.errorLog);
+                Debug.LogError("ShadowRaytracer: Initialization failed - " + rthsRenderer.errorLog);
                 this.enabled = false;
             }
+        }
+
+        static Material s_matBlit;
+
+        static bool DoExportToImage(RenderTexture texture, ExportRequest request)
+        {
+            if (texture == null || !texture.IsCreated() || request.path == null || request.path.Length == 0)
+                return false;
+
+            var f1 = RenderTextureFormat.ARGB32;
+            var f2 = TextureFormat.ARGB32;
+            var exrFlags = Texture2D.EXRFlags.CompressZIP;
+
+            switch (texture.format)
+            {
+                case RenderTextureFormat.R8:
+                case RenderTextureFormat.RG16:
+                case RenderTextureFormat.ARGB32:
+                    f1 = RenderTextureFormat.ARGB32;
+                    f2 = TextureFormat.ARGB32;
+                    break;
+
+                case RenderTextureFormat.RHalf:
+                case RenderTextureFormat.RGHalf:
+                case RenderTextureFormat.ARGBHalf:
+                    if (request.format == ImageFormat.EXR)
+                    {
+                        f1 = RenderTextureFormat.ARGBHalf;
+                        f2 = TextureFormat.RGBAHalf;
+                        exrFlags |= Texture2D.EXRFlags.OutputAsFloat;
+                    }
+                    else
+                    {
+                        f1 = RenderTextureFormat.ARGB32;
+                        f2 = TextureFormat.ARGB32;
+                    }
+                    break;
+
+                case RenderTextureFormat.RFloat:
+                case RenderTextureFormat.RGFloat:
+                case RenderTextureFormat.ARGBFloat:
+                    if (request.format == ImageFormat.EXR)
+                    {
+                        f1 = RenderTextureFormat.ARGBFloat;
+                        f2 = TextureFormat.RGBAFloat;
+                        exrFlags |= Texture2D.EXRFlags.OutputAsFloat;
+                    }
+                    else
+                    {
+                        f1 = RenderTextureFormat.ARGB32;
+                        f2 = TextureFormat.ARGB32;
+                    }
+                    break;
+            }
+
+            RenderTexture tmp1 = null;
+            Texture2D tmp2 = null;
+            bool ret = true;
+            try
+            {
+                if (s_matBlit == null)
+                    s_matBlit = new Material(Shader.Find("Hidden/UTJ/RaytracedHardShadow/Blit"));
+
+                // ReadPixels() doesn't handle format conversion. so create intermediate RenderTexture and Blit() to it.
+                tmp1 = new RenderTexture(texture.width, texture.height, 0, f1);
+                tmp2 = new Texture2D(texture.width, texture.height, f2, false);
+                Graphics.Blit(texture, tmp1, s_matBlit);
+                RenderTexture.active = tmp1;
+                tmp2.ReadPixels(new Rect(0, 0, tmp2.width, tmp2.height), 0, 0);
+                tmp2.Apply();
+                RenderTexture.active = null;
+
+                switch (request.format)
+                {
+                    case ImageFormat.PNG: ExportToPNG(request.path, tmp2); break;
+                    case ImageFormat.EXR: ExportToEXR(request.path, tmp2, exrFlags); break;
+#if UNITY_2018_3_OR_NEWER
+                    case ImageFormat.TGA: ExportToTGA(request.path, tmp2); break;
+#endif
+                    default: ret = false; break;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e);
+                ret = false;
+            }
+
+            if (tmp1 != null)
+                DestroyImmediate(tmp1);
+            if (tmp2 != null)
+                DestroyImmediate(tmp2);
+            return ret;
+        }
+        static void ExportToPNG(string path, Texture2D tex)
+        {
+#if UNITY_2018_1_OR_NEWER
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToPNG(tex));
+#else
+            System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
+#endif
+        }
+        static void ExportToEXR(string path, Texture2D tex, Texture2D.EXRFlags flags)
+        {
+#if UNITY_2018_1_OR_NEWER
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToEXR(tex, flags));
+#else
+            System.IO.File.WriteAllBytes(path, tex.EncodeToEXR(flags));
+#endif
+        }
+#if UNITY_2018_3_OR_NEWER
+        static void ExportToTGA(string path, Texture2D tex)
+        {
+            System.IO.File.WriteAllBytes(path, ImageConversion.EncodeToTGA(tex));
+        }
+#endif
+
+        IEnumerator DoExportToImage()
+        {
+            yield return new WaitForEndOfFrame();
+
+            if (m_outputTexture != null && m_outputTexture.IsCreated())
+            {
+                foreach (var request in m_exportRequests)
+                    DoExportToImage(m_outputTexture, request);
+            }
+            m_exportRequests.Clear();
         }
         #endregion
 
 
+        #region events
 #if UNITY_EDITOR
-        void Reset()
-        {
-        }
-
         void OnValidate()
         {
             UpdateScenePaths();
@@ -754,12 +978,19 @@ namespace UTJ.RaytracedHardShadow
 
         void Update()
         {
-#if UNITY_EDITOR
+#if UNITY_EDITOR && UNITY_2018_3_OR_NEWER
             m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
 #endif
             InitializeRenderer();
             if (!m_renderer)
                 return;
+            else if(!m_renderer.valid)
+            {
+                Debug.LogError("ShadowRaytracer: Error - " + rthsRenderer.errorLog);
+                m_renderer.Release();
+                this.enabled = false;
+                return;
+            }
 
             // first instance reset update count and clear cache
             if (s_updateCount != 0)
@@ -779,25 +1010,18 @@ namespace UTJ.RaytracedHardShadow
             if (cam == null)
                 return;
 
-            bool updateGlobalTexture = false;
-#if UNITY_EDITOR
-            if (m_outputTexture != null && AssetDatabase.Contains(m_outputTexture))
-            {
-                if (!m_outputTexture.IsCreated())
-                    m_outputTexture.Create();
-                if (m_assignGlobalTexture)
-                    updateGlobalTexture = true;
-            }
-            else
-#endif
             if (m_generateRenderTexture)
             {
-                // create output buffer if not assigned. fit its size to camera resolution if already assigned.
-
                 var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
                 if (m_outputTexture != null && (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y))
                 {
-                    m_outputTexture.Release();
+                    // resolution was changed. release existing RenderTexture
+#if UNITY_EDITOR
+                    if (!AssetDatabase.Contains(m_outputTexture))
+#endif
+                    {
+                        DestroyImmediate(m_outputTexture);
+                    }
                     m_outputTexture = null;
                 }
                 if (m_outputTexture == null)
@@ -807,27 +1031,42 @@ namespace UTJ.RaytracedHardShadow
                     m_outputTexture.enableRandomWrite = true; // enable unordered access
                     m_outputTexture.Create();
                     if (m_assignGlobalTexture)
-                        updateGlobalTexture = true;
+                        Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
                 }
+            }
+            else if (m_outputTexture != null)
+            {
+                if (m_assignGlobalTexture)
+                    Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
             }
 
             if (m_outputTexture == null)
                 return;
-            if (updateGlobalTexture)
-                Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
 
             {
-                int flags = 0;
-                if (m_cullBackFace)
-                    flags |= (int)rthsRenderFlag.CullBackFace;
+                rthsRenderFlag flags = 0;
+                if (m_cullBackFaces)
+                    flags |= rthsRenderFlag.CullBackFaces;
+                if (m_flipCasterFaces)
+                    flags |= rthsRenderFlag.FlipCasterFaces;
                 if (m_ignoreSelfShadow)
-                    flags |= (int)rthsRenderFlag.IgnoreSelfShadow;
+                    flags |= rthsRenderFlag.IgnoreSelfShadow;
                 if (m_keepSelfDropShadow)
-                    flags |= (int)rthsRenderFlag.KeepSelfDropShadow;
+                    flags |= rthsRenderFlag.KeepSelfDropShadow;
                 if (m_GPUSkinning)
-                    flags |= (int)rthsRenderFlag.GPUSkinning;
+                    flags |= rthsRenderFlag.GPUSkinning;
+                if (m_adaptiveSampling)
+                    flags |= rthsRenderFlag.AdaptiveSampling;
+                if (m_antialiasing)
+                    flags |= rthsRenderFlag.Antialiasing;
+                if (m_parallelCommandList)
+                    flags |= rthsRenderFlag.ParallelCommandList;
                 if (m_clampBlendshapeWeights)
-                    flags |= (int)rthsRenderFlag.ClampBlendShapeWights;
+                    flags |= rthsRenderFlag.ClampBlendShapeWights;
+                if (m_dbgTimestamp)
+                    flags |= rthsRenderFlag.DbgTimestamp;
+                if (m_dbgForceUpdateAS)
+                    flags |= rthsRenderFlag.DbgForceUpdateAS;
 
                 m_renderer.BeginScene();
                 m_renderer.SetRaytraceFlags(flags);
@@ -848,10 +1087,11 @@ namespace UTJ.RaytracedHardShadow
 
             if (++s_updateCount == s_instanceCount)
             {
-                // last instance issue render event.
+                // last instance issues render event.
                 // all renderers do actual rendering tasks in render thread.
                 rthsRenderer.IssueRender();
             }
         }
+        #endregion
     }
 }

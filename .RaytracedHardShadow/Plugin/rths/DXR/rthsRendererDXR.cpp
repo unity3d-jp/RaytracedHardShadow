@@ -15,8 +15,11 @@ public:
     bool valid() const override;
     void render() override; // called from render thread
     void finish() override; // called from render thread
+    void frameBegin() override; // called from render thread
+    void frameEnd() override; // called from render thread
 
     bool readbackRenderTarget(void *dst) override;
+    const char* getTimestampLog() override;
     void* getRenderTexturePtr() override;
 
 private:
@@ -61,8 +64,25 @@ void RendererDXR::finish()
         return;
 
     auto ctx = GfxContextDXR::getInstance();
-    ctx->finish(m_render_data);
+    if (!ctx->finish(m_render_data))
+        m_render_data.clear();
     clearMeshInstances();
+}
+
+void RendererDXR::frameBegin()
+{
+    if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
+        //auto ctx = GfxContextDXR::getInstance();
+        //ctx->clearResourceCache();
+        //m_render_data.clear();
+
+        for (auto& geom : m_render_data.geometries_prev)
+            geom.clearBLAS();
+    }
+}
+
+void RendererDXR::frameEnd()
+{
 }
 
 bool RendererDXR::readbackRenderTarget(void *dst)
@@ -72,6 +92,15 @@ bool RendererDXR::readbackRenderTarget(void *dst)
 
     auto ctx = GfxContextDXR::getInstance();
     return ctx->readbackRenderTarget(m_render_data, dst);
+}
+
+const char* RendererDXR::getTimestampLog()
+{
+#ifdef rthsEnableTimestamp
+    if (m_render_data.timestamp)
+        return m_render_data.timestamp->getLog().c_str();
+#endif // rthsEnableTimestamp
+    return nullptr;
 }
 
 void* RendererDXR::getRenderTexturePtr()

@@ -74,9 +74,6 @@
     <ClInclude Include="rths\DXR\rthsTypesDXR.h">
       <Filter>rths\DXR</Filter>
     </ClInclude>
-    <ClInclude Include="rths\DXR\Shaders\rthsCommonDXR.h">
-      <Filter>rths\DXR\Shaders</Filter>
-    </ClInclude>
     <ClInclude Include="rths\DXR\rthsDeformerDXR.h">
       <Filter>rths\DXR</Filter>
     </ClInclude>
@@ -97,11 +94,11 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="rths\DXR\Shaders\rthsShadowDXR.hlsl">
+    <FxCompile Include="rths\DXR\Shaders\rthsShadowDXR.hlsl">
       <Filter>rths\DXR\Shaders</Filter>
-    </CustomBuild>
-    <CustomBuild Include="rths\DXR\Shaders\rthsDeform.hlsl">
+    </FxCompile>
+    <FxCompile Include="rths\DXR\Shaders\rthsDeform.hlsl">
       <Filter>rths\DXR\Shaders</Filter>
-    </CustomBuild>
+    </FxCompile>
   </ItemGroup>
 </Project>

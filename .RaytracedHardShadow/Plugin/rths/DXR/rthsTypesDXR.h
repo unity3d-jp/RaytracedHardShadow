@@ -9,20 +9,20 @@
 
     // GPU based validation
     // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/using-d3d12-debug-layer-gpu-based-validation
-    #define rthsEnableD3D12GBV
+    // note: enabling this can cause problems. in our case, shader resources bound by global root sig become invisible.
+    //#define rthsEnableD3D12GBV
 
-    // DREAD (this requires Windows SDK 10.0.18362.0 or newer)
-    // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
-    #define rthsEnableD3D12DREAD
-
-    #define rthsEnableTimestamp
-
-    #define rthsEnableResourceName
+    //// DREAD (this requires Windows SDK 10.0.18362.0 or newer)
+    //// https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
+    //#define rthsEnableD3D12DREAD
 
     //#define rthsEnableBufferValidation
     //#define rthsEnableRenderTargetValidation
     //#define rthsForceSoftwareDevice
 #endif
+
+#define rthsEnableResourceName
+#define rthsEnableTimestamp
 
 
 namespace rths {
@@ -96,6 +96,8 @@ class FenceEventDXR
 {
 public:
     FenceEventDXR();
+    FenceEventDXR(const FenceEventDXR& v);
+    FenceEventDXR& operator=(const FenceEventDXR& v);
     ~FenceEventDXR();
     operator HANDLE() const;
 
@@ -162,6 +164,7 @@ public:
 
     int getVertexStride() const;
     int getIndexStride() const;
+    void clearBLAS();
 };
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
 
@@ -171,13 +174,15 @@ public:
     MeshInstanceData *base = nullptr;
 
     MeshDataDXRPtr mesh;
-    ID3D12DescriptorHeapPtr srvuav_heap;
+    ID3D12DescriptorHeapPtr desc_heap;
     ID3D12ResourcePtr bs_weights;
     ID3D12ResourcePtr bone_matrices;
     ID3D12ResourcePtr deformed_vertices;
     ID3D12ResourcePtr blas_deformed;
     ID3D12ResourcePtr blas_scratch;
     bool is_updated = false;
+
+    void clearBLAS();
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 
@@ -190,6 +195,7 @@ public:
 
     bool operator==(const GeometryDataDXR& v) const;
     bool operator!=(const GeometryDataDXR& v) const;
+    void clearBLAS();
 };
 
 class RenderTargetDataDXR
@@ -197,6 +203,8 @@ class RenderTargetDataDXR
 public:
     RenderTargetData *base = nullptr;
     TextureDataDXRPtr texture;
+    ID3D12ResourcePtr adaptive_res[3]; // for adaptive sampling
+    ID3D12ResourcePtr back_buffer; // back buffer for antialiasing
 };
 using RenderTargetDataDXRPtr = std::shared_ptr<RenderTargetDataDXR>;
 
@@ -207,34 +215,41 @@ public:
     TimestampDXR(ID3D12DevicePtr device, int max_sample = 64);
 
     bool valid() const;
+    bool isEnabled() const;
+    void setEnabled(bool v);
     void reset();
     bool query(ID3D12GraphicsCommandList4Ptr cl, const char *message);
     bool resolve(ID3D12GraphicsCommandList4Ptr cl);
 
     std::vector<std::tuple<uint64_t, std::string*>> getSamples();
-    void printElapsed(ID3D12CommandQueuePtr cq);
+    void updateLog(ID3D12CommandQueuePtr cq);
+    const std::string& getLog() const;
 
 private:
     ID3D12QueryHeapPtr m_query_heap;
     ID3D12ResourcePtr m_timestamp_buffer;
+    bool m_enabled = true;
     int m_max_sample = 0;
     int m_sample_index=0;
     std::vector<std::string> m_messages;
+    std::string m_log;
 };
 using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
 
 #ifdef rthsEnableTimestamp
-    #define TimestampInitialize(q, d) if(!q) { q = std::make_shared<TimestampDXR>(d); }
-    #define TimestampReset(q) q->reset()
-    #define TimestampQuery(q, cl, m) q->query(cl, m)
-    #define TimestampResolve(q, cl) q->resolve(cl)
-    #define TimestampPrint(q, cq) q->printElapsed(cq)
+    #define rthsTimestampInitialize(q, d)   if (!q) { q = std::make_shared<TimestampDXR>(d); }
+    #define rthsTimestampSetEnable(q, e)    q->setEnabled(e)
+    #define rthsTimestampReset(q)           q->reset()
+    #define rthsTimestampQuery(q, cl, m)    q->query(cl, m)
+    #define rthsTimestampResolve(q, cl)     q->resolve(cl)
+    #define rthsTimestampUpdateLog(q, cq)   q->updateLog(cq)
 #else rthsEnableTimestamp
-    #define TimestampInitialize(...)
-    #define TimestampReset(...)
-    #define TimestampQuery(...)
-    #define TimestampResolve(...)
-    #define TimestampPrint(...)
+    #define rthsTimestampInitialize(...)
+    #define rthsTimestampSetEnable(...)
+    #define rthsTimestampReset(...)
+    #define rthsTimestampQuery(...)
+    #define rthsTimestampResolve(...)
+    #define rthsTimestampUpdateLog(...)
 #endif rthsEnableTimestamp
 
 #ifdef rthsEnableResourceName
@@ -243,17 +258,49 @@ using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
     #define DbgSetName(...)
 #endif
 
+class CommandListManagerDXR
+{
+public:
+    CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, const wchar_t *name);
+    CommandListManagerDXR(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state, const wchar_t *name);
+    ID3D12GraphicsCommandList4Ptr get();
+    void reset();
+
+    // command lists to pass ExecuteCommandLists()
+    const std::vector<ID3D12CommandList*>& getCommandLists() const;
+
+private:
+    struct Record
+    {
+        Record(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state);
+        void reset(ID3D12PipelineStatePtr state);
+
+        ID3D12CommandAllocatorPtr allocator;
+        ID3D12GraphicsCommandList4Ptr list;
+    };
+    using CommandPtr = std::shared_ptr<Record>;
+
+    ID3D12DevicePtr m_device;
+    D3D12_COMMAND_LIST_TYPE m_type;
+    ID3D12PipelineStatePtr m_state;
+    std::vector<CommandPtr> m_available, m_in_use;
+    std::vector<ID3D12CommandList*> m_raw;
+    std::wstring m_name;
+};
+using CommandListManagerDXRPtr = std::shared_ptr<CommandListManagerDXR>;
+
 class RenderDataDXR
 {
 public:
-    ID3D12CommandAllocatorPtr ca_deform, ca_blas, ca_tlas, ca_rays, ca_immediate_copy;
-    ID3D12GraphicsCommandList4Ptr cl_deform, cl_blas, cl_tlas, cl_rays, cl_immediate_copy;
+    CommandListManagerDXRPtr clm_deform, clm_blas, clm_tlas, clm_rays;
+    ID3D12GraphicsCommandList4Ptr cl_deform;
 
     ID3D12DescriptorHeapPtr desc_heap;
-    DescriptorHandleDXR render_target_handle;
-    DescriptorHandleDXR tlas_handle;
-    DescriptorHandleDXR instance_data_handle;
-    DescriptorHandleDXR scene_data_handle;
+    DescriptorHandleDXR render_target_uav;
+    DescriptorHandleDXR tlas_srv, instance_data_srv;
+    DescriptorHandleDXR scene_data_cbv;
+    DescriptorHandleDXR adaptive_uavs[3], adaptive_srvs[3];
+    DescriptorHandleDXR back_buffer_uav, back_buffer_srv;
 
     std::vector<GeometryDataDXR> geometries, geometries_prev;
     SceneData scene_data_prev{};
@@ -264,43 +311,17 @@ public:
     ID3D12ResourcePtr instance_data;
     RenderTargetDataDXRPtr render_target;
 
-    ID3D12ResourcePtr shader_table;
-
     uint64_t fv_deform = 0, fv_blas = 0, fv_tlas = 0, fv_rays = 0;
     FenceEventDXR fence_event;
     int render_flags = 0;
+    int max_parallel_command_lists = 8;
 
 #ifdef rthsEnableTimestamp
     TimestampDXRPtr timestamp;
 #endif // rthsEnableTimestamp
-};
 
-class CommandManagerDXR
-{
-public:
-    CommandManagerDXR(ID3D12DevicePtr device, ID3D12FencePtr fence);
-    ID3D12CommandAllocatorPtr getAllocator(D3D12_COMMAND_LIST_TYPE type);
-    ID3D12CommandQueuePtr getQueue(D3D12_COMMAND_LIST_TYPE type);
-    ID3D12GraphicsCommandList4Ptr allocCommandList(D3D12_COMMAND_LIST_TYPE type);
-    void releaseCommandList(ID3D12GraphicsCommandList4Ptr cl);
-    uint64_t submit(ID3D12GraphicsCommandList4Ptr cl, ID3D12GraphicsCommandList4Ptr prev = nullptr, ID3D12GraphicsCommandList4Ptr next = nullptr);
-    void wait(uint64_t fence_value);
-
-    void resetQueues();
-    void reset(ID3D12GraphicsCommandList4Ptr cl, ID3D12PipelineStatePtr state = nullptr);
-
-    void setFenceValue(uint64_t v);
-    uint64_t inclementFenceValue();
-
-private:
-    ID3D12DevicePtr m_device;
-    ID3D12FencePtr m_fence;
-
-    ID3D12CommandAllocatorPtr m_allocator_copy, m_allocator_direct, m_allocator_compute;
-    ID3D12CommandQueuePtr m_queue_copy, m_queue_direct, m_queue_compute;
-    std::vector<ID3D12GraphicsCommandList4Ptr> m_list_copy_pool, m_list_direct_pool, m_list_compute_pool;
-    uint64_t m_fence_value = 0;
-    FenceEventDXR m_fence_event;
+    bool hasFlag(RenderFlag f) const;
+    void clear();
 };
 
 
@@ -308,10 +329,32 @@ extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
 extern const D3D12_HEAP_PROPERTIES kReadbackHeapProps;
 
-size_t SizeOfElement(DXGI_FORMAT rtf);
+UINT SizeOfElement(DXGI_FORMAT rtf);
 DXGI_FORMAT GetDXGIFormat(RenderTargetFormat format);
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
+DXGI_FORMAT GetTypelessFormatDXR(DXGI_FORMAT format);
 std::string ToString(ID3DBlob *blob);
+void PrintStateObjectDesc(const D3D12_STATE_OBJECT_DESC* desc);
+
+// Body : [](size_t size) -> ID3D12Resource
+// return true if expanded
+template<class Body>
+bool ReuseOrExpandBuffer(ID3D12ResourcePtr &buf, size_t stride, size_t size, size_t minimum, const Body& body)
+{
+    if (buf) {
+        auto capacity_in_byte = buf->GetDesc().Width;
+        if (capacity_in_byte < size * stride)
+            buf = nullptr;
+    }
+    if (!buf) {
+        size_t capacity = minimum;
+        while (capacity < size)
+            capacity *= 2;
+        buf = body(stride * capacity);
+        return true;
+    }
+    return false;
+};
 
 } // namespace rths
 #endif // _WIN32

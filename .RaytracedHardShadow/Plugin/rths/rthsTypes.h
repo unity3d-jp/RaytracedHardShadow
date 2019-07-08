@@ -5,26 +5,21 @@
 
 namespace rths {
 
-struct CameraData
-{
-    float4x4 view;
-    float4x4 proj;
-    union {
-        float3 position;
-        float4 position4;
-    };
-    float near_plane;
-    float far_plane;
-    float2 pad1;
-};
-
 enum class RenderFlag : uint32_t
 {
-    CullBackFace            = 0x0001,
-    IgnoreSelfShadow        = 0x0002,
-    KeepSelfDropShadow      = 0x0004,
-    GPUSkinning             = 0x0100,
-    ClampBlendShapeWights   = 0x0200,
+    CullBackFaces           = 0x00000001,
+    FlipCasterFaces         = 0x00000002,
+    IgnoreSelfShadow        = 0x00000004,
+    KeepSelfDropShadow      = 0x00000008,
+    AlphaTest               = 0x00000010,
+    Transparent             = 0x00000020,
+    AdaptiveSampling        = 0x00000100,
+    Antialiasing            = 0x00000200,
+    GPUSkinning             = 0x00010000,
+    ClampBlendShapeWights   = 0x00020000,
+    ParallelCommandList     = 0x00040000,
+    DbgTimestamp            = 0x01000000,
+    DbgForceUpdateAS        = 0x02000000,
 };
 
 enum class LightType : uint32_t
@@ -40,9 +35,7 @@ enum class HitMask : uint8_t
     Receiver    = 0x01,
     Caster      = 0x02,
     Both        = Receiver | Caster,
-
     AllCaster   = 0xfe,
-    ALl         = 0xff,
 };
 
 enum class UpdateFlag : uint32_t
@@ -50,7 +43,9 @@ enum class UpdateFlag : uint32_t
     None = 0,
     Transform = 1,
     Blendshape = 2,
-    Bone = 4,
+    Bones = 4,
+
+    Any = Transform | Blendshape | Bones,
 };
 
 enum class RenderTargetFormat : uint32_t
@@ -67,6 +62,19 @@ enum class RenderTargetFormat : uint32_t
     RGBAf32,
 };
 
+struct CameraData
+{
+    float4x4 view;
+    float4x4 proj;
+    union {
+        float3 position;
+        float4 position4;
+    };
+    float near_plane;
+    float far_plane;
+    float2 pad1;
+};
+
 struct LightData
 {
     LightType light_type{};
@@ -78,21 +86,16 @@ struct LightData
     float spot_angle{}; // radian
 };
 
-
 #define kMaxLights 32
 
 struct SceneData
 {
-    CameraData camera;
-
     uint32_t render_flags; // combination of RenderFlag
     uint32_t light_count;
-    uint32_t pad1[2];
-
     float shadow_ray_offset;
     float self_shadow_threshold;
-    float pad2[2];
 
+    CameraData camera;
     LightData lights[kMaxLights];
 
     bool operator==(SceneData& v) const { return std::memcmp(this, &v, sizeof(*this)) == 0; }
@@ -188,6 +191,12 @@ public:
     MeshInstanceData();
     ~MeshInstanceData();
     bool valid() const;
+    bool isUpdated(UpdateFlag v) const;
+    void markUpdated(UpdateFlag v);
+    void markUpdated(); // for debug
+    void setTransform(const float4x4& v);
+    void setBones(const float4x4 *v, size_t n);
+    void setBlendshapeWeights(const float *v, size_t n);
 };
 using MeshInstanceDataPtr = ref_ptr<MeshInstanceData>;
 
@@ -203,6 +212,7 @@ public:
     uint8_t cast_mask;
 
     bool valid() const;
+    void markUpdated(); // for debug
 };
 
 

@@ -6,7 +6,7 @@
 #include "rthsDeformerDXR.h"
 
 // shader binaries
-#include "rthsDeform.h"
+#include "rthsDeform.hlsl.h"
 
 namespace rths {
 
@@ -60,31 +60,29 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
         param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         param.DescriptorTable.NumDescriptorRanges = _countof(ranges);
         param.DescriptorTable.pDescriptorRanges = ranges;
-        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         D3D12_ROOT_SIGNATURE_DESC desc{};
         desc.NumParameters = 1;
         desc.pParameters = &param;
 
-        ID3DBlobPtr sig_blob;
-        ID3DBlobPtr error_blob;
+        ID3DBlobPtr sig_blob, error_blob;
         HRESULT hr = ::D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &sig_blob, &error_blob);
         if (FAILED(hr)) {
             SetErrorLog(ToString(error_blob) + "\n");
         }
         else {
-            hr = m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_rootsig_deform));
+            hr = m_device->CreateRootSignature(0, sig_blob->GetBufferPointer(), sig_blob->GetBufferSize(), IID_PPV_ARGS(&m_rootsig));
             if (FAILED(hr)) {
                 SetErrorLog("CreateRootSignature() failed\n");
             }
         }
     }
 
-    if (m_rootsig_deform) {
+    if (m_rootsig) {
         D3D12_COMPUTE_PIPELINE_STATE_DESC psd {};
-        psd.pRootSignature = m_rootsig_deform.GetInterfacePtr();
-        psd.CS.pShaderBytecode = rthsDeform;
-        psd.CS.BytecodeLength = sizeof(rthsDeform);
+        psd.pRootSignature = m_rootsig.GetInterfacePtr();
+        psd.CS.pShaderBytecode = g_rthsDeform;
+        psd.CS.BytecodeLength = sizeof(g_rthsDeform);
 
         HRESULT hr = m_device->CreateComputePipelineState(&psd, IID_PPV_ARGS(&m_pipeline_state));
         if (FAILED(hr)) {
@@ -97,48 +95,58 @@ DeformerDXR::~DeformerDXR()
 {
 }
 
+bool DeformerDXR::valid() const
+{
+    return this && m_device && m_rootsig && m_pipeline_state;
+}
+
 bool DeformerDXR::prepare(RenderDataDXR& rd)
 {
-    if (!rd.cl_deform) {
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&rd.ca_deform));
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, rd.ca_deform, m_pipeline_state, IID_PPV_ARGS(&rd.cl_deform));
-        DbgSetName(rd.ca_deform, L"CA Deform");
-        DbgSetName(rd.cl_deform, L"CL Deform");
-    }
+    if (!valid())
+        return false;
 
-    TimestampQuery(rd.timestamp, rd.cl_deform, "DeformerDXR: begin");
+    if (!rd.clm_deform) {
+        rd.clm_deform = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_pipeline_state, L"Deform");
+    }
+    rd.cl_deform = rd.clm_deform->get();
+
+    rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform begin");
     return true;
 }
 
-bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
+bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool submit)
 {
-    if (!m_rootsig_deform || !m_pipeline_state || !inst_dxr.mesh)
+    if (!valid() || !inst_dxr.mesh)
         return false;
-
-    uint32_t update_flags = inst_dxr.base->update_flags;
-    bool blendshape_updated = update_flags & (int)UpdateFlag::Blendshape;
-    bool bone_updated = update_flags & (int)UpdateFlag::Bone;
-    if (!blendshape_updated && !bone_updated)
-        return false; // no need to deform
 
     auto& inst = *inst_dxr.base;
     auto& mesh = *inst_dxr.mesh->base;
     auto& mesh_dxr = *inst_dxr.mesh;
 
-    bool clamp_blendshape_weights = (rd.render_flags & (int)RenderFlag::ClampBlendShapeWights) != 0;
+    bool blendshape_updated = inst_dxr.base->isUpdated(UpdateFlag::Blendshape);
+    bool bone_updated = inst_dxr.base->isUpdated(UpdateFlag::Bones);
+    if (!blendshape_updated && !bone_updated)
+        return false; // no need to deform
+
+    bool clamp_blendshape_weights = rd.hasFlag(RenderFlag::ClampBlendShapeWights) != 0;
     int vertex_count = mesh.vertex_count;
     int blendshape_count = (int)inst.blendshape_weights.size();
     int bone_count = (int)inst.bones.size();
 
     // setup descriptors
-    if (!inst_dxr.srvuav_heap) {
+    bool update_descriptors = false;
+    if (!inst_dxr.desc_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
         desc.NumDescriptors = 32;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&inst_dxr.srvuav_heap));
+        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&inst_dxr.desc_heap));
+        update_descriptors = true;
     }
-    auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, inst_dxr.srvuav_heap);
+
+    // note: there are per-mesh resources (e.g. base vertices) and per-instance ones (e.g. deformed vertices).
+    //       these are not 1 on 1. one mesh can have multiple instances.
+    auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, inst_dxr.desc_heap);
     auto hdst_vertices = handle_allocator.allocate();
     auto hbase_vertices = handle_allocator.allocate();
     auto hbs_delta = handle_allocator.allocate();
@@ -154,17 +162,17 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
         // deformed vertices
         inst_dxr.deformed_vertices = createBuffer(sizeof(float4) * vertex_count, kDefaultHeapProps, true);
     }
-    createUAV(hdst_vertices.hcpu, inst_dxr.deformed_vertices, vertex_count, sizeof(float4));
-
-    // interpret source vertex buffer as just an array of float
-    createSRV(hbase_vertices.hcpu, mesh_dxr.vertex_buffer->resource, mesh_dxr.vertex_buffer->size / 4, 4);
+    if (update_descriptors) {
+        createUAV(hdst_vertices.hcpu, inst_dxr.deformed_vertices, vertex_count, sizeof(float4));
+        // interpret source vertex buffer as just an array of float
+        createSRV(hbase_vertices.hcpu, mesh_dxr.vertex_buffer->resource, mesh_dxr.vertex_buffer->size / 4, 4);
+    }
 
     // blendshape
     if (blendshape_count > 0) {
         int frame_count = 0;
-        for (auto& bs : mesh.blendshapes) {
+        for (auto& bs : mesh.blendshapes)
             frame_count += (int)bs.frames.size();
-        }
 
         if (!mesh_dxr.bs_delta) {
             // delta
@@ -230,10 +238,12 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
             });
         }
 
-        createSRV(hbs_delta.hcpu, mesh_dxr.bs_delta, vertex_count * frame_count, sizeof(float4));
-        createSRV(hbs_frames.hcpu, mesh_dxr.bs_frames, frame_count, sizeof(BlendshapeFrame));
-        createSRV(hbs_info.hcpu, mesh_dxr.bs_info, blendshape_count, sizeof(BlendshapeInfo));
-        createSRV(hbs_weights.hcpu, inst_dxr.bs_weights, blendshape_count, sizeof(float));
+        if (update_descriptors) {
+            createSRV(hbs_delta.hcpu, mesh_dxr.bs_delta, vertex_count * frame_count, sizeof(float4));
+            createSRV(hbs_frames.hcpu, mesh_dxr.bs_frames, frame_count, sizeof(BlendshapeFrame));
+            createSRV(hbs_info.hcpu, mesh_dxr.bs_info, blendshape_count, sizeof(BlendshapeInfo));
+            createSRV(hbs_weights.hcpu, inst_dxr.bs_weights, blendshape_count, sizeof(float));
+        }
     }
 
     // skinning 
@@ -283,10 +293,12 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
             });
         }
 
-        int weight_count = (int)mesh.skin.weights.size();
-        createSRV(hbone_counts.hcpu, mesh_dxr.bone_counts, vertex_count, sizeof(BoneCount));
-        createSRV(hbone_weights.hcpu, mesh_dxr.bone_weights, weight_count, sizeof(BoneWeight));
-        createSRV(hbone_matrices.hcpu, inst_dxr.bone_matrices, bone_count, sizeof(float4x4));
+        if (update_descriptors) {
+            int weight_count = (int)mesh.skin.weights.size();
+            createSRV(hbone_counts.hcpu, mesh_dxr.bone_counts, vertex_count, sizeof(BoneCount));
+            createSRV(hbone_weights.hcpu, mesh_dxr.bone_weights, weight_count, sizeof(BoneWeight));
+            createSRV(hbone_matrices.hcpu, inst_dxr.bone_matrices, bone_count, sizeof(float4x4));
+        }
     }
 
     // mesh info
@@ -305,37 +317,58 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
             *(MeshInfo*)dst_ = info;
         });
     }
-    createCBV(hmesh_info.hcpu, mesh_dxr.mesh_info, mesh_info_size);
+    if (update_descriptors) {
+        createCBV(hmesh_info.hcpu, mesh_dxr.mesh_info, mesh_info_size);
+    }
 
     {
         auto& cl = rd.cl_deform;
-        cl->SetComputeRootSignature(m_rootsig_deform);
+        cl->SetComputeRootSignature(m_rootsig);
 
-        ID3D12DescriptorHeap* heaps[] = { inst_dxr.srvuav_heap };
+        ID3D12DescriptorHeap* heaps[] = { inst_dxr.desc_heap };
         cl->SetDescriptorHeaps(_countof(heaps), heaps);
-        cl->SetComputeRootDescriptorTable(0, hdst_vertices.hgpu);
+        cl->SetComputeRootDescriptorTable(0, inst_dxr.desc_heap->GetGPUDescriptorHandleForHeapStart());
         cl->Dispatch(mesh.vertex_count, 1, 1);
+
+        if (submit) {
+            cl->Close();
+            cl = rd.clm_deform->get();
+        }
     }
 
     return true;
 }
 
-bool DeformerDXR::close(RenderDataDXR& rd)
+uint64_t DeformerDXR::flush(RenderDataDXR& rd)
 {
-    if (rd.cl_deform) {
-        TimestampQuery(rd.timestamp, rd.cl_deform, "DeformerDXR: end");
-        if (SUCCEEDED(rd.cl_deform->Close())) {
-            return true;
-        }
+    if (!valid() || !rd.cl_deform)
+        return 0;
+
+    auto cq = getComputeQueue();
+#ifdef rthsEnableTimestamp
+    if (rd.hasFlag(RenderFlag::ParallelCommandList) && rd.timestamp->isEnabled()) {
+        // make sure all deform commands are finished before timestamp is set
+        auto fv = incrementFenceValue();
+        cq->Signal(getFence(), fv);
+        cq->Wait(getFence(), fv);
     }
-    return false;
+#endif
+    rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform end");
+    rd.cl_deform->Close();
+
+    auto& cls = rd.clm_deform->getCommandLists();
+    cq->ExecuteCommandLists((UINT)cls.size(), cls.data());
+
+    rd.fv_deform = incrementFenceValue();
+    cq->Signal(getFence(), rd.fv_deform);
+    return rd.fv_deform;
 }
 
 bool DeformerDXR::reset(RenderDataDXR & rd)
 {
-    if (rd.ca_deform && rd.cl_deform) {
-        rd.ca_deform->Reset();
-        rd.cl_deform->Reset(rd.ca_deform, m_pipeline_state);
+    if (rd.clm_deform) {
+        rd.clm_deform->reset();
+        rd.cl_deform = nullptr;
         return true;
     }
     return false;
@@ -398,6 +431,19 @@ ID3D12ResourcePtr DeformerDXR::createBuffer(int size, const D3D12_HEAP_PROPERTIE
         SetErrorLog("CreateCommittedResource() failed\n");
     }
     return ret;
+}
+
+ID3D12CommandQueuePtr DeformerDXR::getComputeQueue()
+{
+    return GfxContextDXR::getInstance()->getComputeQueue();
+}
+ID3D12FencePtr DeformerDXR::getFence()
+{
+    return GfxContextDXR::getInstance()->getFence();
+}
+uint64_t DeformerDXR::incrementFenceValue()
+{
+    return GfxContextDXR::getInstance()->incrementFenceValue();
 }
 
 template<class Body>

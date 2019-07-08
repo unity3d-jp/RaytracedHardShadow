@@ -64,16 +64,26 @@ namespace UTJ.RaytracedHardShadow
 #endif
     }
 
-    public enum rthsRenderFlag
+    [Flags]
+    public enum rthsRenderFlag : uint
     {
-        CullBackFace            = 0x0001,
-        IgnoreSelfShadow        = 0x0002,
-        KeepSelfDropShadow      = 0x0004,
-        GPUSkinning             = 0x0100,
-        ClampBlendShapeWights   = 0x0200,
+        CullBackFaces           = 0x00000001,
+        FlipCasterFaces         = 0x00000002,
+        IgnoreSelfShadow        = 0x00000004,
+        KeepSelfDropShadow      = 0x00000008,
+        AlphaTest               = 0x00000010,
+        Transparent             = 0x00000020,
+        AdaptiveSampling        = 0x00000100,
+        Antialiasing            = 0x00000200,
+        GPUSkinning             = 0x00010000,
+        ClampBlendShapeWights   = 0x00020000,
+        ParallelCommandList     = 0x00040000,
+        DbgTimestamp            = 0x01000000,
+        DbgForceUpdateAS        = 0x02000000,
     }
 
-    public enum rthsHitMask
+    [Flags]
+    public enum rthsHitMask : byte
     {
         Rceiver = 0x01,
         Caster  = 0x02,
@@ -316,10 +326,11 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
         [DllImport("rths")] static extern IntPtr rthsRendererCreate();
         [DllImport("rths")] static extern void rthsRendererRelease(IntPtr self);
+        [DllImport("rths")] static extern byte rthsRendererIsValid(IntPtr self);
 
         [DllImport("rths")] static extern void rthsRendererBeginScene(IntPtr self);
         [DllImport("rths")] static extern void rthsRendererEndScene(IntPtr self);
-        [DllImport("rths")] static extern void rthsRendererSetRenderFlags(IntPtr self, int flags);
+        [DllImport("rths")] static extern void rthsRendererSetRenderFlags(IntPtr self, rthsRenderFlag flags);
         [DllImport("rths")] static extern void rthsRendererSetShadowRayOffset(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsRendererSetSelfShadowThreshold(IntPtr self, float v);
         [DllImport("rths")] static extern void rthsRendererSetRenderTarget(IntPtr self, rthsRenderTarget rt);
@@ -328,7 +339,8 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRendererAddSpotLight(IntPtr self, Vector3 pos, Vector3 dir, float range, float spotAngle);
         [DllImport("rths")] static extern void rthsRendererAddPointLight(IntPtr self, Vector3 pos, float range);
         [DllImport("rths")] static extern void rthsRendererAddReversePointLight(IntPtr self, Vector3 pos, float range);
-        [DllImport("rths")] static extern void rthsRendererAddGeometry(IntPtr self, rthsMeshInstanceData mesh, byte rmask, byte cmask);
+        [DllImport("rths")] static extern void rthsRendererAddGeometry(IntPtr self, rthsMeshInstanceData mesh, rthsHitMask rmask, rthsHitMask cmask);
+        [DllImport("rths")] static extern IntPtr rthsRendererGetTimestampLog(IntPtr self);
 
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
@@ -341,6 +353,14 @@ namespace UTJ.RaytracedHardShadow
         public static string errorLog
         {
             get { return Misc.CString(rthsGetErrorLog()); }
+        }
+        public string timestampLog
+        {
+            get { return Misc.CString(rthsRendererGetTimestampLog(self)); }
+        }
+        public bool valid
+        {
+            get { return rthsRendererIsValid(self) != 0; }
         }
 
         public static rthsRenderer Create()
@@ -370,7 +390,7 @@ namespace UTJ.RaytracedHardShadow
             rthsRendererEndScene(self);
         }
 
-        public void SetRaytraceFlags(int flags)
+        public void SetRaytraceFlags(rthsRenderFlag flags)
         {
             rthsRendererSetRenderFlags(self, flags);
         }
@@ -430,7 +450,7 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        public void AddGeometry(rthsMeshInstanceData mesh, byte rmask, byte cmask)
+        public void AddGeometry(rthsMeshInstanceData mesh, rthsHitMask rmask, rthsHitMask cmask)
         {
             rthsRendererAddGeometry(self, mesh, rmask, cmask);
         }
