@@ -197,6 +197,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] string m_globalTextureName = "_RaytracedHardShadow";
 
         [SerializeField] bool m_cullBackFaces = true;
+        [SerializeField] bool m_flipCasterFaces = false;
         [SerializeField] bool m_ignoreSelfShadow = true;
         [SerializeField] bool m_keepSelfDropShadow = true;
         [SerializeField] float m_selfShadowThreshold = 0.0001f;
@@ -271,6 +272,11 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_cullBackFaces; }
             set { m_cullBackFaces = value; }
+        }
+        public bool flipCasterFaces
+        {
+            get { return m_flipCasterFaces; }
+            set { m_flipCasterFaces = value; }
         }
         public bool ignoreSelfShadow
         {
@@ -1041,6 +1047,8 @@ namespace UTJ.RaytracedHardShadow
                 rthsRenderFlag flags = 0;
                 if (m_cullBackFaces)
                     flags |= rthsRenderFlag.CullBackFaces;
+                if (m_flipCasterFaces)
+                    flags |= rthsRenderFlag.FlipCasterFaces;
                 if (m_ignoreSelfShadow)
                     flags |= rthsRenderFlag.IgnoreSelfShadow;
                 if (m_keepSelfDropShadow)

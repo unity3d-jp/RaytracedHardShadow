@@ -126,6 +126,12 @@ namespace UTJ.RaytracedHardShadowEditor
             // shadow
             EditorGUILayout.LabelField("Shadow", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFaces"));
+            if (t.cullBackFaces)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(so.FindProperty("m_flipCasterFaces"));
+                EditorGUI.indentLevel--;
+            }
             EditorGUILayout.PropertyField(so.FindProperty("m_ignoreSelfShadow"));
             if (t.ignoreSelfShadow)
             {

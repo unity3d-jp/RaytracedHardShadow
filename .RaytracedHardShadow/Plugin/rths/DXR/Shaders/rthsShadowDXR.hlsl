@@ -10,9 +10,10 @@ enum LIGHT_TYPE
 
 enum RENDER_FLAG
 {
-    RF_CULL_BACK_FACES = 0x0001,
-    RF_IGNORE_SELF_SHADOW = 0x0002,
-    RF_KEEP_SELF_DROP_SHADOW = 0x0004,
+    RF_CULL_BACK_FACES      = 0x00000001,
+    RF_FLIP_CASTER_FACES    = 0x00000002,
+    RF_IGNORE_SELF_SHADOW   = 0x00000004,
+    RF_KEEP_SELF_DROP_SHADOW= 0x00000008,
 };
 
 enum HIT_MASK
@@ -144,11 +145,12 @@ float SampleDifferential(int2 idx, out float center, out float diff)
 
     center = g_prev_result[idx].x;
     diff = 0.0f;
+
+    // 4 samples for now. an option for more samples may be needed. it can make an unignorable difference (both quality and speed).
     diff += abs(g_prev_result[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x - center);
     diff += abs(g_prev_result[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x - center);
     diff += abs(g_prev_result[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x - center);
     diff += abs(g_prev_result[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x - center);
-    //// 4 samples should be enough
     //diff += abs(g_prev_result[clamp(idx + int2(-1,-1), int2(0, 0), dim - 1)].x - center);
     //diff += abs(g_prev_result[clamp(idx + int2( 1,-1), int2(0, 0), dim - 1)].x - center);
     //diff += abs(g_prev_result[clamp(idx + int2( 1, 1), int2(0, 0), dim - 1)].x - center);
@@ -234,8 +236,12 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
 
     int render_flags = RenderFlags();
     int ray_flags = 0;
-    if (render_flags & RF_CULL_BACK_FACES)
-        ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+    if (render_flags & RF_CULL_BACK_FACES) {
+        if (render_flags & RF_FLIP_CASTER_FACES)
+            ray_flags |= RAY_FLAG_CULL_FRONT_FACING_TRIANGLES;
+        else
+            ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
+    }
     if (render_flags & RF_IGNORE_SELF_SHADOW)
         ray_flags |= RAY_FLAG_FORCE_NON_OPAQUE; // calling any hit shader require non-opaque flag
     else
