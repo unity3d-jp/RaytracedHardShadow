@@ -9,9 +9,11 @@ namespace rths {
 class RendererDXR : public RendererBase
 {
 public:
-    RendererDXR();
+    RendererDXR(bool deferred);
     ~RendererDXR() override;
+    void release() override;
 
+    bool initialized() const override;
     bool valid() const override;
     void render() override; // called from render thread
     void finish() override; // called from render thread
@@ -24,17 +26,45 @@ public:
 
 private:
     RenderDataDXR m_render_data;
+    bool m_deferred = false;
+    bool m_is_initialized = false;
 };
 
 
-RendererDXR::RendererDXR()
+RendererDXR::RendererDXR(bool deferred)
+    : m_deferred(deferred)
 {
-    GfxContextDXR::initializeInstance();
+    auto do_init = [this]() {
+        GfxContextDXR::initializeInstance();
+        m_is_initialized = true;
+    };
+
+    if (m_deferred)
+        AddDeferredCommand(do_init);
+    else
+        do_init();
 }
 
 RendererDXR::~RendererDXR()
 {
-    GfxContextDXR::finalizeInstance();
+}
+
+void RendererDXR::release()
+{
+    auto do_release = [this]() {
+        delete this;
+        GfxContextDXR::finalizeInstance();
+    };
+
+    if (m_deferred)
+        AddDeferredCommand(do_release);
+    else
+        do_release();
+}
+
+bool RendererDXR::initialized() const
+{
+    return m_is_initialized;
 }
 
 bool RendererDXR::valid() const
@@ -110,10 +140,10 @@ void* RendererDXR::getRenderTexturePtr()
     return nullptr;
 }
 
-IRenderer* CreateRendererDXR()
+IRenderer* CreateRendererDXR(bool deferred)
 {
-    auto ret = new RendererDXR();
-    if (!ret->valid()) {
+    auto ret = new RendererDXR(deferred);
+    if (!deferred && !ret->valid()) {
         delete ret;
         ret = nullptr;
     }
@@ -126,7 +156,7 @@ IRenderer* CreateRendererDXR()
 
 namespace rths {
 
-IRenderer* CreateRendererDXR()
+IRenderer* CreateRendererDXR(bool deferred)
 {
     return nullptr;
 }

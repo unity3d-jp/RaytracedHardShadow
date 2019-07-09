@@ -139,8 +139,9 @@ rthsAPI void rthsRenderTargetSetGPUTexture(rths::RenderTargetData *self, rths::G
 rthsAPI void rthsRenderTargetSetup(rths::RenderTargetData *self, int width, int height, rths::RenderTargetFormat format);
 
 // renderer interface
-rthsAPI rths::IRenderer* rthsRendererCreate();
+rthsAPI rths::IRenderer* rthsRendererCreate(bool deferred = false);
 rthsAPI void rthsRendererRelease(rths::IRenderer *self);
+rthsAPI bool rthsRendererIsInitialized(rths::IRenderer *self);
 rthsAPI bool rthsRendererIsValid(rths::IRenderer *self);
 rthsAPI void rthsRendererSetName(rths::IRenderer *self, const char *name);
 rthsAPI void rthsRendererSetRenderTarget(rths::IRenderer *self, rths::RenderTargetData *render_target);

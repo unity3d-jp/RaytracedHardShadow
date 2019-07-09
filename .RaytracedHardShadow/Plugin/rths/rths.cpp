@@ -172,14 +172,23 @@ rthsAPI void rthsRenderTargetSetup(RenderTargetData *self, int width, int height
 }
 
 
-rthsAPI IRenderer* rthsRendererCreate()
+rthsAPI IRenderer* rthsRendererCreate(bool deferred)
 {
-    return CreateRendererDXR();
+    return CreateRendererDXR(deferred);
 }
 
 rthsAPI void rthsRendererRelease(IRenderer *self)
 {
-    delete self;
+    if (!self)
+        return;
+    self->release();
+}
+
+rthsAPI bool rthsRendererIsInitialized(IRenderer *self)
+{
+    if (!self)
+        return false;
+    return self->initialized();
 }
 
 rthsAPI bool rthsRendererIsValid(rths::IRenderer *self)
@@ -378,6 +387,16 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
         return;
     }
 #endif // _WIN32
+}
+
+static void UNITY_INTERFACE_API _FlushDeferredCommands(int)
+{
+    rths::FlushDeferredCommands();
+}
+extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
+rthsGetFlushDeferredCommands()
+{
+    return _FlushDeferredCommands;
 }
 
 static void UNITY_INTERFACE_API _RenderAll(int)

@@ -185,7 +185,7 @@ bool GfxContextDXR::initialize()
         m_device = create_device(true);
 #else // rthsForceSoftwareDevice
         m_device = create_device(false);
-        if(!m_device)
+        if (!m_device)
             m_device = create_device(true);
 #endif // rthsForceSoftwareDevice
     }
@@ -472,7 +472,7 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
 
 void GfxContextDXR::setSceneData(RenderDataDXR& rd, SceneData& data)
 {
-    if (!valid())
+    if (!valid() || !checkError())
         return;
     if (!rd.scene_data || rd.scene_data_prev == data)
         return;
@@ -491,7 +491,7 @@ void GfxContextDXR::setSceneData(RenderDataDXR& rd, SceneData& data)
 
 void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 {
-    if (!valid())
+    if (!valid() || !checkError())
         return;
     if (!rt) {
         rd.render_target = nullptr;
@@ -593,7 +593,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 
 void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geoms)
 {
-    if (!valid())
+    if (!valid() || !checkError())
         return;
     if (rd.fv_blas != 0 || rd.fv_tlas != 0) {
         SetErrorLog("GfxContext::setGeometries(): called before prepare()\n");
@@ -990,7 +990,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
 void GfxContextDXR::flush(RenderDataDXR& rd)
 {
-    if (!valid())
+    if (!valid() || !checkError())
         return;
     if (!rd.render_target || !rd.render_target->texture->resource) {
         SetErrorLog("GfxContext::flush(): render target is null\n");
@@ -1117,7 +1117,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
 
 bool GfxContextDXR::finish(RenderDataDXR& rd)
 {
-    if (!valid())
+    if (!valid() || !checkError())
         return false;
 
     if (rd.fv_rays != 0) {
@@ -1222,7 +1222,7 @@ void GfxContextDXR::onRenderTargetDelete(RenderTargetData *rt)
 
 bool GfxContextDXR::valid() const
 {
-    return this && m_device && m_rootsig && m_pipeline_state && m_shader_table;
+    return this && m_device;
 }
 
 bool GfxContextDXR::checkError()

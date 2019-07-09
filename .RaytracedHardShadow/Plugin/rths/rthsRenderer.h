@@ -21,6 +21,8 @@ class IRenderer
 {
 public:
     virtual ~IRenderer() {}
+    virtual void release() = 0;
+    virtual bool initialized() const = 0;
     virtual bool valid() const = 0;
 
     virtual void beginScene() = 0;
@@ -81,7 +83,10 @@ private:
     std::vector<GeometryData> m_geometries_tmp;
 };
 
-IRenderer* CreateRendererDXR();
+IRenderer* CreateRendererDXR(bool deferred);
+
+void AddDeferredCommand(const std::function<void()>& v);
+void FlushDeferredCommands();
 
 void MarkFrameBegin();
 void MarkFrameEnd();

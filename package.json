@@ -1,7 +1,7 @@
 {
     "name": "com.utj.raytracedhardshadow",
     "description": "Raytraced Hard Shadow",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "unity": "2018.4",
     "displayName": "Raytraced Hard Shadow"
 }

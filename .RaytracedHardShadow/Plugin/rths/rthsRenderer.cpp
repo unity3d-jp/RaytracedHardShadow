@@ -184,6 +184,20 @@ void RendererBase::clearMeshInstances()
 }
 
 
+static std::vector<std::function<void()>> g_deferred_commands;
+
+void AddDeferredCommand(const std::function<void()>& v)
+{
+    g_deferred_commands.push_back(v);
+}
+
+void FlushDeferredCommands()
+{
+    for (auto& f : g_deferred_commands)
+        f();
+    g_deferred_commands.clear();
+}
+
 void MarkFrameBegin()
 {
     for (auto *cb : g_scene_callbacks)
