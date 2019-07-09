@@ -47,13 +47,13 @@ RendererDXR::RendererDXR(bool deferred)
 
 RendererDXR::~RendererDXR()
 {
+    GfxContextDXR::finalizeInstance();
 }
 
 void RendererDXR::release()
 {
     auto do_release = [this]() {
         delete this;
-        GfxContextDXR::finalizeInstance();
     };
 
     if (m_deferred)
@@ -102,12 +102,13 @@ void RendererDXR::finish()
 void RendererDXR::frameBegin()
 {
     if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
-        //auto ctx = GfxContextDXR::getInstance();
-        //ctx->clearResourceCache();
-        //m_render_data.clear();
-
+        // clear static meshes' BLAS
         for (auto& geom : m_render_data.geometries_prev)
             geom.clearBLAS();
+
+        // mark updated to update deformable meshes' BLAS
+        for (auto& geom : m_render_data.geometries_prev)
+            geom.inst->base->markUpdated();
     }
 }
 

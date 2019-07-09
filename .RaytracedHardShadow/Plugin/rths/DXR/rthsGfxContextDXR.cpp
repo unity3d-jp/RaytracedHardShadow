@@ -617,12 +617,6 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         return data;
     };
 
-    if (rd.hasFlag(RenderFlag::DbgForceUpdateAS)) {
-        // mark updated to force update BLAS
-        for (auto& geom : geoms)
-            geom.markUpdated();
-    }
-
     int task_granularity = ceildiv((int)geoms.size(), rd.max_parallel_command_lists);
     bool gpu_skinning = rd.hasFlag(RenderFlag::GPUSkinning) && m_deformer;
     if (gpu_skinning)

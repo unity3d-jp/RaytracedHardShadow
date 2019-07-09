@@ -184,7 +184,7 @@ void RendererBase::clearMeshInstances()
 }
 
 
-static std::vector<std::function<void()>> g_deferred_commands;
+static std::list<std::function<void()>> g_deferred_commands;
 
 void AddDeferredCommand(const std::function<void()>& v)
 {
