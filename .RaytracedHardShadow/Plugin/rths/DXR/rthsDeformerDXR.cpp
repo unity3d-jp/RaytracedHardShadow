@@ -89,6 +89,10 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
             SetErrorLog("CreateComputePipelineState() failed\n");
         }
     }
+
+    if (m_pipeline_state) {
+        m_clm_deform = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_pipeline_state, L"Deforms");
+    }
 }
 
 DeformerDXR::~DeformerDXR()
@@ -105,16 +109,12 @@ bool DeformerDXR::prepare(RenderDataDXR& rd)
     if (!valid())
         return false;
 
-    if (!rd.clm_deform) {
-        rd.clm_deform = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_pipeline_state, L"Deform");
-    }
-    rd.cl_deform = rd.clm_deform->get();
-
+    rd.cl_deform = m_clm_deform->get();
     rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform begin");
     return true;
 }
 
-bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool submit)
+bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
 {
     if (!valid() || !inst_dxr.mesh)
         return false;
@@ -329,11 +329,6 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
         cl->SetDescriptorHeaps(_countof(heaps), heaps);
         cl->SetComputeRootDescriptorTable(0, inst_dxr.desc_heap->GetGPUDescriptorHandleForHeapStart());
         cl->Dispatch(mesh.vertex_count, 1, 1);
-
-        if (submit) {
-            cl->Close();
-            cl = rd.clm_deform->get();
-        }
     }
 
     return true;
@@ -355,20 +350,15 @@ uint64_t DeformerDXR::flush(RenderDataDXR& rd)
 #endif
     rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform end");
     rd.cl_deform->Close();
-
-    auto& cls = rd.clm_deform->getCommandLists();
-    cq->ExecuteCommandLists((UINT)cls.size(), cls.data());
-
-    rd.fv_deform = incrementFenceValue();
-    cq->Signal(getFence(), rd.fv_deform);
-    return rd.fv_deform;
+    auto ret = GfxContextDXR::getInstance()->submitComputeCommandList(rd.cl_deform);
+    rd.cl_deform = nullptr;
+    return ret;
 }
 
-bool DeformerDXR::reset(RenderDataDXR & rd)
+bool DeformerDXR::reset()
 {
-    if (rd.clm_deform) {
-        rd.clm_deform->reset();
-        rd.cl_deform = nullptr;
+    if (m_clm_deform) {
+        m_clm_deform->reset();
         return true;
     }
     return false;
