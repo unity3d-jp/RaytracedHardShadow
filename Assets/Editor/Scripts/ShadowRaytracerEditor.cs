@@ -76,12 +76,20 @@ namespace UTJ.RaytracedHardShadowEditor
         void OnEnable()
         {
             s_target = target as ShadowRaytracer;
+#if UNITY_2019_1_OR_NEWER
             SceneView.duringSceneGui += OnSceneGUI;
+#else
+            SceneView.onSceneGUIDelegate += OnSceneGUI;
+#endif
         }
 
         void OnDisable()
         {
+#if UNITY_2019_1_OR_NEWER
             SceneView.duringSceneGui -= OnSceneGUI;
+#else
+            SceneView.onSceneGUIDelegate -= OnSceneGUI;
+#endif
             s_target = null;
         }
 

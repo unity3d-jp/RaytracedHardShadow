@@ -20,7 +20,7 @@ Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は 
 これが有効な場合、出力先の影テクスチャを画面の解像度に合わせて自動的に作成/更新します。
 既存の RenderTexture を出力先としたい場合、このオプションを無効化して "Output Texture" を手動で設定します。
 
-##### Assign Global RenderTexture
+##### Assign Global Texture
 これが有効な場合、影テクスチャをグローバルなシェーダパラメータとして設定します。パラメータ名は "Global Texture Name" に設定した名前になります。
 
 ##### Cull Back Faces
