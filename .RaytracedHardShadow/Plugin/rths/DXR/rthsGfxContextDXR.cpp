@@ -213,19 +213,20 @@ bool GfxContextDXR::initialize()
 
 
     // command queues
-    auto create_command_queue = [this](ID3D12CommandQueuePtr& dst, D3D12_COMMAND_LIST_TYPE type) {
+    auto create_command_queue = [this](ID3D12CommandQueuePtr& dst, D3D12_COMMAND_LIST_TYPE type, LPCWSTR name) {
         D3D12_COMMAND_QUEUE_DESC desc{};
         desc.Type = type;
         m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&dst));
+        rthsSetName(dst, name);
     };
-    create_command_queue(m_cmd_queue_direct, D3D12_COMMAND_LIST_TYPE_DIRECT);
-    create_command_queue(m_cmd_queue_compute, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-    create_command_queue(m_cmd_queue_copy, D3D12_COMMAND_LIST_TYPE_COPY);
+    create_command_queue(m_cmd_queue_direct, D3D12_COMMAND_LIST_TYPE_DIRECT, L"Direct Queue");
+    create_command_queue(m_cmd_queue_compute, D3D12_COMMAND_LIST_TYPE_COMPUTE, L"Compute Queue");
+    create_command_queue(m_cmd_queue_copy, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy Queue");
 
-    m_clm_blas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"BLAS");
-    m_clm_tlas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"TLAS");
-    m_clm_rays = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"Rays");
-    m_clm_copy = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy");
+    m_clm_blas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"BLAS List");
+    m_clm_tlas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"TLAS List");
+    m_clm_rays = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"Rays List");
+    m_clm_copy = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy List");
 
 
     // root signature
@@ -268,6 +269,9 @@ bool GfxContextDXR::initialize()
             if (FAILED(hr)) {
                 SetErrorLog("CreateRootSignature() failed\n");
             }
+        }
+        if (m_rootsig) {
+            rthsSetName(m_rootsig, L"Shadow Rootsig");
         }
         if (!m_rootsig)
             return false;
@@ -331,6 +335,9 @@ bool GfxContextDXR::initialize()
             SetErrorLog("CreateStateObject() failed\n");
             return false;
         }
+        if (m_pipeline_state) {
+            rthsSetName(m_pipeline_state, L"Shadow Pipeline State");
+        }
     }
 
     // setup shader table
@@ -375,6 +382,7 @@ bool GfxContextDXR::initialize()
             tmp_buf->Unmap(0, nullptr);
 
             m_shader_table = createBuffer(m_shader_record_size * capacity, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, kDefaultHeapProps);
+            rthsSetName(m_shader_table, L"Shadow Shader Table");
             if (!copyBuffer(m_shader_table, tmp_buf, m_shader_record_size * capacity))
                 m_shader_table = nullptr;
         }
@@ -424,6 +432,7 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rd.desc_heap));
+        rthsSetName(rd.desc_heap, rd.name + " Desc Heap");
 
         auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, rd.desc_heap);
         rd.render_target_uav = handle_allocator.allocate();
@@ -444,6 +453,8 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
         // size of constant buffer must be multiple of 256
         int cb_size = align_to(256, sizeof(SceneData));
         rd.scene_data = createBuffer(cb_size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+        rthsSetName(rd.scene_data, rd.name + " Scene Data");
+
         SceneData *dst;
         if (SUCCEEDED(rd.scene_data->Map(0, nullptr, (void**)&dst))) {
             *dst = SceneData{};
@@ -523,6 +534,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
                 data->texture = tex;
             }
         }
+        rthsSetName(data->texture->resource, rt->name + " Texture");
 
         // create textures for adaptive sampling and antialiasing
         int width = data->texture->width;
@@ -532,8 +544,12 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
             data->adaptive_res[0] = createTexture(width / 2, height / 2, format);
             data->adaptive_res[1] = createTexture(width / 4, height / 4, format);
             data->adaptive_res[2] = createTexture(width / 8, height / 8, format);
+            rthsSetName(data->adaptive_res[0], rt->name + " AdaptiveRes[0]");
+            rthsSetName(data->adaptive_res[1], rt->name + " AdaptiveRes[1]");
+            rthsSetName(data->adaptive_res[2], rt->name + " AdaptiveRes[2]");
         }
         data->back_buffer = createTexture(width, height, format);
+        rthsSetName(data->back_buffer, rt->name + " Back Buffer");
     }
 
     if (rd.render_target != data) {
@@ -651,6 +667,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 DebugPrint("GfxContextDXR::setMeshes(): unrecognizable vertex format\n");
                 continue;
             }
+            rthsSetName(mesh_dxr->vertex_buffer->resource, mesh->name + " VB");
 
 #ifdef rthsEnableBufferValidation
             if (mesh_dxr->vertex_buffer) {
@@ -671,6 +688,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
                 DebugPrint("GfxContextDXR::setMeshes(): failed to translate index buffer\n");
                 continue;
             }
+            rthsSetName(mesh_dxr->index_buffer->resource, mesh->name + " IB");
 
             if (mesh->index_stride == 0)
                 mesh->index_stride = mesh_dxr->index_buffer->size / mesh->index_count;
@@ -761,6 +779,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
                     inst_dxr.blas_scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
                     inst_dxr.blas_deformed = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+                    rthsSetName(inst_dxr.blas_scratch, inst.name + " BLAS Scratch");
+                    rthsSetName(inst_dxr.blas_deformed, inst.name + " BLAS");
                 }
 
                 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
@@ -807,6 +827,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
                     mesh_dxr.blas_scratch = createBuffer(info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
                     mesh_dxr.blas = createBuffer(info.ResultDataMaxSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+                    rthsSetName(mesh_dxr.blas_scratch, mesh.name + " BLAS Scratch");
+                    rthsSetName(mesh_dxr.blas, mesh.name + " BLAS");
                 }
 
                 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
@@ -860,8 +882,10 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
 
         // instance desc buffer
-        ReuseOrExpandBuffer(rd.instance_desc, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), geometry_count, 4096, [this](size_t size) {
-            return createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+        ReuseOrExpandBuffer(rd.instance_desc, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), geometry_count, 4096, [this, &rd](size_t size) {
+            auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            rthsSetName(ret, rd.name + " Instance Desk");
+            return ret;
         });
 
         // create instance desc
@@ -894,12 +918,16 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
             // scratch buffer
             ReuseOrExpandBuffer(rd.tlas_scratch, 1, info.ScratchDataSizeInBytes, 1024 * 64, [this, &rd](size_t size) {
-                return createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
+                auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
+                rthsSetName(ret, rd.name + " TLAS Scratch");
+                return ret;
             });
 
             // TLAS buffer
             bool expanded = ReuseOrExpandBuffer(rd.tlas, 1, info.ResultDataMaxSizeInBytes, 1024 * 256, [this, &rd](size_t size) {
-                return createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+                auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+                rthsSetName(ret, rd.name + " TLAS");
+                return ret;
             });
             if (expanded) {
                 // SRV
@@ -939,7 +967,9 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     if (needs_build_tlas) {
         size_t stride = sizeof(InstanceData);
         bool expanded = ReuseOrExpandBuffer(rd.instance_data, stride, geometry_count, 4096, [this, &rd](size_t size) {
-            return createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            rthsSetName(ret, rd.name + " Instance Data");
+            return ret;
         });
         if (expanded) {
             auto capacity = rd.instance_data->GetDesc().Width;
@@ -1327,6 +1357,7 @@ uint64_t GfxContextDXR::submitCommandList(ID3D12CommandQueue *cq, ID3D12Graphics
 uint64_t GfxContextDXR::readbackBuffer(void *dst, ID3D12Resource *src, UINT64 size)
 {
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
+    rthsSetName(readback_buf, L"Temporary Readback Buffer");
     auto ret = copyBuffer(readback_buf, src, size, true);
     if (ret == 0)
         return 0;
@@ -1342,6 +1373,7 @@ uint64_t GfxContextDXR::readbackBuffer(void *dst, ID3D12Resource *src, UINT64 si
 uint64_t GfxContextDXR::uploadBuffer(ID3D12Resource *dst, const void *src, UINT64 size, bool immediate)
 {
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+    rthsSetName(upload_buf, L"Temporary Upload Buffer");
     void *mapped;
     if (SUCCEEDED(upload_buf->Map(0, nullptr, &mapped))) {
         memcpy(mapped, src, size);
@@ -1371,6 +1403,7 @@ uint64_t GfxContextDXR::readbackTexture(void *dst_, ID3D12Resource *src, UINT wi
     auto readback_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, kReadbackHeapProps);
     if (!readback_buf)
         return 0;
+    rthsSetName(readback_buf, L"Temporary Readback Texture Buffer");
 
     D3D12_TEXTURE_COPY_LOCATION dst_loc{};
     dst_loc.pResource = readback_buf;
@@ -1413,6 +1446,7 @@ uint64_t GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src_, UIN
     auto upload_buf = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
     if (!upload_buf)
         return 0;
+    rthsSetName(upload_buf, L"Temporary Upload Texture Buffer");
 
     char *mapped;
     if (SUCCEEDED(upload_buf->Map(0, nullptr, (void**)&mapped))) {

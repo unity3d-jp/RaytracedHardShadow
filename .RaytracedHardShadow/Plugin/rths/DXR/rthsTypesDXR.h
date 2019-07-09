@@ -252,10 +252,14 @@ using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
     #define rthsTimestampUpdateLog(...)
 #endif rthsEnableTimestamp
 
+void SetNameImpl(ID3D12Object *obj, LPCSTR name);
+void SetNameImpl(ID3D12Object *obj, LPCWSTR name);
+void SetNameImpl(ID3D12Object *obj, const std::string& name);
+void SetNameImpl(ID3D12Object *obj, const std::wstring& name);
 #ifdef rthsEnableResourceName
-    #define DbgSetName(res, name) res->SetName(name)
+    #define rthsSetName(res, name) SetNameImpl(res, name)
 #else
-    #define DbgSetName(...)
+    #define rthsSetName(...)
 #endif
 
 class CommandListManagerDXR
@@ -292,8 +296,9 @@ using CommandListManagerDXRPtr = std::shared_ptr<CommandListManagerDXR>;
 class RenderDataDXR
 {
 public:
-    ID3D12GraphicsCommandList4Ptr cl_deform;
+    std::string name;
 
+    ID3D12GraphicsCommandList4Ptr cl_deform;
     ID3D12DescriptorHeapPtr desc_heap;
     DescriptorHandleDXR render_target_uav;
     DescriptorHandleDXR tlas_srv, instance_data_srv;

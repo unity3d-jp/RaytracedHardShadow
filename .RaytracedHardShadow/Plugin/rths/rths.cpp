@@ -23,6 +23,13 @@ rthsAPI void rthsMeshRelease(MeshData *self)
     self->release();
 }
 
+rthsAPI void rthsMeshSetName(rths::MeshData *self, const char *name)
+{
+    if (!self)
+        return;
+    self->name = name ? name : std::string();
+}
+
 rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData * self, CPUResourcePtr vb, CPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset)
 {
@@ -126,6 +133,12 @@ rthsAPI void rthsMeshInstanceRelease(MeshInstanceData *self)
         return;
     self->release();
 }
+rthsAPI void rthsMeshInstanceSetName(rths::MeshInstanceData * self, const char *name)
+{
+    if (!self)
+        return;
+    self->name = name ? name : std::string();
+}
 rthsAPI void rthsMeshInstanceSetTransform(MeshInstanceData *self, float4x4 transform)
 {
     if (!self)
@@ -155,6 +168,12 @@ rthsAPI void rthsRenderTargetRelease(RenderTargetData *self)
     if (!self)
         return;
     self->release();
+}
+rthsAPI void rthsRenderTargetSetName(rths::RenderTargetData * self, const char *name)
+{
+    if (!self)
+        return;
+    self->name = name ? name : std::string();
 }
 rthsAPI void rthsRenderTargetSetGPUTexture(RenderTargetData *self, GPUResourcePtr tex)
 {
@@ -196,6 +215,13 @@ rthsAPI bool rthsRendererIsValid(rths::IRenderer *self)
     if (!self)
         return false;
     return self->valid();
+}
+
+rthsAPI void rthsRendererSetName(rths::IRenderer * self, const char *name)
+{
+    if (!self)
+        return;
+    self->setName(name ? name : std::string());
 }
 
 rthsAPI void rthsRendererSetRenderTarget(IRenderer *self, RenderTargetData *render_target)

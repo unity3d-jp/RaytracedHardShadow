@@ -159,6 +159,7 @@ struct BlendshapeData
 class MeshData : public SharedResource<MeshData>
 {
 public:
+    std::string name;
     GPUResourcePtr gpu_vertex_buffer = nullptr;
     GPUResourcePtr gpu_index_buffer = nullptr;
     CPUResourcePtr cpu_vertex_buffer = nullptr;
@@ -182,6 +183,7 @@ using MeshDataPtr = ref_ptr<MeshData>;
 class MeshInstanceData : public SharedResource<MeshInstanceData>
 {
 public:
+    std::string name;
     MeshDataPtr mesh;
     float4x4 transform = float4x4::identity();
     std::vector<float4x4> bones;
@@ -219,6 +221,7 @@ public:
 class RenderTargetData : public SharedResource<RenderTargetData>
 {
 public:
+    std::string name;
     GPUResourcePtr gpu_texture = nullptr;
     int width = 0;
     int height = 0;

@@ -28,6 +28,7 @@ public:
     virtual void beginScene() = 0;
     virtual void endScene() = 0;
 
+    virtual void setName(const std::string& name) = 0;
     virtual void setRaytraceFlags(uint32_t flags) = 0;
     virtual void setShadowRayOffset(float v) = 0;
     virtual void setSelfShadowThreshold(float v) = 0;

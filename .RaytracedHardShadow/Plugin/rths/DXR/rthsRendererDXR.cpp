@@ -12,6 +12,7 @@ public:
     RendererDXR(bool deferred);
     ~RendererDXR() override;
     void release() override;
+    void setName(const std::string& name) override;
 
     bool initialized() const override;
     bool valid() const override;
@@ -60,6 +61,11 @@ void RendererDXR::release()
         AddDeferredCommand(do_release);
     else
         do_release();
+}
+
+void RendererDXR::setName(const std::string& name)
+{
+    m_render_data.name = name;
 }
 
 bool RendererDXR::initialized() const
