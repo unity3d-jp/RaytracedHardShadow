@@ -6,9 +6,6 @@ using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-#if UNITY_2019_1_OR_NEWER
-using Unity.Collections;
-#endif
 
 namespace UTJ.RaytracedHardShadow
 {
@@ -64,6 +61,7 @@ namespace UTJ.RaytracedHardShadow
                 Release();
 
                 meshData = rthsMeshData.Create();
+                meshData.name = mesh.name;
                 meshData.SetGPUBuffers(mesh);
                 meshData.SetBindpose(mesh.bindposes);
 #if UNITY_2019_1_OR_NEWER
@@ -105,19 +103,22 @@ namespace UTJ.RaytracedHardShadow
             public rthsMeshData meshData;
             public int useCount;
 
-            public void Update(rthsMeshData md, Matrix4x4 trans)
+            public void Update(rthsMeshData md, Matrix4x4 trans, GameObject go)
             {
                 if (instData && meshData != md)
                     instData.Release();
                 meshData = md;
                 if (!instData)
+                {
                     instData = rthsMeshInstanceData.Create(md);
+                    instData.name = go.name;
+                }
                 instData.SetTransform(trans);
             }
 
             public void Update(rthsMeshData md, MeshRenderer mr)
             {
-                Update(md, mr.localToWorldMatrix);
+                Update(md, mr.localToWorldMatrix, mr.gameObject);
             }
 
             public void Update(rthsMeshData md, SkinnedMeshRenderer smr)
@@ -128,13 +129,13 @@ namespace UTJ.RaytracedHardShadow
                     // skinned
                     var rootBone = smr.rootBone;
                     var rootMatrix = rootBone != null ? rootBone.localToWorldMatrix : Matrix4x4.identity;
-                    Update(md, rootMatrix);
+                    Update(md, rootMatrix, smr.gameObject);
                     instData.SetBones(bones);
                 }
                 else
                 {
                     // non-skinned
-                    Update(md, smr.localToWorldMatrix);
+                    Update(md, smr.localToWorldMatrix, smr.gameObject);
                 }
                 instData.SetBlendshapeWeights(smr);
             }
@@ -168,6 +169,7 @@ namespace UTJ.RaytracedHardShadow
                 if (!rtData)
                 {
                     rtData = rthsRenderTarget.Create();
+                    rtData.name = rtex.name;
                     rtData.Setup(ptr);
                     nativeTexturePtr = ptr;
                 }
@@ -236,6 +238,7 @@ namespace UTJ.RaytracedHardShadow
 #endif
 
         rthsRenderer m_renderer;
+        bool m_initialized = false;
         List<ExportRequest> m_exportRequests;
 
         static int s_instanceCount, s_updateCount;
@@ -617,7 +620,7 @@ namespace UTJ.RaytracedHardShadow
             bool requireBake = cloth != null || (!m_GPUSkinning && (smr.rootBone != null || smr.sharedMesh.blendShapeCount != 0));
             if (requireBake)
             {
-                rec.Update(GetBakedMeshData(smr), smr.localToWorldMatrix);
+                rec.Update(GetBakedMeshData(smr), smr.localToWorldMatrix, smr.gameObject);
             }
             else
             {
@@ -791,42 +794,45 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-#if UNITY_EDITOR
-        int m_initializeWaitCount = 1;
-#endif
         void InitializeRenderer()
         {
-            if (m_renderer)
+            if (m_initialized)
                 return;
-
 #if UNITY_EDITOR
-            // initializing renderer on scene load causes a crash in GI baking. so wait until GI bake is completed.
+            // initializing renderer can interfere GI baking. so wait until it is completed.
             if (Lightmapping.isRunning)
                 return;
-            if (!EditorApplication.isPlaying && m_initializeWaitCount > 0)
-            {
-                --m_initializeWaitCount;
-                return;
-            }
 #endif
 
-            m_renderer = rthsRenderer.Create();
-            if (m_renderer)
+            if (!m_renderer)
             {
-                ++s_instanceCount;
-
-                if (s_meshDataCache == null)
-                {
-                    s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
-                    s_bakedMeshDataCache = new Dictionary<Component, MeshRecord>();
-                    s_meshInstDataCache = new Dictionary<Component, MeshInstanceRecord>();
-                    s_renderTargetCache = new Dictionary<RenderTexture, RenderTargetRecord>();
-                }
+                m_renderer = rthsRenderer.Create();
+                m_renderer.name = gameObject.name;
+                //Debug.Log("Create: " + m_renderer.self);
             }
-            else
+
+            if (m_renderer.initialized)
             {
-                Debug.LogError("ShadowRaytracer: Initialization failed - " + rthsRenderer.errorLog);
-                this.enabled = false;
+                m_initialized = true;
+                if (m_renderer.valid)
+                {
+                    ++s_instanceCount;
+
+                    if (s_meshDataCache == null)
+                    {
+                        s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
+                        s_bakedMeshDataCache = new Dictionary<Component, MeshRecord>();
+                        s_meshInstDataCache = new Dictionary<Component, MeshInstanceRecord>();
+                        s_renderTargetCache = new Dictionary<RenderTexture, RenderTargetRecord>();
+                    }
+                }
+                else
+                {
+                    m_renderer.Release();
+
+                    Debug.LogError("ShadowRaytracer: Initialization failed - " + rthsRenderer.errorLog);
+                    this.enabled = false;
+                }
             }
         }
 
@@ -974,14 +980,18 @@ namespace UTJ.RaytracedHardShadow
 
         void OnDisable()
         {
-            if (m_renderer)
+            if (m_initialized && m_renderer.valid)
             {
-                m_renderer.Release();
                 --s_instanceCount;
-
-                if (s_instanceCount==0)
+                if (s_instanceCount == 0)
                     ClearAllCacheRecords();
             }
+            if (m_renderer)
+            {
+                //Debug.Log("Release: " + m_renderer.self);
+                m_renderer.Release();
+            }
+            m_initialized = false;
         }
 
         void Update()
@@ -990,15 +1000,8 @@ namespace UTJ.RaytracedHardShadow
             m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
 #endif
             InitializeRenderer();
-            if (!m_renderer)
+            if (!m_initialized || !m_renderer)
                 return;
-            else if(!m_renderer.valid)
-            {
-                Debug.LogError("ShadowRaytracer: Error - " + rthsRenderer.errorLog);
-                m_renderer.Release();
-                this.enabled = false;
-                return;
-            }
 
             // first instance reset update count and clear cache
             if (s_updateCount != 0)
@@ -1011,7 +1014,7 @@ namespace UTJ.RaytracedHardShadow
 
         void LateUpdate()
         {
-            if (!m_renderer)
+            if (!m_initialized || !m_renderer)
                 return;
 
             var cam = GetComponent<Camera>();

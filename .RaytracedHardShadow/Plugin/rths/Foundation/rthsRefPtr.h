@@ -2,9 +2,6 @@
 
 namespace rths {
 
-template<class T> void addref(T *v) { v->addref(); }
-template<class T> void release(T *v) { v->release(); }
-
 // simplified boost::intrusive_ptr equivalent
 template<class T>
 class ref_ptr
@@ -19,10 +16,10 @@ public:
     void reset(T *data = nullptr)
     {
         if (m_ptr)
-            release<T>(m_ptr);
+            m_ptr->internalRelease();
         m_ptr = data;
         if (m_ptr)
-            addref<T>(m_ptr);
+            m_ptr->internalAddref();
     }
     void swap(ref_ptr& v)
     {
@@ -43,23 +40,53 @@ private:
     T *m_ptr = nullptr;
 };
 
+template<class T> void ExternalRelease(T *self);
+
 template<class T>
 class RefCount
 {
-public:
-    void addref()
+friend class ref_ptr<T>;
+friend void ExternalRelease<T>(T *self);
+protected:
+    RefCount(T *self = nullptr) : m_self(self ? self : (T*)this) {}
+
+    int internalAddref()
     {
-        ++ref_count;
+        return ++m_ref_count;
     }
 
-    void release()
+    int internalRelease()
     {
-        if (--ref_count == 0)
-            delete (T*)this;
+        if (--m_ref_count == 0) {
+            delete m_self;
+        }
+        return m_ref_count;
     }
 
 private:
-    std::atomic_int ref_count = 1;
+    T *m_self;
+    std::atomic_int m_ref_count = 1;
+};
+
+// resource type exposed to plugin user
+template<class T>
+class SharedResource : public RefCount<T>
+{
+using super = RefCount<T>;
+public:
+    SharedResource(T *self = nullptr) : super(self) {};
+    bool operator==(const SharedResource& v) const { return id == v.id; }
+    bool operator!=(const SharedResource& v) const { return id != v.id; }
+    bool operator<(const SharedResource& v) const { return id < v.id; }
+
+protected:
+    static uint64_t newID()
+    {
+        static uint64_t s_id;
+        return ++s_id;
+    }
+
+    uint64_t id = newID();
 };
 
 } // namespace rths

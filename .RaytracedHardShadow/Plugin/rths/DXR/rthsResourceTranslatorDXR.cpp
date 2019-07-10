@@ -33,7 +33,6 @@ private:
     ID3D11DeviceContext4Ptr m_host_context;
 
     ID3D11FencePtr m_fence;
-    uint64_t m_fence_value = 0;
     FenceEventDXR m_fence_event;
 };
 
@@ -49,25 +48,11 @@ public:
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
     BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
 
-    void executeAndWaitCopy();
-    void executeAndWaitResourceBarrier(ID3D12Resource *resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
-
 private:
     ID3D12DevicePtr m_host_device;
 
     ID3D12FencePtr m_fence;
-    uint64_t m_fence_value = 0;
     FenceEventDXR m_fence_event;
-
-    // command list for resource barrier
-    ID3D12CommandAllocatorPtr m_cmd_allocator;
-    ID3D12GraphicsCommandList4Ptr m_cmd_list;
-    ID3D12CommandQueuePtr m_cmd_queue;
-
-    // command list for copy
-    ID3D12CommandAllocatorPtr m_cmd_allocator_copy;
-    ID3D12GraphicsCommandList4Ptr m_cmd_list_copy;
-    ID3D12CommandQueuePtr m_cmd_queue_copy;
 };
 
 
@@ -248,26 +233,6 @@ D3D12ResourceTranslator::D3D12ResourceTranslator(ID3D12Device *device)
     : m_host_device(device)
 {
     m_host_device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
-
-    // command queue for resource barrier
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-        m_host_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue));
-    }
-    m_host_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_cmd_allocator));
-    m_host_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmd_allocator, nullptr, IID_PPV_ARGS(&m_cmd_list));
-
-    // command queue for copy
-    {
-        D3D12_COMMAND_QUEUE_DESC desc{};
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
-        m_host_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_cmd_queue_copy));
-    }
-    m_host_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&m_cmd_allocator_copy));
-    m_host_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_cmd_allocator_copy, nullptr, IID_PPV_ARGS(&m_cmd_list_copy));
 }
 
 D3D12ResourceTranslator::~D3D12ResourceTranslator()
@@ -301,21 +266,18 @@ TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(GPUResourcePtr
     return ret;
 }
 
-uint64_t D3D12ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fence_value)
+uint64_t D3D12ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fv)
 {
     auto tex_host = (ID3D12Resource*)src.texture;
     // copy is not needed if unordered access is allowed
     if (src.resource == tex_host)
         return 0;
 
-    executeAndWaitResourceBarrier(tex_host, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON);
-
-    m_cmd_list_copy->CopyResource(tex_host, src.resource);
-    m_cmd_list_copy->Close();
-    executeAndWaitCopy();
-
-    executeAndWaitResourceBarrier(tex_host, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ);
-    return m_fence_value;
+    auto *inst = GfxContextDXR::getInstance();
+    fv = inst->submitResourceBarrier(tex_host, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON, fv);
+    fv = inst->copyTexture(tex_host, src.resource, false, fv);
+    fv = inst->submitResourceBarrier(tex_host, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ, fv);
+    return fv;
 }
 
 BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
@@ -329,45 +291,6 @@ BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     ret->resource = buf_host;
     ret->size = (int)src_desc.Width;
     return ret;
-}
-
-void D3D12ResourceTranslator::executeAndWaitCopy()
-{
-    ID3D12CommandList* cmd_list_copy = m_cmd_list_copy.GetInterfacePtr();
-    m_cmd_queue_copy->ExecuteCommandLists(1, &cmd_list_copy);
-
-    auto fence_value = GfxContextDXR::getInstance()->incrementFenceValue();
-    m_cmd_queue_copy->Signal(m_fence, fence_value);
-    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
-    ::WaitForSingleObject(m_fence_event, INFINITE);
-
-    m_cmd_allocator_copy->Reset();
-    m_cmd_list_copy->Reset(m_cmd_allocator_copy, nullptr);
-}
-
-void D3D12ResourceTranslator::executeAndWaitResourceBarrier(ID3D12Resource *resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after)
-{
-    {
-        D3D12_RESOURCE_BARRIER barrier{};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource = resource;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.StateBefore = before;
-        barrier.Transition.StateAfter = after;
-        m_cmd_list->ResourceBarrier(1, &barrier);
-    }
-    m_cmd_list->Close();
-
-    ID3D12CommandList* cmd_list = m_cmd_list.GetInterfacePtr();
-    m_cmd_queue->ExecuteCommandLists(1, &cmd_list);
-
-    auto fence_value = GfxContextDXR::getInstance()->incrementFenceValue();
-    m_cmd_queue->Signal(m_fence, fence_value);
-    m_fence->SetEventOnCompletion(fence_value, m_fence_event);
-    ::WaitForSingleObject(m_fence_event, INFINITE);
-
-    m_cmd_allocator->Reset();
-    m_cmd_list->Reset(m_cmd_allocator, nullptr);
 }
 
 

@@ -76,6 +76,9 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
                 SetErrorLog("CreateRootSignature() failed\n");
             }
         }
+        if (m_rootsig) {
+            rthsSetName(m_rootsig, L"Deform Rootsig");
+        }
     }
 
     if (m_rootsig) {
@@ -88,6 +91,11 @@ DeformerDXR::DeformerDXR(ID3D12Device5Ptr device)
         if (FAILED(hr)) {
             SetErrorLog("CreateComputePipelineState() failed\n");
         }
+    }
+
+    if (m_pipeline_state) {
+        rthsSetName(m_pipeline_state, L"Deform Pipeline State");
+        m_clm_deform = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_pipeline_state, L"Deforms");
     }
 }
 
@@ -105,16 +113,12 @@ bool DeformerDXR::prepare(RenderDataDXR& rd)
     if (!valid())
         return false;
 
-    if (!rd.clm_deform) {
-        rd.clm_deform = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_pipeline_state, L"Deform");
-    }
-    rd.cl_deform = rd.clm_deform->get();
-
+    rd.cl_deform = m_clm_deform->get();
     rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform begin");
     return true;
 }
 
-bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool submit)
+bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr)
 {
     if (!valid() || !inst_dxr.mesh)
         return false;
@@ -141,6 +145,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&inst_dxr.desc_heap));
+        rthsSetName(inst_dxr.desc_heap, inst.name + " Desc Heap");
         update_descriptors = true;
     }
 
@@ -161,6 +166,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
     if (!inst_dxr.deformed_vertices) {
         // deformed vertices
         inst_dxr.deformed_vertices = createBuffer(sizeof(float4) * vertex_count, kDefaultHeapProps, true);
+        rthsSetName(inst_dxr.deformed_vertices, inst.name + " Deformed Vertices");
     }
     if (update_descriptors) {
         createUAV(hdst_vertices.hcpu, inst_dxr.deformed_vertices, vertex_count, sizeof(float4));
@@ -177,6 +183,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
         if (!mesh_dxr.bs_delta) {
             // delta
             mesh_dxr.bs_delta = createBuffer(sizeof(float4) * vertex_count * frame_count, kUploadHeapProps);
+            rthsSetName(mesh_dxr.bs_delta, mesh.name + " Blendshape Delta");
             writeBuffer(mesh_dxr.bs_delta, [&](void *dst_) {
                 auto dst = (float4*)dst_;
                 for (auto& bs : mesh.blendshapes) {
@@ -190,6 +197,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
 
             // frame
             mesh_dxr.bs_frames = createBuffer(sizeof(BlendshapeFrame) * frame_count, kUploadHeapProps);
+            rthsSetName(mesh_dxr.bs_frames, mesh.name + " Blendshape Frame");
             writeBuffer(mesh_dxr.bs_frames, [&](void *dst_) {
                 auto dst = (BlendshapeFrame*)dst_;
                 int offset = 0;
@@ -207,6 +215,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
 
             // counts
             mesh_dxr.bs_info = createBuffer(sizeof(BlendshapeInfo) * blendshape_count, kUploadHeapProps);
+            rthsSetName(mesh_dxr.bs_info, mesh.name + " Blendshape Counts");
             writeBuffer(mesh_dxr.bs_info, [&](void *dst_) {
                 auto dst = (BlendshapeInfo*)dst_;
                 int offset = 0;
@@ -225,6 +234,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
         {
             if (!inst_dxr.bs_weights) {
                 inst_dxr.bs_weights = createBuffer(sizeof(float) * blendshape_count, kUploadHeapProps);
+                rthsSetName(inst_dxr.bs_weights, inst.name + " Blendshape Weights");
             }
             // update on every frame
             writeBuffer(inst_dxr.bs_weights, [&](void *dst_) {
@@ -251,6 +261,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
         // bone counts & weights
         if (!mesh_dxr.bone_counts) {
             mesh_dxr.bone_counts = createBuffer(sizeof(BoneCount) * vertex_count, kUploadHeapProps);
+            rthsSetName(mesh_dxr.bone_counts, mesh.name + " Bone Counts");
 
             int weight_offset = 0;
             writeBuffer(mesh_dxr.bone_counts, [&](void *dst_) {
@@ -264,6 +275,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
 
             const int weight_count = weight_offset;
             mesh_dxr.bone_weights = createBuffer(sizeof(BoneWeight) * weight_count, kUploadHeapProps);
+            rthsSetName(mesh_dxr.bone_weights, mesh.name + " Bone Weights");
             writeBuffer(mesh_dxr.bone_weights, [&](void *dst_) {
                 auto dst = (BoneWeight*)dst_;
                 for (int wi = 0; wi < weight_count; ++wi) {
@@ -277,6 +289,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
         {
             if (!inst_dxr.bone_matrices) {
                 inst_dxr.bone_matrices = createBuffer(sizeof(float4x4) * bone_count, kUploadHeapProps);
+                rthsSetName(inst_dxr.bone_matrices, inst.name + " Bone Matrices");
             }
             // update on every frame
             writeBuffer(inst_dxr.bone_matrices, [&](void *dst_) {
@@ -305,6 +318,7 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
     int mesh_info_size = align_to(256, sizeof(MeshInfo));
     if (!mesh_dxr.mesh_info) {
         mesh_dxr.mesh_info = createBuffer(mesh_info_size, kUploadHeapProps);
+        rthsSetName(mesh_dxr.mesh_info, mesh.name + " Mesh Info");
         writeBuffer(mesh_dxr.mesh_info, [&](void *dst_) {
             MeshInfo info{};
             info.vertex_stride = mesh_dxr.getVertexStride() / 4;
@@ -329,11 +343,6 @@ bool DeformerDXR::deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst_dxr, bool 
         cl->SetDescriptorHeaps(_countof(heaps), heaps);
         cl->SetComputeRootDescriptorTable(0, inst_dxr.desc_heap->GetGPUDescriptorHandleForHeapStart());
         cl->Dispatch(mesh.vertex_count, 1, 1);
-
-        if (submit) {
-            cl->Close();
-            cl = rd.clm_deform->get();
-        }
     }
 
     return true;
@@ -355,20 +364,15 @@ uint64_t DeformerDXR::flush(RenderDataDXR& rd)
 #endif
     rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform end");
     rd.cl_deform->Close();
-
-    auto& cls = rd.clm_deform->getCommandLists();
-    cq->ExecuteCommandLists((UINT)cls.size(), cls.data());
-
-    rd.fv_deform = incrementFenceValue();
-    cq->Signal(getFence(), rd.fv_deform);
-    return rd.fv_deform;
+    auto ret = GfxContextDXR::getInstance()->submitComputeCommandList(rd.cl_deform);
+    rd.cl_deform = nullptr;
+    return ret;
 }
 
-bool DeformerDXR::reset(RenderDataDXR & rd)
+bool DeformerDXR::reset()
 {
-    if (rd.clm_deform) {
-        rd.clm_deform->reset();
-        rd.cl_deform = nullptr;
+    if (m_clm_deform) {
+        m_clm_deform->reset();
         return true;
     }
     return false;
