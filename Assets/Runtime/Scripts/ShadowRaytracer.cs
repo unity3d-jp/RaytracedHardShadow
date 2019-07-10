@@ -808,7 +808,11 @@ namespace UTJ.RaytracedHardShadow
 #endif
 
             if (!m_renderer)
+            {
                 m_renderer = rthsRenderer.Create();
+                m_renderer.name = gameObject.name;
+                //Debug.Log("Create: " + m_renderer.self);
+            }
 
             if (m_renderer.initialized)
             {
@@ -979,11 +983,15 @@ namespace UTJ.RaytracedHardShadow
 
         void OnDisable()
         {
-            if (m_renderer)
+            if (m_initialized && m_renderer.valid)
             {
                 --s_instanceCount;
                 if (s_instanceCount == 0)
                     ClearAllCacheRecords();
+            }
+            if (m_renderer)
+            {
+                //Debug.Log("Release: " + m_renderer.self);
                 m_renderer.Release();
             }
             m_initialized = false;

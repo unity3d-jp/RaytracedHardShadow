@@ -45,7 +45,9 @@ RendererDXR::RendererDXR()
 
 RendererDXR::~RendererDXR()
 {
-    GfxContextDXR::finalizeInstance();
+    if (m_is_initialized) {
+        GfxContextDXR::finalizeInstance();
+    }
 }
 
 void RendererDXR::setName(const std::string& name)
