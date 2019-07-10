@@ -77,6 +77,8 @@ void RendererBase::release()
 
 void RendererBase::beginScene()
 {
+    m_mutex.lock();
+    ++m_update_count;
     m_scene_data.render_flags = 0;
     m_scene_data.light_count = 0;
     m_geometries.clear();
@@ -110,6 +112,7 @@ void RendererBase::endScene()
         m_geometries_tmp.push_back(prev);
         std::swap(m_geometries, m_geometries_tmp);
     }
+    m_mutex.unlock();
 }
 
 void RendererBase::setRaytraceFlags(uint32_t flags)

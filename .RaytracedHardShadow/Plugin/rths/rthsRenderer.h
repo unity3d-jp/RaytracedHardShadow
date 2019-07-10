@@ -81,6 +81,10 @@ protected:
     SceneData m_scene_data;
     RenderTargetDataPtr m_render_target;
     std::vector<GeometryData> m_geometries;
+    std::mutex m_mutex;
+
+    int m_update_count = 0;
+    int m_render_count = 0;
 
 private:
     std::vector<GeometryData> m_geometries_tmp;

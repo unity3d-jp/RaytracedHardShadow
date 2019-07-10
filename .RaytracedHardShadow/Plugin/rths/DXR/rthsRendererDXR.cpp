@@ -73,12 +73,16 @@ void RendererDXR::render()
     if (!valid())
         return;
 
-    auto ctx = GfxContextDXR::getInstance();
-    ctx->prepare(m_render_data);
-    ctx->setSceneData(m_render_data, m_scene_data);
-    ctx->setRenderTarget(m_render_data, m_render_target);
-    ctx->setGeometries(m_render_data, m_geometries);
-    ctx->flush(m_render_data);
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        ++m_render_count;
+        auto ctx = GfxContextDXR::getInstance();
+        ctx->prepare(m_render_data);
+        ctx->setSceneData(m_render_data, m_scene_data);
+        ctx->setRenderTarget(m_render_data, m_render_target);
+        ctx->setGeometries(m_render_data, m_geometries);
+        ctx->flush(m_render_data);
+    }
 }
 
 void RendererDXR::finish()
@@ -89,7 +93,6 @@ void RendererDXR::finish()
     auto ctx = GfxContextDXR::getInstance();
     if (!ctx->finish(m_render_data))
         m_render_data.clear();
-    clearMeshInstances();
 }
 
 void RendererDXR::frameBegin()
