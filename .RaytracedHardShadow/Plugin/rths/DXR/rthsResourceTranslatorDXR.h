@@ -10,6 +10,7 @@ public:
     virtual ~IResourceTranslator() {}
 
     virtual ID3D12FencePtr getFence(ID3D12Device *dxr_device) = 0;
+    virtual uint64_t insertSignal() = 0;
 
     virtual TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) = 0;
     virtual uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value_to_wait) = 0;

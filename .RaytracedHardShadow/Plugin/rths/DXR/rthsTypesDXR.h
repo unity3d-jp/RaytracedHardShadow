@@ -1,29 +1,7 @@
 #pragma once
-
-#include "rthsTypes.h"
-
 #ifdef _WIN32
-#ifdef rthsDebug
-    // debug layer
-    #define rthsEnableD3D12DebugLayer
-
-    // GPU based validation
-    // https://docs.microsoft.com/en-us/windows/desktop/direct3d12/using-d3d12-debug-layer-gpu-based-validation
-    // note: enabling this can cause problems. in our case, shader resources bound by global root sig become invisible.
-    //#define rthsEnableD3D12GBV
-
-    //// DREAD (this requires Windows SDK 10.0.18362.0 or newer)
-    //// https://docs.microsoft.com/en-us/windows/desktop/direct3d12/use-dred
-    //#define rthsEnableD3D12DREAD
-
-    //#define rthsEnableBufferValidation
-    //#define rthsEnableRenderTargetValidation
-    //#define rthsForceSoftwareDevice
-#endif
-
-#define rthsEnableResourceName
-#define rthsEnableTimestamp
-
+#include "rthsTypes.h"
+#include "rthsDXRSettings.h"
 
 namespace rths {
 
@@ -252,10 +230,14 @@ using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
     #define rthsTimestampUpdateLog(...)
 #endif rthsEnableTimestamp
 
+void SetNameImpl(ID3D12Object *obj, LPCSTR name);
+void SetNameImpl(ID3D12Object *obj, LPCWSTR name);
+void SetNameImpl(ID3D12Object *obj, const std::string& name);
+void SetNameImpl(ID3D12Object *obj, const std::wstring& name);
 #ifdef rthsEnableResourceName
-    #define DbgSetName(res, name) res->SetName(name)
+    #define rthsSetName(res, name) SetNameImpl(res, name)
 #else
-    #define DbgSetName(...)
+    #define rthsSetName(...)
 #endif
 
 class CommandListManagerDXR
@@ -292,9 +274,9 @@ using CommandListManagerDXRPtr = std::shared_ptr<CommandListManagerDXR>;
 class RenderDataDXR
 {
 public:
-    CommandListManagerDXRPtr clm_deform, clm_blas, clm_tlas, clm_rays;
-    ID3D12GraphicsCommandList4Ptr cl_deform;
+    std::string name;
 
+    ID3D12GraphicsCommandList4Ptr cl_deform;
     ID3D12DescriptorHeapPtr desc_heap;
     DescriptorHandleDXR render_target_uav;
     DescriptorHandleDXR tlas_srv, instance_data_srv;
@@ -311,7 +293,7 @@ public:
     ID3D12ResourcePtr instance_data;
     RenderTargetDataDXRPtr render_target;
 
-    uint64_t fv_deform = 0, fv_blas = 0, fv_tlas = 0, fv_rays = 0;
+    uint64_t fv_translate = 0, fv_deform = 0, fv_blas = 0, fv_tlas = 0, fv_rays = 0;
     FenceEventDXR fence_event;
     int render_flags = 0;
     int max_parallel_command_lists = 8;

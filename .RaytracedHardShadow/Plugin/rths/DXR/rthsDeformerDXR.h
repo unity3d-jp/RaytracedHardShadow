@@ -9,9 +9,9 @@ public:
     ~DeformerDXR();
     bool valid() const;
     bool prepare(RenderDataDXR& rd);
-    bool deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst, bool submit);
+    bool deform(RenderDataDXR& rd, MeshInstanceDataDXR& inst);
     uint64_t flush(RenderDataDXR& rd);
-    bool reset(RenderDataDXR& rd);
+    bool reset();
 
 private:
     void createSRV(D3D12_CPU_DESCRIPTOR_HANDLE dst, ID3D12Resource *res, int num_elements, int stride);
@@ -29,6 +29,7 @@ private:
 
     ID3D12RootSignaturePtr m_rootsig;
     ID3D12PipelineStatePtr m_pipeline_state;
+    CommandListManagerDXRPtr m_clm_deform;
 };
 using DeformerDXRPtr = std::shared_ptr<DeformerDXR>;
 

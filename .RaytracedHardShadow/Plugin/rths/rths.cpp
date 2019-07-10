@@ -11,6 +11,11 @@ rthsAPI const char* rthsGetErrorLog()
     return GetErrorLog().c_str();
 }
 
+rthsAPI void rthsGlobalsSetDeferredInitialization(bool v)
+{
+    rths::GetGlobals().deferred_initilization = v;
+}
+
 
 rthsAPI MeshData* rthsMeshCreate()
 {
@@ -21,6 +26,13 @@ rthsAPI void rthsMeshRelease(MeshData *self)
     if (!self)
         return;
     self->release();
+}
+
+rthsAPI void rthsMeshSetName(rths::MeshData *self, const char *name)
+{
+    if (!self)
+        return;
+    self->name = name ? name : std::string();
 }
 
 rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData * self, CPUResourcePtr vb, CPUResourcePtr ib,
@@ -113,6 +125,13 @@ rthsAPI void rthsMeshAddBlendshapeFrame(MeshData *self, int bs_index, const floa
     self->blendshapes[bs_index].frames.push_back(std::move(frame));
 }
 
+rthsAPI void rthsMeshMarkDyncmic(MeshData *self, bool v)
+{
+    if (!self)
+        return;
+    self->is_dynamic = v;
+}
+
 
 rthsAPI MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh)
 {
@@ -125,6 +144,12 @@ rthsAPI void rthsMeshInstanceRelease(MeshInstanceData *self)
     if (!self)
         return;
     self->release();
+}
+rthsAPI void rthsMeshInstanceSetName(rths::MeshInstanceData * self, const char *name)
+{
+    if (!self)
+        return;
+    self->name = name ? name : std::string();
 }
 rthsAPI void rthsMeshInstanceSetTransform(MeshInstanceData *self, float4x4 transform)
 {
@@ -156,6 +181,12 @@ rthsAPI void rthsRenderTargetRelease(RenderTargetData *self)
         return;
     self->release();
 }
+rthsAPI void rthsRenderTargetSetName(rths::RenderTargetData * self, const char *name)
+{
+    if (!self)
+        return;
+    self->name = name ? name : std::string();
+}
 rthsAPI void rthsRenderTargetSetGPUTexture(RenderTargetData *self, GPUResourcePtr tex)
 {
     if (!self)
@@ -179,7 +210,16 @@ rthsAPI IRenderer* rthsRendererCreate()
 
 rthsAPI void rthsRendererRelease(IRenderer *self)
 {
-    delete self;
+    if (!self)
+        return;
+    self->release();
+}
+
+rthsAPI bool rthsRendererIsInitialized(IRenderer *self)
+{
+    if (!self)
+        return false;
+    return self->initialized();
 }
 
 rthsAPI bool rthsRendererIsValid(rths::IRenderer *self)
@@ -187,6 +227,13 @@ rthsAPI bool rthsRendererIsValid(rths::IRenderer *self)
     if (!self)
         return false;
     return self->valid();
+}
+
+rthsAPI void rthsRendererSetName(rths::IRenderer * self, const char *name)
+{
+    if (!self)
+        return;
+    self->setName(name ? name : std::string());
 }
 
 rthsAPI void rthsRendererSetRenderTarget(IRenderer *self, RenderTargetData *render_target)
@@ -378,6 +425,16 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
         return;
     }
 #endif // _WIN32
+}
+
+static void UNITY_INTERFACE_API _FlushDeferredCommands(int)
+{
+    rths::FlushDeferredCommands();
+}
+extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
+rthsGetFlushDeferredCommands()
+{
+    return _FlushDeferredCommands;
 }
 
 static void UNITY_INTERFACE_API _RenderAll(int)

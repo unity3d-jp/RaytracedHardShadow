@@ -21,11 +21,14 @@ class IRenderer
 {
 public:
     virtual ~IRenderer() {}
+    virtual void release() = 0;
+    virtual bool initialized() const = 0;
     virtual bool valid() const = 0;
 
     virtual void beginScene() = 0;
     virtual void endScene() = 0;
 
+    virtual void setName(const std::string& name) = 0;
     virtual void setRaytraceFlags(uint32_t flags) = 0;
     virtual void setShadowRayOffset(float v) = 0;
     virtual void setSelfShadowThreshold(float v) = 0;
@@ -49,11 +52,13 @@ public:
 };
 
 
-class RendererBase : public IRenderer
+class RendererBase : public IRenderer, public SharedResource<RendererBase>
 {
+using ref_count = SharedResource<RendererBase>;
 public:
     RendererBase();
     ~RendererBase() override;
+    void release() override;
 
     void beginScene() override;
     void endScene() override;
@@ -76,6 +81,10 @@ protected:
     SceneData m_scene_data;
     RenderTargetDataPtr m_render_target;
     std::vector<GeometryData> m_geometries;
+    std::mutex m_mutex;
+
+    int m_update_count = 0;
+    int m_render_count = 0;
 
 private:
     std::vector<GeometryData> m_geometries_tmp;

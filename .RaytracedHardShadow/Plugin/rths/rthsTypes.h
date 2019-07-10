@@ -102,28 +102,17 @@ struct SceneData
     bool operator!=(SceneData& v) const { return !(*this == v); }
 };
 
+struct GlobalSettings
+{
+    bool deferred_initilization = false;
+};
+
+GlobalSettings& GetGlobals();
+void AddDeferredCommand(const std::function<void()>& v);
+void FlushDeferredCommands();
+
 using GPUResourcePtr = const void*;
 using CPUResourcePtr = const void*;
-
-
-// resource type exposed to plugin user
-template<class T>
-class SharedResource : public RefCount<T>
-{
-public:
-    bool operator==(const SharedResource& v) const { return id == v.id; }
-    bool operator!=(const SharedResource& v) const { return id != v.id; }
-    bool operator<(const SharedResource& v) const { return id < v.id; }
-
-protected:
-    static uint64_t newID()
-    {
-        static uint64_t s_id;
-        return ++s_id;
-    }
-
-    uint64_t id = newID();
-};
 
 
 struct BoneWeight1
@@ -159,6 +148,7 @@ struct BlendshapeData
 class MeshData : public SharedResource<MeshData>
 {
 public:
+    std::string name;
     GPUResourcePtr gpu_vertex_buffer = nullptr;
     GPUResourcePtr gpu_index_buffer = nullptr;
     CPUResourcePtr cpu_vertex_buffer = nullptr;
@@ -171,9 +161,11 @@ public:
     int index_offset = 0; // in byte
     SkinData skin;
     std::vector<BlendshapeData> blendshapes;
+    bool is_dynamic = false;
 
     MeshData();
     ~MeshData();
+    void release();
     bool valid() const;
 };
 using MeshDataPtr = ref_ptr<MeshData>;
@@ -182,6 +174,7 @@ using MeshDataPtr = ref_ptr<MeshData>;
 class MeshInstanceData : public SharedResource<MeshInstanceData>
 {
 public:
+    std::string name;
     MeshDataPtr mesh;
     float4x4 transform = float4x4::identity();
     std::vector<float4x4> bones;
@@ -190,6 +183,7 @@ public:
 
     MeshInstanceData();
     ~MeshInstanceData();
+    void release();
     bool valid() const;
     bool isUpdated(UpdateFlag v) const;
     void markUpdated(UpdateFlag v);
@@ -219,6 +213,7 @@ public:
 class RenderTargetData : public SharedResource<RenderTargetData>
 {
 public:
+    std::string name;
     GPUResourcePtr gpu_texture = nullptr;
     int width = 0;
     int height = 0;
@@ -226,7 +221,19 @@ public:
 
     RenderTargetData();
     ~RenderTargetData();
+    void release();
 };
 using RenderTargetDataPtr = ref_ptr<RenderTargetData>;
+
+
+
+template<class T>
+inline void ExternalRelease(T *self)
+{
+    if (GetGlobals().deferred_initilization)
+        AddDeferredCommand([self]() { self->internalRelease(); });
+    else
+        self->internalRelease();
+}
 
 } // namespace rths

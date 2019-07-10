@@ -3,6 +3,41 @@
 
 namespace rths {
 
+GlobalSettings& GetGlobals()
+{
+    static GlobalSettings s_globals;
+    return s_globals;
+}
+
+static std::vector<std::function<void()>> g_deferred_commands, g_deferred_commands_tmp;
+static std::mutex g_mutex_deferred_commands;
+
+template<class Body>
+inline void DeferredCommandsLock(const Body& body)
+{
+    std::unique_lock<std::mutex> l(g_mutex_deferred_commands);
+    body();
+}
+
+void AddDeferredCommand(const std::function<void()>& v)
+{
+    DeferredCommandsLock([&v]() {
+        g_deferred_commands.push_back(v);
+    });
+}
+
+void FlushDeferredCommands()
+{
+    DeferredCommandsLock([]() {
+        g_deferred_commands.swap(g_deferred_commands_tmp);
+    });
+    for (auto& f : g_deferred_commands_tmp)
+        f();
+    g_deferred_commands_tmp.clear();
+}
+
+
+
 bool SkinData::valid() const
 {
     return !bindposes.empty() && !bone_counts.empty() && !weights.empty();
@@ -22,6 +57,11 @@ MeshData::~MeshData()
     CallOnMeshDelete(this);
 }
 
+void MeshData::release()
+{
+    ExternalRelease(this);
+}
+
 bool MeshData::valid() const
 {
     return
@@ -38,6 +78,11 @@ MeshInstanceData::MeshInstanceData()
 MeshInstanceData::~MeshInstanceData()
 {
     CallOnMeshInstanceDelete(this);
+}
+
+void MeshInstanceData::release()
+{
+    ExternalRelease(this);
 }
 
 bool MeshInstanceData::valid() const
@@ -124,6 +169,11 @@ RenderTargetData::RenderTargetData()
 RenderTargetData::~RenderTargetData()
 {
     CallOnRenderTargetDelete(this);
+}
+
+void RenderTargetData::release()
+{
+    ExternalRelease(this);
 }
 
 } // namespace rths 

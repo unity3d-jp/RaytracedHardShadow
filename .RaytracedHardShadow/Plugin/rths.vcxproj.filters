@@ -92,6 +92,9 @@
     <ClInclude Include="rths\Foundation\rthsLog.h">
       <Filter>rths\Foundation</Filter>
     </ClInclude>
+    <ClInclude Include="rths\DXR\rthsDXRSettings.h">
+      <Filter>rths\DXR</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="rths\DXR\Shaders\rthsShadowDXR.hlsl">

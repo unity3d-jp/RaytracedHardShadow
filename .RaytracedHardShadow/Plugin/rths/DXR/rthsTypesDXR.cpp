@@ -1,6 +1,7 @@
 #include "pch.h"
 #ifdef _WIN32
 #include "Foundation/rthsLog.h"
+#include "Foundation/rthsMisc.h"
 #include "rthsTypesDXR.h"
 
 namespace rths {
@@ -346,6 +347,33 @@ void RenderDataDXR::clear()
     *this = RenderDataDXR();
 }
 
+
+void SetNameImpl(ID3D12Object *obj, LPCSTR name)
+{
+    if (obj && name) {
+        auto wname = ToWCS(name);
+        obj->SetName(wname.c_str());
+    }
+}
+void SetNameImpl(ID3D12Object *obj, LPCWSTR name)
+{
+    if (obj && name) {
+        obj->SetName(name);
+    }
+}
+void SetNameImpl(ID3D12Object *obj, const std::string& name)
+{
+    if (obj && !name.empty()) {
+        auto wname = ToWCS(name);
+        obj->SetName(wname.c_str());
+    }
+}
+void SetNameImpl(ID3D12Object *obj, const std::wstring& name)
+{
+    if (obj && !name.empty()) {
+        obj->SetName(name.c_str());
+    }
+}
 
 UINT SizeOfElement(DXGI_FORMAT rtf)
 {

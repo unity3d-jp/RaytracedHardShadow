@@ -111,6 +111,7 @@ namespace UTJ.RaytracedHardShadow
         public IntPtr self;
         [DllImport("rths")] static extern IntPtr rthsMeshCreate();
         [DllImport("rths")] static extern void rthsMeshRelease(IntPtr self);
+        [DllImport("rths")] static extern void rthsMeshSetName(IntPtr self, string name);
         [DllImport("rths")] static extern void rthsMeshSetCPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
         [DllImport("rths")] static extern void rthsMeshSetGPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
         [DllImport("rths")] static extern void rthsMeshSetSkinBindposes(IntPtr self, Matrix4x4[] bindposes, int num_bindposes);
@@ -118,12 +119,17 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsMeshSetSkinWeights4(IntPtr self, BoneWeight[] w4, int nw4);
         [DllImport("rths")] static extern void rthsMeshSetBlendshapeCount(IntPtr self, int num_bs);
         [DllImport("rths")] static extern void rthsMeshAddBlendshapeFrame(IntPtr self, int bs_index, Vector3[] delta, float weight);
+        [DllImport("rths")] static extern void rthsMeshMarkDyncmic(IntPtr self, byte v);
         #endregion
 
         public static implicit operator bool(rthsMeshData v) { return v.self != IntPtr.Zero; }
         public static bool operator ==(rthsMeshData a, rthsMeshData b) { return a.self == b.self; }
         public static bool operator !=(rthsMeshData a, rthsMeshData b) { return a.self != b.self; }
 
+        public string name
+        {
+            set { rthsMeshSetName(self, value); }
+        }
 
         public static rthsMeshData Create()
         {
@@ -134,6 +140,7 @@ namespace UTJ.RaytracedHardShadow
         {
             rthsMeshRelease(self);
             self = IntPtr.Zero;
+            rthsRenderer.IssueFlushDeferredCommands();
         }
 
         public void SetGPUBuffers(IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset)
@@ -191,6 +198,11 @@ namespace UTJ.RaytracedHardShadow
                 mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
                 0, mesh.vertexCount, 0, indexStride, indexCountMerged, 0);
         }
+
+        public void MarkDynamic()
+        {
+            rthsMeshMarkDyncmic(self, 1);
+        }
     }
 
     public struct rthsMeshInstanceData
@@ -199,6 +211,7 @@ namespace UTJ.RaytracedHardShadow
         public IntPtr self;
         [DllImport("rths")] static extern IntPtr rthsMeshInstanceCreate(rthsMeshData mesh);
         [DllImport("rths")] static extern void rthsMeshInstanceRelease(IntPtr self);
+        [DllImport("rths")] static extern void rthsMeshInstanceSetName(IntPtr self, string name);
         [DllImport("rths")] static extern void rthsMeshInstanceSetTransform(IntPtr self, Matrix4x4 transform);
         [DllImport("rths")] static extern void rthsMeshInstanceSetBones(IntPtr self, Matrix4x4[] bones, int num_bones);
         [DllImport("rths")] static extern void rthsMeshInstanceSetBlendshapeWeights(IntPtr self, float[] bsw, int num_bsw);
@@ -209,6 +222,11 @@ namespace UTJ.RaytracedHardShadow
         public static bool operator !=(rthsMeshInstanceData a, rthsMeshInstanceData b) { return a.self != b.self; }
 
 
+        public string name
+        {
+            set { rthsMeshInstanceSetName(self, value); }
+        }
+
         public static rthsMeshInstanceData Create(rthsMeshData mesh)
         {
             return new rthsMeshInstanceData { self = rthsMeshInstanceCreate(mesh) };
@@ -218,6 +236,7 @@ namespace UTJ.RaytracedHardShadow
         {
             rthsMeshInstanceRelease(self);
             self = IntPtr.Zero;
+            rthsRenderer.IssueFlushDeferredCommands();
         }
 
         public void SetTransform(Matrix4x4 transform)
@@ -288,6 +307,7 @@ namespace UTJ.RaytracedHardShadow
         public IntPtr self;
         [DllImport("rths")] static extern IntPtr rthsRenderTargetCreate();
         [DllImport("rths")] static extern void rthsRenderTargetRelease(IntPtr self);
+        [DllImport("rths")] static extern void rthsRenderTargetSetName(IntPtr self, string name);
         [DllImport("rths")] static extern void rthsRenderTargetSetGPUTexture(IntPtr self, IntPtr tex);
         [DllImport("rths")] static extern void rthsRenderTargetSetup(IntPtr self, int width, int height, rthsRenderTargetFormat format);
         #endregion
@@ -295,6 +315,11 @@ namespace UTJ.RaytracedHardShadow
         public static implicit operator bool(rthsRenderTarget v) { return v.self != IntPtr.Zero; }
         public static bool operator ==(rthsRenderTarget a, rthsRenderTarget b) { return a.self == b.self; }
         public static bool operator !=(rthsRenderTarget a, rthsRenderTarget b) { return a.self != b.self; }
+
+        public string name
+        {
+            set { rthsRenderTargetSetName(self, value); }
+        }
 
         public static rthsRenderTarget Create()
         {
@@ -306,6 +331,7 @@ namespace UTJ.RaytracedHardShadow
         {
             rthsRenderTargetRelease(self);
             self = IntPtr.Zero;
+            rthsRenderer.IssueFlushDeferredCommands();
         }
 
         public void Setup(IntPtr GPUTexture)
@@ -323,10 +349,11 @@ namespace UTJ.RaytracedHardShadow
     {
         #region internal
         public IntPtr self;
-        [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
         [DllImport("rths")] static extern IntPtr rthsRendererCreate();
         [DllImport("rths")] static extern void rthsRendererRelease(IntPtr self);
+        [DllImport("rths")] static extern byte rthsRendererIsInitialized(IntPtr self);
         [DllImport("rths")] static extern byte rthsRendererIsValid(IntPtr self);
+        [DllImport("rths")] static extern void rthsRendererSetName(IntPtr self, string name);
 
         [DllImport("rths")] static extern void rthsRendererBeginScene(IntPtr self);
         [DllImport("rths")] static extern void rthsRendererEndScene(IntPtr self);
@@ -342,6 +369,9 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRendererAddGeometry(IntPtr self, rthsMeshInstanceData mesh, rthsHitMask rmask, rthsHitMask cmask);
         [DllImport("rths")] static extern IntPtr rthsRendererGetTimestampLog(IntPtr self);
 
+        [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
+        [DllImport("rths")] static extern void rthsGlobalsSetDeferredInitialization(byte v);
+        [DllImport("rths")] static extern IntPtr rthsGetFlushDeferredCommands();
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
 
@@ -354,9 +384,17 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return Misc.CString(rthsGetErrorLog()); }
         }
+        public string name
+        {
+            set { rthsRendererSetName(self, value); }
+        }
         public string timestampLog
         {
             get { return Misc.CString(rthsRendererGetTimestampLog(self)); }
+        }
+        public bool initialized
+        {
+            get { return rthsRendererIsInitialized(self) != 0; }
         }
         public bool valid
         {
@@ -365,14 +403,17 @@ namespace UTJ.RaytracedHardShadow
 
         public static rthsRenderer Create()
         {
-            // rthsCreateRenderer() will return null if DXR is not supported
-            return new rthsRenderer { self = rthsRendererCreate() };
+            rthsGlobalsSetDeferredInitialization(1);
+            var ret = new rthsRenderer { self = rthsRendererCreate() };
+            IssueFlushDeferredCommands();
+            return ret;
         }
 
         public void Release()
         {
             rthsRendererRelease(self);
             self = IntPtr.Zero;
+            IssueFlushDeferredCommands();
         }
 
         public void SetRenderTarget(rthsRenderTarget rt)
@@ -453,6 +494,11 @@ namespace UTJ.RaytracedHardShadow
         public void AddGeometry(rthsMeshInstanceData mesh, rthsHitMask rmask, rthsHitMask cmask)
         {
             rthsRendererAddGeometry(self, mesh, rmask, cmask);
+        }
+
+        public static void IssueFlushDeferredCommands()
+        {
+            GL.IssuePluginEvent(rthsGetFlushDeferredCommands(), 0);
         }
 
         public static void IssueRender()

@@ -108,6 +108,7 @@ class IRenderer;
 
 
 rthsAPI const char* rthsGetErrorLog();
+rthsAPI void rthsGlobalsSetDeferredInitialization(bool v);
 
 // mesh interface
 rthsAPI rths::MeshData* rthsMeshCreate();
@@ -122,6 +123,7 @@ rthsAPI void rthsMeshSetSkinWeights(rths::MeshData *self, const uint8_t *c, int 
 rthsAPI void rthsMeshSetSkinWeights4(rths::MeshData *self, const rths::BoneWeight4 *w4, int nw4);
 rthsAPI void rthsMeshSetBlendshapeCount(rths::MeshData *self, int num_bs);
 rthsAPI void rthsMeshAddBlendshapeFrame(rths::MeshData *self, int bs_index, const rths::float3 *delta, float weight);
+rthsAPI void rthsMeshMarkDyncmic(rths::MeshData *self, bool v);
 
 // mesh instance interface
 rthsAPI rths::MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh);
@@ -141,6 +143,7 @@ rthsAPI void rthsRenderTargetSetup(rths::RenderTargetData *self, int width, int 
 // renderer interface
 rthsAPI rths::IRenderer* rthsRendererCreate();
 rthsAPI void rthsRendererRelease(rths::IRenderer *self);
+rthsAPI bool rthsRendererIsInitialized(rths::IRenderer *self);
 rthsAPI bool rthsRendererIsValid(rths::IRenderer *self);
 rthsAPI void rthsRendererSetName(rths::IRenderer *self, const char *name);
 rthsAPI void rthsRendererSetRenderTarget(rths::IRenderer *self, rths::RenderTargetData *render_target);

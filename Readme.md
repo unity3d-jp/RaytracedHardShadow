@@ -1,3 +1,4 @@
+![demo](https://user-images.githubusercontent.com/1488611/60965577-1ca89700-a351-11e9-9b7d-962a6a7e1aed.png)
 # Raytraced Hard Shadow
 レイトレーシングにより正確なハードシャドウを生成するプラグインです。[UnityChanToonShader](https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project) などと併用することを想定した、アニメ用影システムとなります。
 
@@ -14,6 +15,8 @@ Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は 
 
 - Camera を選択し、"Add Component" -> "UTJ/Raytraced Hard Shadow/Shadow Raytacer" を選択。このコンポーネントが影生成を担当します。
 
+<img align="right" src="https://user-images.githubusercontent.com/1488611/60966118-7b224500-a352-11e9-8160-4c846ff38443.png" width=400>
+
 ### Shadow Raytracer
 
 ###### Generate Render Texture
@@ -28,7 +31,6 @@ Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は 
 
 ##### Ignore Self Shadow
 自分自身に落とす影 (セルフシャドウ) を無視します。  
-具体的には、ポリゴン表面からライトへレイを飛ばしてそれが遮られた時、遮ったオブジェクトが自分自身であればそれを無視します。
 "Keep Self Drop Shadow" が有効な場合、レイが遮られるまでの距離がほぼゼロ ("Self Shadow Threshold" で調節可) であればその遮ったオブジェクトは無視しますが、それ以上であれば自分自身であっても影とみなします。  
 
 デフォルトでは "Ignore Self Shadow" "Keep Self Drop Shadow" 共に有効となっており、通常これが最も望ましい動作であると思われます。  

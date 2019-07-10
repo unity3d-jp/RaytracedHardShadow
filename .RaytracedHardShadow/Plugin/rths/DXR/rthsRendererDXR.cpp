@@ -11,7 +11,9 @@ class RendererDXR : public RendererBase
 public:
     RendererDXR();
     ~RendererDXR() override;
+    void setName(const std::string& name) override;
 
+    bool initialized() const override;
     bool valid() const override;
     void render() override; // called from render thread
     void finish() override; // called from render thread
@@ -24,17 +26,38 @@ public:
 
 private:
     RenderDataDXR m_render_data;
+    bool m_is_initialized = false;
 };
 
 
 RendererDXR::RendererDXR()
 {
-    GfxContextDXR::initializeInstance();
+    auto do_init = [this]() {
+        GfxContextDXR::initializeInstance();
+        m_is_initialized = true;
+    };
+
+    if (GetGlobals().deferred_initilization)
+        AddDeferredCommand(do_init);
+    else
+        do_init();
 }
 
 RendererDXR::~RendererDXR()
 {
-    GfxContextDXR::finalizeInstance();
+    if (m_is_initialized) {
+        GfxContextDXR::finalizeInstance();
+    }
+}
+
+void RendererDXR::setName(const std::string& name)
+{
+    m_render_data.name = name;
+}
+
+bool RendererDXR::initialized() const
+{
+    return m_is_initialized;
 }
 
 bool RendererDXR::valid() const
@@ -50,12 +73,16 @@ void RendererDXR::render()
     if (!valid())
         return;
 
-    auto ctx = GfxContextDXR::getInstance();
-    ctx->prepare(m_render_data);
-    ctx->setSceneData(m_render_data, m_scene_data);
-    ctx->setRenderTarget(m_render_data, m_render_target);
-    ctx->setGeometries(m_render_data, m_geometries);
-    ctx->flush(m_render_data);
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        ++m_render_count;
+        auto ctx = GfxContextDXR::getInstance();
+        ctx->prepare(m_render_data);
+        ctx->setSceneData(m_render_data, m_scene_data);
+        ctx->setRenderTarget(m_render_data, m_render_target);
+        ctx->setGeometries(m_render_data, m_geometries);
+        ctx->flush(m_render_data);
+    }
 }
 
 void RendererDXR::finish()
@@ -66,18 +93,18 @@ void RendererDXR::finish()
     auto ctx = GfxContextDXR::getInstance();
     if (!ctx->finish(m_render_data))
         m_render_data.clear();
-    clearMeshInstances();
 }
 
 void RendererDXR::frameBegin()
 {
     if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
-        //auto ctx = GfxContextDXR::getInstance();
-        //ctx->clearResourceCache();
-        //m_render_data.clear();
-
+        // clear static meshes' BLAS
         for (auto& geom : m_render_data.geometries_prev)
             geom.clearBLAS();
+
+        // mark updated to update deformable meshes' BLAS
+        for (auto& geom : m_render_data.geometries_prev)
+            geom.inst->base->markUpdated();
     }
 }
 
@@ -113,8 +140,8 @@ void* RendererDXR::getRenderTexturePtr()
 IRenderer* CreateRendererDXR()
 {
     auto ret = new RendererDXR();
-    if (!ret->valid()) {
-        delete ret;
+    if (ret->initialized() && !ret->valid()) {
+        ret->release();
         ret = nullptr;
     }
     return ret;
