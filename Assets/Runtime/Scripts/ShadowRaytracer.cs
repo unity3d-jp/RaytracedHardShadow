@@ -54,37 +54,50 @@ namespace UTJ.RaytracedHardShadow
         {
             public rthsMeshData meshData;
             public Mesh bakedMesh;
+            public IntPtr nativeVBPtr, nativeIBPtr;
+
             public int useCount;
 
             public void Update(Mesh mesh)
             {
-                Release();
+                var vb = mesh.GetNativeVertexBufferPtr(0);
+                var ib = mesh.GetNativeIndexBufferPtr();
+                if (meshData)
+                {
+                    if (nativeVBPtr != vb || nativeIBPtr != ib)
+                        Release();
+                }
+                if (!meshData)
+                {
+                    nativeVBPtr = vb;
+                    nativeIBPtr = ib;
 
-                meshData = rthsMeshData.Create();
-                meshData.name = mesh.name;
-                meshData.SetGPUBuffers(mesh);
-                meshData.SetBindpose(mesh.bindposes);
+                    meshData = rthsMeshData.Create();
+                    meshData.name = mesh.name;
+                    meshData.SetGPUBuffers(mesh);
+                    meshData.SetBindpose(mesh.bindposes);
 #if UNITY_2019_1_OR_NEWER
-                meshData.SetSkinWeights(mesh.GetBonesPerVertex(), mesh.GetAllBoneWeights());
+                    meshData.SetSkinWeights(mesh.GetBonesPerVertex(), mesh.GetAllBoneWeights());
 #else
-                meshData.SetSkinWeights(mesh.boneWeights);
+                    meshData.SetSkinWeights(mesh.boneWeights);
 #endif
 
-                int numBS = mesh.blendShapeCount;
-                meshData.SetBlendshapeCount(numBS);
-                if (numBS > 0)
-                {
-                    var deltaPoints = new Vector3[mesh.vertexCount];
-                    var deltaNormals = new Vector3[mesh.vertexCount];
-                    var deltaTangents = new Vector3[mesh.vertexCount];
-                    for (int bsi = 0; bsi < numBS; ++bsi)
+                    int numBS = mesh.blendShapeCount;
+                    meshData.SetBlendshapeCount(numBS);
+                    if (numBS > 0)
                     {
-                        int numFrames = mesh.GetBlendShapeFrameCount(bsi);
-                        for (int fi = 0; fi < numFrames; ++fi)
+                        var deltaPoints = new Vector3[mesh.vertexCount];
+                        var deltaNormals = new Vector3[mesh.vertexCount];
+                        var deltaTangents = new Vector3[mesh.vertexCount];
+                        for (int bsi = 0; bsi < numBS; ++bsi)
                         {
-                            float weight = mesh.GetBlendShapeFrameWeight(bsi, fi);
-                            mesh.GetBlendShapeFrameVertices(bsi, fi, deltaPoints, deltaNormals, deltaTangents);
-                            meshData.AddBlendshapeFrame(bsi, deltaPoints, weight);
+                            int numFrames = mesh.GetBlendShapeFrameCount(bsi);
+                            for (int fi = 0; fi < numFrames; ++fi)
+                            {
+                                float weight = mesh.GetBlendShapeFrameWeight(bsi, fi);
+                                mesh.GetBlendShapeFrameVertices(bsi, fi, deltaPoints, deltaNormals, deltaTangents);
+                                meshData.AddBlendshapeFrame(bsi, deltaPoints, weight);
+                            }
                         }
                     }
                 }
@@ -583,9 +596,9 @@ namespace UTJ.RaytracedHardShadow
             if (!s_meshDataCache.TryGetValue(mesh, out rec))
             {
                 rec = new MeshRecord();
-                rec.Update(mesh);
                 s_meshDataCache.Add(mesh, rec);
             }
+            rec.Update(mesh);
             rec.useCount++;
             return rec.meshData;
         }

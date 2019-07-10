@@ -28,6 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\DXR\rthsDeformerDXR.h" />
+    <ClInclude Include="rths\DXR\rthsDXRSettings.h" />
     <ClInclude Include="rths\Foundation\rthsHalf.h" />
     <ClInclude Include="rths\Foundation\rthsLog.h" />
     <ClInclude Include="rths\Foundation\rthsMath.h" />

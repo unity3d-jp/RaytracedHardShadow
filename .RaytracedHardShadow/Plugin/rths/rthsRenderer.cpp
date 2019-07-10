@@ -53,7 +53,7 @@ ISceneCallback::~ISceneCallback()
 }
 
 
-static std::vector<RendererBase*> g_renderers;
+static std::vector<IRenderer*> g_renderers;
 
 RendererBase::RendererBase()
     : ref_count(this)
