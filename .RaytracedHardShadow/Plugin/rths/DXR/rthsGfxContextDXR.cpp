@@ -223,9 +223,7 @@ bool GfxContextDXR::initialize()
     create_command_queue(m_cmd_queue_compute, D3D12_COMMAND_LIST_TYPE_COMPUTE, L"Compute Queue");
     create_command_queue(m_cmd_queue_copy, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy Queue");
 
-    m_clm_blas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"BLAS List");
-    m_clm_tlas = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"TLAS List");
-    m_clm_rays = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"Rays List");
+    m_clm_direct = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT, L"Direct List");
     m_clm_copy = std::make_shared<CommandListManagerDXR>(m_device, D3D12_COMMAND_LIST_TYPE_COPY, L"Copy List");
 
 
@@ -728,7 +726,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
     // build BLAS
     size_t geometry_count = rd.geometries.size();
-    auto cl_blas = m_clm_blas->get();
+    auto cl_blas = m_clm_direct->get();
     rthsTimestampQuery(rd.timestamp, cl_blas, "Building BLAS begin");
     int blas_update_count = 0;
     for (auto& geom_dxr : rd.geometries) {
@@ -870,7 +868,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
 
     // build TLAS
-    auto cl_tlas = m_clm_tlas->get();
+    auto cl_tlas = m_clm_direct->get();
     rthsTimestampQuery(rd.timestamp, cl_tlas, "Building TLAS begin");
     if (needs_build_tlas) {
         // get the size of the TLAS buffers
@@ -1010,7 +1008,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     }
 
 
-    auto cl_rays = m_clm_rays->get();
+    auto cl_rays = m_clm_direct->get();
     rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays begin");
 
     cl_rays->SetComputeRootSignature(m_rootsig);
@@ -1167,9 +1165,7 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
 void GfxContextDXR::frameEnd()
 {
     m_deformer->reset();
-    m_clm_blas->reset();
-    m_clm_tlas->reset();
-    m_clm_rays->reset();
+    m_clm_direct->reset();
     m_clm_copy->reset();
     m_tmp_resources.clear();
 
@@ -1330,6 +1326,21 @@ void GfxContextDXR::addResourceBarrier(ID3D12GraphicsCommandList *cl, ID3D12Reso
     cl->ResourceBarrier(1, &barrier);
 }
 
+uint64_t GfxContextDXR::submitResourceBarrier(ID3D12ResourcePtr resource, D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after, uint64_t preceding_fv)
+{
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = resource;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = state_before;
+    barrier.Transition.StateAfter = state_after;
+
+    auto cl = m_clm_direct->get();
+    cl->ResourceBarrier(1, &barrier);
+    cl->Close();
+    return submitDirectCommandList(cl, preceding_fv);
+}
+
 uint64_t GfxContextDXR::submitDirectCommandList(ID3D12GraphicsCommandList *cl, uint64_t preceding_fv)
 {
     return submitCommandList(m_cmd_queue_direct, cl, preceding_fv);
@@ -1482,9 +1493,30 @@ uint64_t GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src_, UIN
     return 0;
 }
 
-uint64_t GfxContextDXR::submitCopy(ID3D12GraphicsCommandList4Ptr& cl, bool immediate)
+uint64_t GfxContextDXR::copyTexture(ID3D12Resource *dst, ID3D12Resource *src, bool immediate, uint64_t preceding_fv)
+{
+    D3D12_TEXTURE_COPY_LOCATION dst_loc{};
+    dst_loc.pResource = dst;
+    dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    dst_loc.SubresourceIndex = 0;
+
+    D3D12_TEXTURE_COPY_LOCATION src_loc{};
+    src_loc.pResource = src;
+    src_loc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    src_loc.SubresourceIndex = 0;
+
+    auto cl = m_clm_copy->get();
+    cl->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, nullptr);
+    return submitCopy(cl, immediate, preceding_fv);
+}
+
+uint64_t GfxContextDXR::submitCopy(ID3D12GraphicsCommandList4Ptr& cl, bool immediate, uint64_t preceding_fv)
 {
     cl->Close();
+
+    if (preceding_fv != 0)
+        m_cmd_queue_copy->Wait(m_fence, preceding_fv);
+
     ID3D12CommandList *cmd_list[]{ cl.GetInterfacePtr() };
     m_cmd_queue_copy->ExecuteCommandLists(_countof(cmd_list), cmd_list);
 

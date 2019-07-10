@@ -6,9 +6,6 @@ using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-#if UNITY_2019_1_OR_NEWER
-using Unity.Collections;
-#endif
 
 namespace UTJ.RaytracedHardShadow
 {
