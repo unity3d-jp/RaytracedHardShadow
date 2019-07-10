@@ -6,6 +6,9 @@
 
 using namespace rths;
 
+rthsAPI const char* rthsGetVersion() { return rthsVersion; }
+rthsAPI const char* rthsGetReleaseDate() { return rthsReleaseDate; }
+
 rthsAPI const char* rthsGetErrorLog()
 {
     return GetErrorLog().c_str();

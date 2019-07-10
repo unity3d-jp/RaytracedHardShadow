@@ -107,6 +107,8 @@ class IRenderer;
 } // namespace rths
 
 
+rthsAPI const char* rthsGetVersion();
+rthsAPI const char* rthsGetReleaseDate();
 rthsAPI const char* rthsGetErrorLog();
 rthsAPI void rthsGlobalsSetDeferredInitialization(bool v);
 

@@ -850,7 +850,7 @@ namespace UTJ.RaytracedHardShadow
                 {
                     m_renderer.Release();
 
-                    Debug.LogError("ShadowRaytracer: Initialization failed - " + rthsRenderer.errorLog);
+                    Debug.LogError("ShadowRaytracer: Initialization failed - " + rthsGlobals.errorLog);
                     this.enabled = false;
                 }
             }

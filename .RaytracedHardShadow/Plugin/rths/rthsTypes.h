@@ -1,4 +1,5 @@
 #pragma once
+#include "rthsSettings.h"
 #include "Foundation/rthsRefPtr.h"
 #include "Foundation/rthsMath.h"
 #include "Foundation/rthsHalf.h"
