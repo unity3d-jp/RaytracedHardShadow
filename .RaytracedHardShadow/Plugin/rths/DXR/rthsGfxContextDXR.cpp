@@ -616,10 +616,13 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         return;
     }
 
-    auto translate_gpu_buffer = [this](GPUResourcePtr buffer) {
+    int translated_gpu_buffer_count = 0;
+    auto translate_gpu_buffer = [this, &translated_gpu_buffer_count](GPUResourcePtr buffer) {
         auto& data = m_buffer_records[buffer];
-        if (!data)
+        if (!data) {
             data = m_resource_translator->translateBuffer(buffer);
+            ++translated_gpu_buffer_count;
+        }
         return data;
     };
 
@@ -800,7 +803,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         }
         else {
             if (!mesh_dxr.blas) {
-                // BLAS for static meshes
+                // BLAS for non-deformable meshes
 
                 D3D12_RAYTRACING_GEOMETRY_DESC geom_desc{};
                 geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -817,7 +820,10 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
                 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
                 inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-                inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+                if (mesh.is_dynamic)
+                    inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+                else
+                    inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
                 inputs.NumDescs = 1;
                 inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
                 inputs.pGeometryDescs = &geom_desc;

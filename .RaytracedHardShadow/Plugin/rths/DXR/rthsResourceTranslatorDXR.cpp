@@ -24,7 +24,7 @@ public:
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
     BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
 
-    uint64_t copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool wait);
+    uint64_t copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool immediate);
 
 private:
     // note:
@@ -212,13 +212,13 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     return ret;
 }
 
-uint64_t D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool wait)
+uint64_t D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool immediate)
 {
     m_host_context->CopyResource(dst, src);
 
     auto fence_value = GfxContextDXR::getInstance()->incrementFenceValue();
     m_host_context->Signal(m_fence, fence_value);
-    if (wait) {
+    if (immediate) {
         // wait for completion of CopyResource()
         m_fence->SetEventOnCompletion(fence_value, m_fence_event);
         ::WaitForSingleObject(m_fence_event, INFINITE);

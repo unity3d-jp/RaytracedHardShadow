@@ -62,10 +62,15 @@ namespace UTJ.RaytracedHardShadow
             {
                 var vb = mesh.GetNativeVertexBufferPtr(0);
                 var ib = mesh.GetNativeIndexBufferPtr();
+                bool markDynamic = bakedMesh != null;
+
                 if (meshData)
                 {
                     if (nativeVBPtr != vb || nativeIBPtr != ib)
+                    {
                         Release();
+                        markDynamic = true;
+                    }
                 }
                 if (!meshData)
                 {
@@ -74,6 +79,8 @@ namespace UTJ.RaytracedHardShadow
 
                     meshData = rthsMeshData.Create();
                     meshData.name = mesh.name;
+                    if (markDynamic)
+                        meshData.MarkDynamic();
                     meshData.SetGPUBuffers(mesh);
                     meshData.SetBindpose(mesh.bindposes);
 #if UNITY_2019_1_OR_NEWER

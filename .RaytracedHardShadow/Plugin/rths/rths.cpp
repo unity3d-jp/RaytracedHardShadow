@@ -125,6 +125,13 @@ rthsAPI void rthsMeshAddBlendshapeFrame(MeshData *self, int bs_index, const floa
     self->blendshapes[bs_index].frames.push_back(std::move(frame));
 }
 
+rthsAPI void rthsMeshMarkDyncmic(MeshData *self, bool v)
+{
+    if (!self)
+        return;
+    self->is_dynamic = v;
+}
+
 
 rthsAPI MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh)
 {

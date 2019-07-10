@@ -161,6 +161,7 @@ public:
     int index_offset = 0; // in byte
     SkinData skin;
     std::vector<BlendshapeData> blendshapes;
+    bool is_dynamic = false;
 
     MeshData();
     ~MeshData();

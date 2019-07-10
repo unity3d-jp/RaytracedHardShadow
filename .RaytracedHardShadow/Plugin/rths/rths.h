@@ -123,6 +123,7 @@ rthsAPI void rthsMeshSetSkinWeights(rths::MeshData *self, const uint8_t *c, int 
 rthsAPI void rthsMeshSetSkinWeights4(rths::MeshData *self, const rths::BoneWeight4 *w4, int nw4);
 rthsAPI void rthsMeshSetBlendshapeCount(rths::MeshData *self, int num_bs);
 rthsAPI void rthsMeshAddBlendshapeFrame(rths::MeshData *self, int bs_index, const rths::float3 *delta, float weight);
+rthsAPI void rthsMeshMarkDyncmic(rths::MeshData *self, bool v);
 
 // mesh instance interface
 rthsAPI rths::MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh);

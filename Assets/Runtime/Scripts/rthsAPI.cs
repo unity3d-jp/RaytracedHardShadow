@@ -119,6 +119,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsMeshSetSkinWeights4(IntPtr self, BoneWeight[] w4, int nw4);
         [DllImport("rths")] static extern void rthsMeshSetBlendshapeCount(IntPtr self, int num_bs);
         [DllImport("rths")] static extern void rthsMeshAddBlendshapeFrame(IntPtr self, int bs_index, Vector3[] delta, float weight);
+        [DllImport("rths")] static extern void rthsMeshMarkDyncmic(IntPtr self, byte v);
         #endregion
 
         public static implicit operator bool(rthsMeshData v) { return v.self != IntPtr.Zero; }
@@ -196,6 +197,11 @@ namespace UTJ.RaytracedHardShadow
             SetGPUBuffers(
                 mesh.GetNativeVertexBufferPtr(0), mesh.GetNativeIndexBufferPtr(),
                 0, mesh.vertexCount, 0, indexStride, indexCountMerged, 0);
+        }
+
+        public void MarkDynamic()
+        {
+            rthsMeshMarkDyncmic(self, 1);
         }
     }
 
