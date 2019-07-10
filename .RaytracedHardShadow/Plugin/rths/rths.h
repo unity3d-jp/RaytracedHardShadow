@@ -108,6 +108,7 @@ class IRenderer;
 
 
 rthsAPI const char* rthsGetErrorLog();
+rthsAPI void rthsGlobalsSetDeferredInitialization(bool v);
 
 // mesh interface
 rthsAPI rths::MeshData* rthsMeshCreate();
@@ -139,7 +140,7 @@ rthsAPI void rthsRenderTargetSetGPUTexture(rths::RenderTargetData *self, rths::G
 rthsAPI void rthsRenderTargetSetup(rths::RenderTargetData *self, int width, int height, rths::RenderTargetFormat format);
 
 // renderer interface
-rthsAPI rths::IRenderer* rthsRendererCreate(bool deferred = false);
+rthsAPI rths::IRenderer* rthsRendererCreate();
 rthsAPI void rthsRendererRelease(rths::IRenderer *self);
 rthsAPI bool rthsRendererIsInitialized(rths::IRenderer *self);
 rthsAPI bool rthsRendererIsValid(rths::IRenderer *self);

@@ -52,11 +52,13 @@ public:
 };
 
 
-class RendererBase : public IRenderer
+class RendererBase : public IRenderer, public SharedResource<RendererBase>
 {
+using ref_count = SharedResource<RendererBase>;
 public:
     RendererBase();
     ~RendererBase() override;
+    void release() override;
 
     void beginScene() override;
     void endScene() override;
@@ -84,10 +86,7 @@ private:
     std::vector<GeometryData> m_geometries_tmp;
 };
 
-IRenderer* CreateRendererDXR(bool deferred);
-
-void AddDeferredCommand(const std::function<void()>& v);
-void FlushDeferredCommands();
+IRenderer* CreateRendererDXR();
 
 void MarkFrameBegin();
 void MarkFrameEnd();

@@ -38,6 +38,7 @@ ISceneCallback::~ISceneCallback()
 static std::vector<RendererBase*> g_renderers;
 
 RendererBase::RendererBase()
+    : ref_count(this)
 {
     g_renderers.push_back(this);
 }
@@ -45,6 +46,11 @@ RendererBase::RendererBase()
 RendererBase::~RendererBase()
 {
     g_renderers.erase(std::find(g_renderers.begin(), g_renderers.end(), this));
+}
+
+void RendererBase::release()
+{
+    ExternalRelease(this);
 }
 
 void RendererBase::beginScene()
@@ -183,20 +189,6 @@ void RendererBase::clearMeshInstances()
     m_geometries.clear();
 }
 
-
-static std::list<std::function<void()>> g_deferred_commands;
-
-void AddDeferredCommand(const std::function<void()>& v)
-{
-    g_deferred_commands.push_back(v);
-}
-
-void FlushDeferredCommands()
-{
-    for (auto& f : g_deferred_commands)
-        f();
-    g_deferred_commands.clear();
-}
 
 void MarkFrameBegin()
 {

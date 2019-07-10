@@ -11,6 +11,11 @@ rthsAPI const char* rthsGetErrorLog()
     return GetErrorLog().c_str();
 }
 
+rthsAPI void rthsGlobalsSetDeferredInitialization(bool v)
+{
+    rths::GetGlobals().deferred_initilization = v;
+}
+
 
 rthsAPI MeshData* rthsMeshCreate()
 {
@@ -191,9 +196,9 @@ rthsAPI void rthsRenderTargetSetup(RenderTargetData *self, int width, int height
 }
 
 
-rthsAPI IRenderer* rthsRendererCreate(bool deferred)
+rthsAPI IRenderer* rthsRendererCreate()
 {
-    return CreateRendererDXR(deferred);
+    return CreateRendererDXR();
 }
 
 rthsAPI void rthsRendererRelease(IRenderer *self)

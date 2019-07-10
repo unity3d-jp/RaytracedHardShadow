@@ -102,28 +102,17 @@ struct SceneData
     bool operator!=(SceneData& v) const { return !(*this == v); }
 };
 
+struct GlobalSettings
+{
+    bool deferred_initilization = false;
+};
+
+GlobalSettings& GetGlobals();
+void AddDeferredCommand(const std::function<void()>& v);
+void FlushDeferredCommands();
+
 using GPUResourcePtr = const void*;
 using CPUResourcePtr = const void*;
-
-
-// resource type exposed to plugin user
-template<class T>
-class SharedResource : public RefCount<T>
-{
-public:
-    bool operator==(const SharedResource& v) const { return id == v.id; }
-    bool operator!=(const SharedResource& v) const { return id != v.id; }
-    bool operator<(const SharedResource& v) const { return id < v.id; }
-
-protected:
-    static uint64_t newID()
-    {
-        static uint64_t s_id;
-        return ++s_id;
-    }
-
-    uint64_t id = newID();
-};
 
 
 struct BoneWeight1
@@ -175,6 +164,7 @@ public:
 
     MeshData();
     ~MeshData();
+    void release();
     bool valid() const;
 };
 using MeshDataPtr = ref_ptr<MeshData>;
@@ -192,6 +182,7 @@ public:
 
     MeshInstanceData();
     ~MeshInstanceData();
+    void release();
     bool valid() const;
     bool isUpdated(UpdateFlag v) const;
     void markUpdated(UpdateFlag v);
@@ -229,7 +220,19 @@ public:
 
     RenderTargetData();
     ~RenderTargetData();
+    void release();
 };
 using RenderTargetDataPtr = ref_ptr<RenderTargetData>;
+
+
+
+template<class T>
+inline void ExternalRelease(T *self)
+{
+    if (GetGlobals().deferred_initilization)
+        AddDeferredCommand([self]() { self->internalRelease(); });
+    else
+        self->internalRelease();
+}
 
 } // namespace rths

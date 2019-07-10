@@ -9,9 +9,8 @@ namespace rths {
 class RendererDXR : public RendererBase
 {
 public:
-    RendererDXR(bool deferred);
+    RendererDXR();
     ~RendererDXR() override;
-    void release() override;
     void setName(const std::string& name) override;
 
     bool initialized() const override;
@@ -27,20 +26,18 @@ public:
 
 private:
     RenderDataDXR m_render_data;
-    bool m_deferred = false;
     bool m_is_initialized = false;
 };
 
 
-RendererDXR::RendererDXR(bool deferred)
-    : m_deferred(deferred)
+RendererDXR::RendererDXR()
 {
     auto do_init = [this]() {
         GfxContextDXR::initializeInstance();
         m_is_initialized = true;
     };
 
-    if (m_deferred)
+    if (GetGlobals().deferred_initilization)
         AddDeferredCommand(do_init);
     else
         do_init();
@@ -49,18 +46,6 @@ RendererDXR::RendererDXR(bool deferred)
 RendererDXR::~RendererDXR()
 {
     GfxContextDXR::finalizeInstance();
-}
-
-void RendererDXR::release()
-{
-    auto do_release = [this]() {
-        delete this;
-    };
-
-    if (m_deferred)
-        AddDeferredCommand(do_release);
-    else
-        do_release();
 }
 
 void RendererDXR::setName(const std::string& name)
@@ -147,11 +132,11 @@ void* RendererDXR::getRenderTexturePtr()
     return nullptr;
 }
 
-IRenderer* CreateRendererDXR(bool deferred)
+IRenderer* CreateRendererDXR()
 {
-    auto ret = new RendererDXR(deferred);
-    if (!deferred && !ret->valid()) {
-        delete ret;
+    auto ret = new RendererDXR();
+    if (ret->initialized() && !ret->valid()) {
+        ret->release();
         ret = nullptr;
     }
     return ret;
@@ -163,7 +148,7 @@ IRenderer* CreateRendererDXR(bool deferred)
 
 namespace rths {
 
-IRenderer* CreateRendererDXR(bool deferred)
+IRenderer* CreateRendererDXR()
 {
     return nullptr;
 }

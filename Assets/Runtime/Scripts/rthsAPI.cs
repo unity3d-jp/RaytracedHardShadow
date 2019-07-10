@@ -139,6 +139,7 @@ namespace UTJ.RaytracedHardShadow
         {
             rthsMeshRelease(self);
             self = IntPtr.Zero;
+            rthsRenderer.IssueFlushDeferredCommands();
         }
 
         public void SetGPUBuffers(IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset)
@@ -229,6 +230,7 @@ namespace UTJ.RaytracedHardShadow
         {
             rthsMeshInstanceRelease(self);
             self = IntPtr.Zero;
+            rthsRenderer.IssueFlushDeferredCommands();
         }
 
         public void SetTransform(Matrix4x4 transform)
@@ -323,6 +325,7 @@ namespace UTJ.RaytracedHardShadow
         {
             rthsRenderTargetRelease(self);
             self = IntPtr.Zero;
+            rthsRenderer.IssueFlushDeferredCommands();
         }
 
         public void Setup(IntPtr GPUTexture)
@@ -340,8 +343,7 @@ namespace UTJ.RaytracedHardShadow
     {
         #region internal
         public IntPtr self;
-        [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
-        [DllImport("rths")] static extern IntPtr rthsRendererCreate(byte deferred);
+        [DllImport("rths")] static extern IntPtr rthsRendererCreate();
         [DllImport("rths")] static extern void rthsRendererRelease(IntPtr self);
         [DllImport("rths")] static extern byte rthsRendererIsInitialized(IntPtr self);
         [DllImport("rths")] static extern byte rthsRendererIsValid(IntPtr self);
@@ -361,6 +363,8 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRendererAddGeometry(IntPtr self, rthsMeshInstanceData mesh, rthsHitMask rmask, rthsHitMask cmask);
         [DllImport("rths")] static extern IntPtr rthsRendererGetTimestampLog(IntPtr self);
 
+        [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
+        [DllImport("rths")] static extern void rthsGlobalsSetDeferredInitialization(byte v);
         [DllImport("rths")] static extern IntPtr rthsGetFlushDeferredCommands();
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
         #endregion
@@ -393,7 +397,8 @@ namespace UTJ.RaytracedHardShadow
 
         public static rthsRenderer Create()
         {
-            var ret = new rthsRenderer { self = rthsRendererCreate(1) };
+            rthsGlobalsSetDeferredInitialization(1);
+            var ret = new rthsRenderer { self = rthsRendererCreate() };
             IssueFlushDeferredCommands();
             return ret;
         }
@@ -485,7 +490,7 @@ namespace UTJ.RaytracedHardShadow
             rthsRendererAddGeometry(self, mesh, rmask, cmask);
         }
 
-        static void IssueFlushDeferredCommands()
+        public static void IssueFlushDeferredCommands()
         {
             GL.IssuePluginEvent(rthsGetFlushDeferredCommands(), 0);
         }
