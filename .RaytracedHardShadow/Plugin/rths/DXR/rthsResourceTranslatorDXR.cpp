@@ -19,6 +19,7 @@ public:
     ~D3D11ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
+    virtual uint64_t insertSignal() override;
 
     TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) override;
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
@@ -43,6 +44,7 @@ public:
     ~D3D12ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
+    virtual uint64_t insertSignal() override;
 
     TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) override;
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
@@ -114,6 +116,13 @@ ID3D12FencePtr D3D11ResourceTranslator::getFence(ID3D12Device *dxr_device)
         hr = dxr_device->OpenSharedHandle(hfence, IID_PPV_ARGS(&ret));
     }
     return ret;
+}
+
+uint64_t D3D11ResourceTranslator::insertSignal()
+{
+    auto fv = GfxContextDXR::getInstance()->incrementFenceValue();
+    m_host_context->Signal(m_fence, fv);
+    return fv;
 }
 
 
@@ -198,7 +207,7 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     HRESULT hr = m_host_device->CreateBuffer(&tmp_desc, nullptr, &ret->temporary_d3d11);
     if (SUCCEEDED(hr)) {
         // copy contents to temporary
-        copyResource(ret->temporary_d3d11, buf_host, true);
+        m_host_context->CopyResource(ret->temporary_d3d11, buf_host);
 
         // translate temporary as d3d12 resource
         IDXGIResourcePtr ires;
@@ -242,6 +251,12 @@ D3D12ResourceTranslator::~D3D12ResourceTranslator()
 ID3D12FencePtr D3D12ResourceTranslator::getFence(ID3D12Device *dxr_device)
 {
     return m_fence;
+}
+
+uint64_t D3D12ResourceTranslator::insertSignal()
+{
+    // on d3d12 this can be skipped because no copy is needed for vertex buffers
+    return 0;
 }
 
 TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(GPUResourcePtr ptr)

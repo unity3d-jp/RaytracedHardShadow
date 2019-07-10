@@ -364,7 +364,7 @@ uint64_t DeformerDXR::flush(RenderDataDXR& rd)
 #endif
     rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform end");
     rd.cl_deform->Close();
-    auto ret = GfxContextDXR::getInstance()->submitComputeCommandList(rd.cl_deform);
+    auto ret = GfxContextDXR::getInstance()->submitComputeCommandList(rd.cl_deform, rd.fv_translate);
     rd.cl_deform = nullptr;
     return ret;
 }

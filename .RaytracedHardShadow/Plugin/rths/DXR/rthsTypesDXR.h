@@ -293,7 +293,7 @@ public:
     ID3D12ResourcePtr instance_data;
     RenderTargetDataDXRPtr render_target;
 
-    uint64_t fv_deform = 0, fv_blas = 0, fv_tlas = 0, fv_rays = 0;
+    uint64_t fv_translate = 0, fv_deform = 0, fv_blas = 0, fv_tlas = 0, fv_rays = 0;
     FenceEventDXR fence_event;
     int render_flags = 0;
     int max_parallel_command_lists = 8;

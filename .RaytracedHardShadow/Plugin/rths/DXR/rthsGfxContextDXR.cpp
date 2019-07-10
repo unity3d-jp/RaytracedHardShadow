@@ -473,7 +473,7 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
     rthsTimestampSetEnable(rd.timestamp, rd.hasFlag(RenderFlag::DbgTimestamp));
 
     // reset fence values
-    rd.fv_deform = rd.fv_blas = rd.fv_tlas = rd.fv_rays = 0;
+    rd.fv_translate = rd.fv_deform = rd.fv_blas = rd.fv_tlas = rd.fv_rays = 0;
 
     if (m_fv_last_rays != 0) {
         // wait for complete previous renderer's DispatchRays() because there may be dependencies. (e.g. building BLAS)
@@ -638,10 +638,6 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     };
 
     int task_granularity = ceildiv((int)geoms.size(), rd.max_parallel_command_lists);
-    bool gpu_skinning = rd.hasFlag(RenderFlag::GPUSkinning) && m_deformer;
-    if (gpu_skinning)
-        m_deformer->prepare(rd);
-    int deform_count = 0;
     rd.geometries.clear();
 
     bool needs_build_tlas = false;
@@ -720,14 +716,27 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             inst_dxr->base = inst;
             inst_dxr->mesh = mesh_dxr;
         }
-        if (gpu_skinning) {
-            if (m_deformer->deform(rd, *inst_dxr))
-                ++deform_count;
-        }
         rd.geometries.push_back({ inst_dxr, geom.receive_mask, geom.cast_mask });
     }
-    if (gpu_skinning)
+    if (translated_gpu_buffer_count > 0) {
+        // fence for complete buffer copy
+        rd.fv_translate = m_resource_translator->insertSignal();
+    }
+
+    // deform
+    bool gpu_skinning = rd.hasFlag(RenderFlag::GPUSkinning) && m_deformer;
+    if (gpu_skinning) {
+        int deform_count = 0;
+        m_deformer->prepare(rd);
+        for (auto& geom_dxr : rd.geometries) {
+            if (m_deformer->deform(rd, *geom_dxr.inst))
+                ++deform_count;
+        }
         m_deformer->flush(rd);
+    }
+    else {
+        rd.fv_deform = rd.fv_translate;
+    }
 
 
     // build BLAS
