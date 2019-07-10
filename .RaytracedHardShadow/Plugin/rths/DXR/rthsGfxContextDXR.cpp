@@ -70,7 +70,7 @@ const D3D12_HEAP_PROPERTIES kReadbackHeapProps =
 
 
 
-static int g_gfx_initialize_count = 0;
+static std::atomic_int g_gfx_initialize_count{ 0 };
 static std::unique_ptr<GfxContextDXR> g_gfx_context;
 
 bool GfxContextDXR::initializeInstance()

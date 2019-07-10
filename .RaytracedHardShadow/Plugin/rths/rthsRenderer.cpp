@@ -5,33 +5,51 @@
 namespace rths {
 
 static std::vector<ISceneCallback*> g_scene_callbacks;
+static std::mutex g_mutex_scene_callbacks;
+
+template<class Body>
+inline void SceneCallbacksLock(const Body& body)
+{
+    std::unique_lock<std::mutex> l(g_mutex_scene_callbacks);
+    body();
+}
 
 void CallOnMeshDelete(MeshData *mesh)
 {
-    for (auto& cb : g_scene_callbacks)
-        cb->onMeshDelete(mesh);
+    SceneCallbacksLock([mesh]() {
+        for (auto& cb : g_scene_callbacks)
+            cb->onMeshDelete(mesh);
+    });
 }
 
 void CallOnMeshInstanceDelete(MeshInstanceData *inst)
 {
-    for (auto& cb : g_scene_callbacks)
-        cb->onMeshInstanceDelete(inst);
+    SceneCallbacksLock([inst]() {
+        for (auto& cb : g_scene_callbacks)
+            cb->onMeshInstanceDelete(inst);
+    });
 }
 
 void CallOnRenderTargetDelete(RenderTargetData *rt)
 {
-    for (auto& cb : g_scene_callbacks)
-        cb->onRenderTargetDelete(rt);
+    SceneCallbacksLock([rt]() {
+        for (auto& cb : g_scene_callbacks)
+            cb->onRenderTargetDelete(rt);
+    });
 }
 
 ISceneCallback::ISceneCallback()
 {
-    g_scene_callbacks.push_back(this);
+    SceneCallbacksLock([this]() {
+        g_scene_callbacks.push_back(this);
+    });
 }
 
 ISceneCallback::~ISceneCallback()
 {
-    g_scene_callbacks.erase(std::find(g_scene_callbacks.begin(), g_scene_callbacks.end(), this));
+    SceneCallbacksLock([this]() {
+        g_scene_callbacks.erase(std::find(g_scene_callbacks.begin(), g_scene_callbacks.end(), this));
+    });
 }
 
 
@@ -40,12 +58,16 @@ static std::vector<RendererBase*> g_renderers;
 RendererBase::RendererBase()
     : ref_count(this)
 {
-    g_renderers.push_back(this);
+    SceneCallbacksLock([this]() {
+        g_renderers.push_back(this);
+    });
 }
 
 RendererBase::~RendererBase()
 {
-    g_renderers.erase(std::find(g_renderers.begin(), g_renderers.end(), this));
+    SceneCallbacksLock([this]() {
+        g_renderers.erase(std::find(g_renderers.begin(), g_renderers.end(), this));
+    });
 }
 
 void RendererBase::release()
@@ -190,7 +212,7 @@ void RendererBase::clearMeshInstances()
 }
 
 
-void MarkFrameBegin()
+static inline void MarkFrameBeginImpl()
 {
     for (auto *cb : g_scene_callbacks)
         cb->frameBegin();
@@ -198,7 +220,7 @@ void MarkFrameBegin()
         renderer->frameBegin();
 }
 
-void MarkFrameEnd()
+static inline void MarkFrameEndImpl()
 {
     for (auto renderer : g_renderers)
         renderer->frameEnd();
@@ -206,14 +228,30 @@ void MarkFrameEnd()
         cb->frameEnd();
 }
 
+void MarkFrameBegin()
+{
+    SceneCallbacksLock([]() {
+        MarkFrameBeginImpl();
+    });
+}
+
+void MarkFrameEnd()
+{
+    SceneCallbacksLock([]() {
+        MarkFrameEndImpl();
+    });
+}
+
 void RenderAll()
 {
-    MarkFrameBegin();
-    for (auto renderer : g_renderers)
-        renderer->render();
-    for (auto renderer : g_renderers)
-        renderer->finish();
-    MarkFrameEnd();
+    SceneCallbacksLock([]() {
+        MarkFrameBeginImpl();
+        for (auto renderer : g_renderers)
+            renderer->render();
+        for (auto renderer : g_renderers)
+            renderer->finish();
+        MarkFrameEndImpl();
+    });
 }
 
 } // namespace rths
