@@ -64,6 +64,7 @@ namespace UTJ.RaytracedHardShadow
                 Release();
 
                 meshData = rthsMeshData.Create();
+                meshData.name = mesh.name;
                 meshData.SetGPUBuffers(mesh);
                 meshData.SetBindpose(mesh.bindposes);
 #if UNITY_2019_1_OR_NEWER
@@ -105,19 +106,22 @@ namespace UTJ.RaytracedHardShadow
             public rthsMeshData meshData;
             public int useCount;
 
-            public void Update(rthsMeshData md, Matrix4x4 trans)
+            public void Update(rthsMeshData md, Matrix4x4 trans, GameObject go)
             {
                 if (instData && meshData != md)
                     instData.Release();
                 meshData = md;
                 if (!instData)
+                {
                     instData = rthsMeshInstanceData.Create(md);
+                    instData.name = go.name;
+                }
                 instData.SetTransform(trans);
             }
 
             public void Update(rthsMeshData md, MeshRenderer mr)
             {
-                Update(md, mr.localToWorldMatrix);
+                Update(md, mr.localToWorldMatrix, mr.gameObject);
             }
 
             public void Update(rthsMeshData md, SkinnedMeshRenderer smr)
@@ -128,13 +132,13 @@ namespace UTJ.RaytracedHardShadow
                     // skinned
                     var rootBone = smr.rootBone;
                     var rootMatrix = rootBone != null ? rootBone.localToWorldMatrix : Matrix4x4.identity;
-                    Update(md, rootMatrix);
+                    Update(md, rootMatrix, smr.gameObject);
                     instData.SetBones(bones);
                 }
                 else
                 {
                     // non-skinned
-                    Update(md, smr.localToWorldMatrix);
+                    Update(md, smr.localToWorldMatrix, smr.gameObject);
                 }
                 instData.SetBlendshapeWeights(smr);
             }
@@ -168,6 +172,7 @@ namespace UTJ.RaytracedHardShadow
                 if (!rtData)
                 {
                     rtData = rthsRenderTarget.Create();
+                    rtData.name = rtex.name;
                     rtData.Setup(ptr);
                     nativeTexturePtr = ptr;
                 }
@@ -618,7 +623,7 @@ namespace UTJ.RaytracedHardShadow
             bool requireBake = cloth != null || (!m_GPUSkinning && (smr.rootBone != null || smr.sharedMesh.blendShapeCount != 0));
             if (requireBake)
             {
-                rec.Update(GetBakedMeshData(smr), smr.localToWorldMatrix);
+                rec.Update(GetBakedMeshData(smr), smr.localToWorldMatrix, smr.gameObject);
             }
             else
             {
