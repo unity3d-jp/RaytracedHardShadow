@@ -195,6 +195,9 @@ bool GfxContextDXR::initialize()
         SetErrorLog("DXR is not supported on this system");
         return false;
     }
+#ifdef rthsEnableD3D12StablePowerState
+    m_device->SetStablePowerState(TRUE);
+#endif
 
 
     // resource translator (null if there is no host device)
