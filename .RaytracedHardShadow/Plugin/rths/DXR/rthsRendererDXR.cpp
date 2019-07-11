@@ -26,7 +26,7 @@ public:
 
 private:
     RenderDataDXR m_render_data;
-    bool m_is_initialized = false;
+    std::atomic_bool m_is_initialized{ false };
 };
 
 

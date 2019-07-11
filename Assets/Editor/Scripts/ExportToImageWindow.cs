@@ -7,7 +7,7 @@ namespace UTJ.RaytracedHardShadowEditor
     public class ExportToImageWindow : EditorWindow
     {
         ShadowRaytracer m_raytracer;
-        ShadowRaytracer.ImageFormat m_format = ShadowRaytracer.ImageFormat.PNG;
+        static ShadowRaytracer.ImageFormat m_format = ShadowRaytracer.ImageFormat.PNG; // static to keep last selection
         string m_path;
 
         public static void Open(ShadowRaytracer sr)

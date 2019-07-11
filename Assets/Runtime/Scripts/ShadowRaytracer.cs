@@ -846,14 +846,14 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        void InitializeRenderer()
+        bool InitializeRenderer(bool wait = false, double timeoutInSeconds = 3.0)
         {
             if (m_initialized)
-                return;
+                return m_renderer;
 #if UNITY_EDITOR
             // initializing renderer can interfere GI baking. so wait until it is completed.
             if (Lightmapping.isRunning)
-                return;
+                return false;
 #endif
 
             if (!m_renderer)
@@ -862,6 +862,23 @@ namespace UTJ.RaytracedHardShadow
                 m_renderer.name = gameObject.name;
                 if (m_dbgVerboseLog)
                     Debug.Log(String.Format("Initializing Renderer start ({0}f)", Time.frameCount));
+            }
+
+            // actual initialization (create d3d12 device if needed and initialize GPU resources) is done in render thread.
+            // wait for complete actual initialization if 'wait' is true.
+            if (wait)
+            {
+                var freq = System.Diagnostics.Stopwatch.Frequency;
+                var timeout = (long)(timeoutInSeconds * freq);
+                var start = System.Diagnostics.Stopwatch.GetTimestamp();
+                while (!m_renderer.initialized && (System.Diagnostics.Stopwatch.GetTimestamp() - start) < timeout)
+                    System.Threading.Thread.Sleep(10);
+                if (m_dbgVerboseLog)
+                {
+                    var elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - start;
+                    var elapsedMS = (double)elapsed / freq * 1000.0;
+                    Debug.Log(String.Format("{0}ms waited", elapsedMS));
+                }
             }
 
             if (m_renderer.initialized)
@@ -889,6 +906,7 @@ namespace UTJ.RaytracedHardShadow
                     this.enabled = false;
                 }
             }
+            return m_renderer;
         }
 
         void FinalizeRenderer()
@@ -1139,12 +1157,18 @@ namespace UTJ.RaytracedHardShadow
         void OnValidate()
         {
             UpdateScenePaths();
+
+            if (EditorApplication.isPlaying && EditorApplication.isPaused)
+            {
+                if (InitializeRenderer(true) && Render())
+                    rthsRenderer.IssueRender();
+            }
         }
 #endif
 
         void OnEnable()
         {
-            InitializeRenderer();
+            InitializeRenderer(true);
         }
 
         void OnDisable()
