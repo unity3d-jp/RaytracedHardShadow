@@ -35,7 +35,7 @@ rthsAPI bool rthsMeshIsRelocated(MeshData *self)
 {
     if (!self)
         return false;
-    self->isRelocated();
+    return self->isRelocated();
 }
 
 rthsAPI void rthsMeshSetName(rths::MeshData *self, const char *name)

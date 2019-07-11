@@ -85,6 +85,7 @@ protected:
 
     int m_update_count = 0;
     int m_render_count = 0;
+    int m_skip_count = 0;
 
 private:
     std::vector<GeometryData> m_geometries_tmp;

@@ -175,7 +175,6 @@ namespace UTJ.RaytracedHardShadow
                 if (!rtex.IsCreated())
                     rtex.Create();
 
-                var ptr = rtex.GetNativeTexturePtr();
                 if (rtData)
                 {
                     if (rtData.isRelocated)
@@ -189,7 +188,7 @@ namespace UTJ.RaytracedHardShadow
                 {
                     rtData = rthsRenderTarget.Create();
                     rtData.name = rtex.name;
-                    rtData.Setup(ptr);
+                    rtData.Setup(rtex.GetNativeTexturePtr());
                 }
             }
 
