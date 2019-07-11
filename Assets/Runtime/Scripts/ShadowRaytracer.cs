@@ -54,29 +54,25 @@ namespace UTJ.RaytracedHardShadow
         {
             public rthsMeshData meshData;
             public Mesh bakedMesh;
-            public IntPtr nativeVBPtr, nativeIBPtr;
 
             public int useCount;
 
             public void Update(Mesh mesh)
             {
-                var vb = mesh.GetNativeVertexBufferPtr(0);
-                var ib = mesh.GetNativeIndexBufferPtr();
                 bool markDynamic = bakedMesh != null;
 
                 if (meshData)
                 {
-                    if (nativeVBPtr != vb || nativeIBPtr != ib)
+                    if (meshData.isRelocated)
                     {
                         Release();
+                        if (s_dbgVerboseLog)
+                            Debug.Log(String.Format("Relocated Mesh \"{0}\"\n", mesh.name));
                         markDynamic = true;
                     }
                 }
                 if (!meshData)
                 {
-                    nativeVBPtr = vb;
-                    nativeIBPtr = ib;
-
                     meshData = rthsMeshData.Create();
                     meshData.name = mesh.name;
                     if (markDynamic)
@@ -171,7 +167,6 @@ namespace UTJ.RaytracedHardShadow
         public class RenderTargetRecord
         {
             public rthsRenderTarget rtData;
-            public IntPtr nativeTexturePtr;
 
             public int useCount;
 
@@ -180,18 +175,20 @@ namespace UTJ.RaytracedHardShadow
                 if (!rtex.IsCreated())
                     rtex.Create();
 
-                var ptr = rtex.GetNativeTexturePtr();
                 if (rtData)
                 {
-                    if (nativeTexturePtr != ptr)
+                    if (rtData.isRelocated)
+                    {
                         rtData.Release();
+                        if (s_dbgVerboseLog)
+                            Debug.Log(String.Format("Relocated RenderTexture \"{0}\"\n", rtex.name));
+                    }
                 }
                 if (!rtData)
                 {
                     rtData = rthsRenderTarget.Create();
                     rtData.name = rtex.name;
-                    rtData.Setup(ptr);
-                    nativeTexturePtr = ptr;
+                    rtData.Setup(rtex.GetNativeTexturePtr());
                 }
             }
 
@@ -250,11 +247,13 @@ namespace UTJ.RaytracedHardShadow
 
         [SerializeField] bool m_dbgTimestamp = false;
         [SerializeField] bool m_dbgForceUpdateAS = false;
+        [SerializeField] bool m_dbgVerboseLog = false;
 
 #if UNITY_EDITOR
 #pragma warning disable CS0414
         [SerializeField] bool m_foldDebug = false;
 #pragma warning restore CS0414 
+        bool m_isCompiling = false;
 #endif
 
         rthsRenderer m_renderer;
@@ -262,6 +261,7 @@ namespace UTJ.RaytracedHardShadow
         List<ExportRequest> m_exportRequests;
 
         static int s_instanceCount, s_updateCount;
+        static bool s_dbgVerboseLog = false;
         static Dictionary<Mesh, MeshRecord> s_meshDataCache;
         static Dictionary<Component, MeshRecord> s_bakedMeshDataCache;
         static Dictionary<Component, MeshInstanceRecord> s_meshInstDataCache;
@@ -473,6 +473,13 @@ namespace UTJ.RaytracedHardShadow
             if (path == null || path.Length == 0)
                 return;
 
+#if UNITY_EDITOR
+            if (EditorApplication.isPlaying && EditorApplication.isPaused)
+            {
+                if (Render())
+                    rthsRenderer.IssueRender();
+            }
+#endif
             if (m_exportRequests == null)
                 m_exportRequests = new List<ExportRequest>();
             m_exportRequests.Add(new ExportRequest { path = path, format = format });
@@ -507,9 +514,15 @@ namespace UTJ.RaytracedHardShadow
 
         static void ClearBakedMeshRecords()
         {
-            foreach (var rec in s_bakedMeshDataCache)
-                rec.Value.meshData.Release();
-            s_bakedMeshDataCache.Clear();
+            if (s_bakedMeshDataCache.Count != 0)
+            {
+                foreach (var rec in s_bakedMeshDataCache)
+                    rec.Value.meshData.Release();
+
+                if (s_dbgVerboseLog)
+                    Debug.Log(String.Format("{0} MeshData (baked meshes) erased\n", s_bakedMeshDataCache.Count));
+                s_bakedMeshDataCache.Clear();
+            }
         }
 
         static List<Mesh> s_meshesToErase;
@@ -528,13 +541,19 @@ namespace UTJ.RaytracedHardShadow
                         s_meshesToErase.Add(rec.Key);
                     rec.Value.useCount = 0;
                 }
-                foreach(var k in s_meshesToErase)
+                if (s_meshesToErase.Count != 0)
                 {
-                    var rec = s_meshDataCache[k];
-                    rec.Release();
-                    s_meshDataCache.Remove(k);
+                    foreach (var k in s_meshesToErase)
+                    {
+                        var rec = s_meshDataCache[k];
+                        rec.Release();
+                        s_meshDataCache.Remove(k);
+                    }
+
+                    if (s_dbgVerboseLog)
+                        Debug.Log(String.Format("{0} MeshData erased\n", s_meshesToErase.Count));
+                    s_meshesToErase.Clear();
                 }
-                s_meshesToErase.Clear();
             }
 
             // mesh instance data
@@ -547,13 +566,19 @@ namespace UTJ.RaytracedHardShadow
                         s_instToErase.Add(rec.Key);
                     rec.Value.useCount = 0;
                 }
-                foreach (var k in s_instToErase)
+                if (s_instToErase.Count != 0)
                 {
-                    var rec = s_meshInstDataCache[k];
-                    rec.Release();
-                    s_meshInstDataCache.Remove(k);
+                    foreach (var k in s_instToErase)
+                    {
+                        var rec = s_meshInstDataCache[k];
+                        rec.Release();
+                        s_meshInstDataCache.Remove(k);
+                    }
+
+                    if (s_dbgVerboseLog)
+                        Debug.Log(String.Format("{0} MeshInstanceData erased\n", s_instToErase.Count));
+                    s_instToErase.Clear();
                 }
-                s_instToErase.Clear();
             }
 
             // render target data
@@ -566,13 +591,19 @@ namespace UTJ.RaytracedHardShadow
                         s_rtToErase.Add(rec.Key);
                     rec.Value.useCount = 0;
                 }
-                foreach (var k in s_rtToErase)
+                if (s_rtToErase.Count != 0)
                 {
-                    var rec = s_renderTargetCache[k];
-                    rec.Release();
-                    s_renderTargetCache.Remove(k);
+                    foreach (var k in s_rtToErase)
+                    {
+                        var rec = s_renderTargetCache[k];
+                        rec.Release();
+                        s_renderTargetCache.Remove(k);
+                    }
+
+                    if (s_dbgVerboseLog)
+                        Debug.Log(String.Format("{0} RenderTargetData erased\n", s_rtToErase.Count));
+                    s_rtToErase.Clear();
                 }
-                s_rtToErase.Clear();
             }
         }
 
@@ -751,7 +782,8 @@ namespace UTJ.RaytracedHardShadow
                 }
             };
 
-            Action<string[], rthsHitMask, rthsHitMask> processScenes = (scenePaths, rmask, cmask) => {
+            Action<string[], rthsHitMask, rthsHitMask> processScenes = (scenePaths, rmask, cmask) =>
+            {
                 foreach (var scenePath in scenePaths)
                 {
                     if (scenePath == null || scenePath.Length == 0)
@@ -828,11 +860,14 @@ namespace UTJ.RaytracedHardShadow
             {
                 m_renderer = rthsRenderer.Create();
                 m_renderer.name = gameObject.name;
-                //Debug.Log("Create: " + m_renderer.self);
+                if (m_dbgVerboseLog)
+                    Debug.Log(String.Format("Initializing Renderer start ({0}f)", Time.frameCount));
             }
 
             if (m_renderer.initialized)
             {
+                if (m_dbgVerboseLog)
+                    Debug.Log(String.Format("Initializing Renderer finish ({0}f)", Time.frameCount));
                 m_initialized = true;
                 if (m_renderer.valid)
                 {
@@ -850,10 +885,124 @@ namespace UTJ.RaytracedHardShadow
                 {
                     m_renderer.Release();
 
-                    Debug.LogError("ShadowRaytracer: Initialization failed - " + rthsRenderer.errorLog);
+                    Debug.LogError("ShadowRaytracer: Initialization failed - " + rthsGlobals.errorLog);
                     this.enabled = false;
                 }
             }
+        }
+
+        void FinalizeRenderer()
+        {
+            if (m_initialized && m_renderer.valid)
+            {
+                --s_instanceCount;
+                if (s_instanceCount == 0)
+                {
+                    s_dbgVerboseLog = m_dbgVerboseLog;
+                    ClearAllCacheRecords();
+                }
+            }
+            if (m_renderer)
+            {
+                //Debug.Log("Release: " + m_renderer.self);
+                m_renderer.Release();
+            }
+            m_initialized = false;
+            if (m_dbgVerboseLog)
+                Debug.Log(String.Format("Finalize Renderer ({0}f)", Time.frameCount));
+        }
+
+        bool Render()
+        {
+            if (!m_initialized || !m_renderer)
+                return false;
+
+            var cam = GetComponent<Camera>();
+            if (cam == null)
+                return false;
+
+            if (m_generateRenderTexture)
+            {
+                var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
+                if (m_outputTexture != null && (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y))
+                {
+                    // resolution was changed. release existing RenderTexture
+#if UNITY_EDITOR
+                    if (!AssetDatabase.Contains(m_outputTexture))
+#endif
+                    {
+                        DestroyImmediate(m_outputTexture);
+                    }
+                    m_outputTexture = null;
+                }
+                if (m_outputTexture == null)
+                {
+                    m_outputTexture = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RHalf);
+                    m_outputTexture.name = "RaytracedHardShadow";
+                    m_outputTexture.enableRandomWrite = true; // enable unordered access
+                    m_outputTexture.Create();
+                    if (m_assignGlobalTexture)
+                        Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+                }
+            }
+            else if (m_outputTexture != null)
+            {
+                if (m_assignGlobalTexture)
+                    Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+            }
+
+            if (m_outputTexture == null)
+                return false;
+
+            {
+                rthsRenderFlag flags = 0;
+                if (m_cullBackFaces)
+                    flags |= rthsRenderFlag.CullBackFaces;
+                if (m_flipCasterFaces)
+                    flags |= rthsRenderFlag.FlipCasterFaces;
+                if (m_ignoreSelfShadow)
+                    flags |= rthsRenderFlag.IgnoreSelfShadow;
+                if (m_keepSelfDropShadow)
+                    flags |= rthsRenderFlag.KeepSelfDropShadow;
+                if (m_GPUSkinning)
+                    flags |= rthsRenderFlag.GPUSkinning;
+                if (m_adaptiveSampling)
+                    flags |= rthsRenderFlag.AdaptiveSampling;
+                if (m_antialiasing)
+                    flags |= rthsRenderFlag.Antialiasing;
+                if (m_parallelCommandList)
+                    flags |= rthsRenderFlag.ParallelCommandList;
+                if (m_clampBlendshapeWeights)
+                    flags |= rthsRenderFlag.ClampBlendShapeWights;
+                if (m_dbgTimestamp)
+                    flags |= rthsRenderFlag.DbgTimestamp;
+                if (m_dbgForceUpdateAS)
+                    flags |= rthsRenderFlag.DbgForceUpdateAS;
+
+                m_renderer.BeginScene();
+                try
+                {
+                    m_renderer.SetRaytraceFlags(flags);
+                    m_renderer.SetShadowRayOffset(m_ignoreSelfShadow ? 0.0f : m_shadowRayOffset);
+                    m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
+                    m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
+                    m_renderer.SetCamera(cam);
+                    EnumerateLights(
+                        l => { m_renderer.AddLight(l); },
+                        scl => { m_renderer.AddLight(scl); }
+                    );
+                    EnumerateMeshRenderers(
+                        (mr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(mr), rmask, cmask); },
+                        (smr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(smr), rmask, cmask); }
+                    );
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e);
+                }
+                m_renderer.EndScene();
+            }
+            return true;
         }
 
         static Material s_matBlit;
@@ -1000,24 +1149,26 @@ namespace UTJ.RaytracedHardShadow
 
         void OnDisable()
         {
-            if (m_initialized && m_renderer.valid)
-            {
-                --s_instanceCount;
-                if (s_instanceCount == 0)
-                    ClearAllCacheRecords();
-            }
-            if (m_renderer)
-            {
-                //Debug.Log("Release: " + m_renderer.self);
-                m_renderer.Release();
-            }
-            m_initialized = false;
+            FinalizeRenderer();
         }
 
         void Update()
         {
 #if UNITY_EDITOR && UNITY_2018_3_OR_NEWER
             m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
+#endif
+#if UNITY_EDITOR
+            if (EditorApplication.isCompiling && !m_isCompiling)
+            {
+                // on compile begin
+                m_isCompiling = true;
+                FinalizeRenderer();
+            }
+            else if (!EditorApplication.isCompiling && m_isCompiling)
+            {
+                // on compile end
+                m_isCompiling = false;
+            }
 #endif
             InitializeRenderer();
             if (!m_initialized || !m_renderer)
@@ -1027,6 +1178,7 @@ namespace UTJ.RaytracedHardShadow
             if (s_updateCount != 0)
             {
                 s_updateCount = 0;
+                s_dbgVerboseLog = m_dbgVerboseLog;
                 ClearBakedMeshRecords();
                 EraseUnusedMeshRecords();
             }
@@ -1034,87 +1186,8 @@ namespace UTJ.RaytracedHardShadow
 
         void LateUpdate()
         {
-            if (!m_initialized || !m_renderer)
+            if (!Render())
                 return;
-
-            var cam = GetComponent<Camera>();
-            if (cam == null)
-                return;
-
-            if (m_generateRenderTexture)
-            {
-                var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
-                if (m_outputTexture != null && (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y))
-                {
-                    // resolution was changed. release existing RenderTexture
-#if UNITY_EDITOR
-                    if (!AssetDatabase.Contains(m_outputTexture))
-#endif
-                    {
-                        DestroyImmediate(m_outputTexture);
-                    }
-                    m_outputTexture = null;
-                }
-                if (m_outputTexture == null)
-                {
-                    m_outputTexture = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RHalf);
-                    m_outputTexture.name = "RaytracedHardShadow";
-                    m_outputTexture.enableRandomWrite = true; // enable unordered access
-                    m_outputTexture.Create();
-                    if (m_assignGlobalTexture)
-                        Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
-                }
-            }
-            else if (m_outputTexture != null)
-            {
-                if (m_assignGlobalTexture)
-                    Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
-            }
-
-            if (m_outputTexture == null)
-                return;
-
-            {
-                rthsRenderFlag flags = 0;
-                if (m_cullBackFaces)
-                    flags |= rthsRenderFlag.CullBackFaces;
-                if (m_flipCasterFaces)
-                    flags |= rthsRenderFlag.FlipCasterFaces;
-                if (m_ignoreSelfShadow)
-                    flags |= rthsRenderFlag.IgnoreSelfShadow;
-                if (m_keepSelfDropShadow)
-                    flags |= rthsRenderFlag.KeepSelfDropShadow;
-                if (m_GPUSkinning)
-                    flags |= rthsRenderFlag.GPUSkinning;
-                if (m_adaptiveSampling)
-                    flags |= rthsRenderFlag.AdaptiveSampling;
-                if (m_antialiasing)
-                    flags |= rthsRenderFlag.Antialiasing;
-                if (m_parallelCommandList)
-                    flags |= rthsRenderFlag.ParallelCommandList;
-                if (m_clampBlendshapeWeights)
-                    flags |= rthsRenderFlag.ClampBlendShapeWights;
-                if (m_dbgTimestamp)
-                    flags |= rthsRenderFlag.DbgTimestamp;
-                if (m_dbgForceUpdateAS)
-                    flags |= rthsRenderFlag.DbgForceUpdateAS;
-
-                m_renderer.BeginScene();
-                m_renderer.SetRaytraceFlags(flags);
-                m_renderer.SetShadowRayOffset(m_ignoreSelfShadow ? 0.0f : m_shadowRayOffset);
-                m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
-                m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
-                m_renderer.SetCamera(cam);
-                EnumerateLights(
-                    l => { m_renderer.AddLight(l); },
-                    scl => { m_renderer.AddLight(scl); }
-                    );
-                EnumerateMeshRenderers(
-                    (mr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(mr), rmask, cmask); },
-                    (smr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(smr), rmask, cmask); }
-                    );
-                m_renderer.EndScene();
-            }
 
             if (++s_updateCount == s_instanceCount)
             {

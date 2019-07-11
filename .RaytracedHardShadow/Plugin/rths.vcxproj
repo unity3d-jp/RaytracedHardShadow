@@ -39,6 +39,7 @@
     <ClInclude Include="rths\DXR\rthsGfxContextDXR.h" />
     <ClInclude Include="rths\rthsRenderer.h" />
     <ClInclude Include="rths\DXR\rthsResourceTranslatorDXR.h" />
+    <ClInclude Include="rths\rthsSettings.h" />
     <ClInclude Include="rths\rthsTypes.h" />
     <ClInclude Include="rths\DXR\rthsTypesDXR.h" />
   </ItemGroup>

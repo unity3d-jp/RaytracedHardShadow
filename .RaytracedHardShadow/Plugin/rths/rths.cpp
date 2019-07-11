@@ -6,6 +6,9 @@
 
 using namespace rths;
 
+rthsAPI const char* rthsGetVersion() { return rthsVersion; }
+rthsAPI const char* rthsGetReleaseDate() { return rthsReleaseDate; }
+
 rthsAPI const char* rthsGetErrorLog()
 {
     return GetErrorLog().c_str();
@@ -26,6 +29,13 @@ rthsAPI void rthsMeshRelease(MeshData *self)
     if (!self)
         return;
     self->release();
+}
+
+rthsAPI bool rthsMeshIsRelocated(MeshData *self)
+{
+    if (!self)
+        return false;
+    return self->isRelocated();
 }
 
 rthsAPI void rthsMeshSetName(rths::MeshData *self, const char *name)
@@ -181,7 +191,13 @@ rthsAPI void rthsRenderTargetRelease(RenderTargetData *self)
         return;
     self->release();
 }
-rthsAPI void rthsRenderTargetSetName(rths::RenderTargetData * self, const char *name)
+rthsAPI bool rthsRenderTargetIsRelocated(RenderTargetData *self)
+{
+    if (!self)
+        return false;
+    return self->isRelocated();
+}
+rthsAPI void rthsRenderTargetSetName(RenderTargetData * self, const char *name)
 {
     if (!self)
         return;

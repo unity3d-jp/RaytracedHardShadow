@@ -73,8 +73,7 @@ void RendererDXR::render()
     if (!valid())
         return;
 
-    {
-        std::unique_lock<std::mutex> lock(m_mutex);
+    if (m_mutex.try_lock()) {
         ++m_render_count;
         auto ctx = GfxContextDXR::getInstance();
         ctx->prepare(m_render_data);
@@ -82,6 +81,10 @@ void RendererDXR::render()
         ctx->setRenderTarget(m_render_data, m_render_target);
         ctx->setGeometries(m_render_data, m_geometries);
         ctx->flush(m_render_data);
+        m_mutex.unlock();
+    }
+    else {
+        ++m_skip_count;
     }
 }
 

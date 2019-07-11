@@ -282,6 +282,7 @@ namespace UTJ.RaytracedHardShadowEditor
                 EditorGUI.indentLevel++;
                 EditorGUILayout.PropertyField(so.FindProperty("m_dbgTimestamp"));
                 EditorGUILayout.PropertyField(so.FindProperty("m_dbgForceUpdateAS"));
+                EditorGUILayout.PropertyField(so.FindProperty("m_dbgVerboseLog"));
                 if (t.dbgTimestamp)
                     EditorGUILayout.TextArea(t.timestampLog, GUILayout.Height(80));
                 EditorGUI.indentLevel--;
@@ -292,6 +293,9 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.Space();
             if (GUILayout.Button("Export to image", GUILayout.Width(200)))
                 ExportToImageWindow.Open(t);
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(System.String.Format("Plugin version: {0} ({1})", rthsGlobals.version, rthsGlobals.releaseDate));
         }
     }
 }

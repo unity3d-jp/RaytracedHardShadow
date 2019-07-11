@@ -107,12 +107,15 @@ class IRenderer;
 } // namespace rths
 
 
+rthsAPI const char* rthsGetVersion();
+rthsAPI const char* rthsGetReleaseDate();
 rthsAPI const char* rthsGetErrorLog();
 rthsAPI void rthsGlobalsSetDeferredInitialization(bool v);
 
 // mesh interface
 rthsAPI rths::MeshData* rthsMeshCreate();
 rthsAPI void rthsMeshRelease(rths::MeshData *self);
+rthsAPI bool rthsMeshIsRelocated(rths::MeshData *self);
 rthsAPI void rthsMeshSetName(rths::MeshData *self, const char *name);
 rthsAPI void rthsMeshSetCPUBuffers(rths::MeshData *self, rths::CPUResourcePtr vb, rths::CPUResourcePtr ib,
     int vertex_stride, int vertex_count, int vertex_offset, int index_stride, int index_count, int index_offset);
@@ -136,6 +139,7 @@ rthsAPI void rthsMeshInstanceSetBlendshapeWeights(rths::MeshInstanceData *self, 
 // render target interface
 rthsAPI rths::RenderTargetData* rthsRenderTargetCreate();
 rthsAPI void rthsRenderTargetRelease(rths::RenderTargetData *self);
+rthsAPI bool rthsRenderTargetIsRelocated(rths::RenderTargetData *self);
 rthsAPI void rthsRenderTargetSetName(rths::RenderTargetData *self, const char *name);
 rthsAPI void rthsRenderTargetSetGPUTexture(rths::RenderTargetData *self, rths::GPUResourcePtr tex);
 rthsAPI void rthsRenderTargetSetup(rths::RenderTargetData *self, int width, int height, rths::RenderTargetFormat format);

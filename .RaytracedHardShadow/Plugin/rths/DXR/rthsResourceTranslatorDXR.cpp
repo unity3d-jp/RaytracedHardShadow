@@ -19,11 +19,14 @@ public:
     ~D3D11ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
-    virtual uint64_t insertSignal() override;
+    uint64_t insertSignal() override;
 
     TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) override;
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
     BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
+
+    bool isValidTexture(TextureDataDXR& data) override;
+    bool isValidBuffer(BufferDataDXR& data) override;
 
     uint64_t copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool immediate);
 
@@ -44,11 +47,14 @@ public:
     ~D3D12ResourceTranslator() override;
 
     ID3D12FencePtr getFence(ID3D12Device *dxr_device) override;
-    virtual uint64_t insertSignal() override;
+    uint64_t insertSignal() override;
 
     TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) override;
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
     BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
+
+    bool isValidTexture(TextureDataDXR& data) override;
+    bool isValidBuffer(BufferDataDXR& data) override;
 
 private:
     ID3D12DevicePtr m_host_device;
@@ -131,10 +137,13 @@ TextureDataDXRPtr D3D11ResourceTranslator::createTemporaryTexture(GPUResourcePtr
     auto ret = std::make_shared<TextureDataDXR>();
 
     auto tex_host = (ID3D11Texture2D*)ptr;
+    ret->host_ptr = ptr;
+    ret->host_d3d11 = tex_host;
+    ret->initial_ref = GetRefCount(ret->host_d3d11);
+
     D3D11_TEXTURE2D_DESC src_desc{};
     tex_host->GetDesc(&src_desc);
 
-    ret->texture = ptr;
     ret->width = src_desc.Width;
     ret->height = src_desc.Height;
     ret->format = src_desc.Format;
@@ -182,7 +191,7 @@ uint64_t D3D11ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fenc
 {
     if (src.temporary_d3d11) {
         m_host_context->Wait(m_fence, fence_value);
-        fence_value = copyResource((ID3D11Texture2D*)src.texture, src.temporary_d3d11, false);
+        fence_value = copyResource((ID3D11Texture2D*)src.host_ptr, src.temporary_d3d11, false);
         m_host_context->Signal(m_fence, fence_value);
         return fence_value;
     }
@@ -192,9 +201,12 @@ uint64_t D3D11ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fenc
 BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
 {
     auto ret = std::make_shared<BufferDataDXR>();
-    ret->buffer = ptr;
 
     auto buf_host = (ID3D11Buffer*)ptr;
+    ret->host_ptr = ptr;
+    ret->host_d3d11 = buf_host;
+    ret->initial_ref = GetRefCount(ret->host_d3d11);
+
     D3D11_BUFFER_DESC src_desc{};
     buf_host->GetDesc(&src_desc);
 
@@ -221,6 +233,16 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     return ret;
 }
 
+bool D3D11ResourceTranslator::isValidTexture(TextureDataDXR& data)
+{
+    return GetRefCount(data.host_d3d11) >= data.initial_ref;
+}
+
+bool D3D11ResourceTranslator::isValidBuffer(BufferDataDXR& data)
+{
+    return GetRefCount(data.host_d3d11) >= data.initial_ref;
+}
+
 uint64_t D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool immediate)
 {
     m_host_context->CopyResource(dst, src);
@@ -230,7 +252,7 @@ uint64_t D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resour
     if (immediate) {
         // wait for completion of CopyResource()
         m_fence->SetEventOnCompletion(fence_value, m_fence_event);
-        ::WaitForSingleObject(m_fence_event, INFINITE);
+        ::WaitForSingleObject(m_fence_event, kTimeoutMS);
     }
     return fence_value;
 }
@@ -264,9 +286,11 @@ TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(GPUResourcePtr
     auto ret = std::make_shared<TextureDataDXR>();
 
     auto tex_host = (ID3D12Resource*)ptr;
-    D3D12_RESOURCE_DESC src_desc = tex_host->GetDesc();
+    ret->host_ptr = ptr;
+    ret->host_d3d12 = tex_host;
+    ret->initial_ref = GetRefCount(ret->host_d3d12);
 
-    ret->texture = ptr;
+    D3D12_RESOURCE_DESC src_desc = tex_host->GetDesc();
     ret->width = (int)src_desc.Width;
     ret->height = (int)src_desc.Height;
     ret->format = src_desc.Format;
@@ -283,7 +307,7 @@ TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(GPUResourcePtr
 
 uint64_t D3D12ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fv)
 {
-    auto tex_host = (ID3D12Resource*)src.texture;
+    auto tex_host = (ID3D12Resource*)src.host_ptr;
     // copy is not needed if unordered access is allowed
     if (src.resource == tex_host)
         return 0;
@@ -300,12 +324,25 @@ BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     auto ret = std::make_shared<BufferDataDXR>();
 
     auto buf_host = (ID3D12Resource*)ptr;
-    D3D12_RESOURCE_DESC src_desc = buf_host->GetDesc();
+    ret->host_ptr = ptr;
+    ret->host_d3d12 = buf_host;
 
+    D3D12_RESOURCE_DESC src_desc = buf_host->GetDesc();
     // on d3d12, buffer can be directly shared with DXR side
     ret->resource = buf_host;
     ret->size = (int)src_desc.Width;
+    ret->initial_ref = GetRefCount(ret->host_d3d12);
     return ret;
+}
+
+bool D3D12ResourceTranslator::isValidTexture(TextureDataDXR& data)
+{
+    return GetRefCount(data.host_d3d12) >= data.initial_ref;
+}
+
+bool D3D12ResourceTranslator::isValidBuffer(BufferDataDXR& data)
+{
+    return GetRefCount(data.host_d3d12) >= data.initial_ref;
 }
 
 
