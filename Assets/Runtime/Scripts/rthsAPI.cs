@@ -138,6 +138,7 @@ namespace UTJ.RaytracedHardShadow
         public IntPtr self;
         [DllImport("rths")] static extern IntPtr rthsMeshCreate();
         [DllImport("rths")] static extern void rthsMeshRelease(IntPtr self);
+        [DllImport("rths")] static extern byte rthsMeshIsRelocated(IntPtr self);
         [DllImport("rths")] static extern void rthsMeshSetName(IntPtr self, string name);
         [DllImport("rths")] static extern void rthsMeshSetCPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
         [DllImport("rths")] static extern void rthsMeshSetGPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
@@ -156,6 +157,10 @@ namespace UTJ.RaytracedHardShadow
         public string name
         {
             set { rthsMeshSetName(self, value); }
+        }
+        public bool isRelocated
+        {
+            get { return rthsMeshIsRelocated(self) != 0; }
         }
 
         public static rthsMeshData Create()
@@ -334,6 +339,7 @@ namespace UTJ.RaytracedHardShadow
         public IntPtr self;
         [DllImport("rths")] static extern IntPtr rthsRenderTargetCreate();
         [DllImport("rths")] static extern void rthsRenderTargetRelease(IntPtr self);
+        [DllImport("rths")] static extern byte rthsRenderTargetIsRelocated(IntPtr self);
         [DllImport("rths")] static extern void rthsRenderTargetSetName(IntPtr self, string name);
         [DllImport("rths")] static extern void rthsRenderTargetSetGPUTexture(IntPtr self, IntPtr tex);
         [DllImport("rths")] static extern void rthsRenderTargetSetup(IntPtr self, int width, int height, rthsRenderTargetFormat format);
@@ -346,6 +352,10 @@ namespace UTJ.RaytracedHardShadow
         public string name
         {
             set { rthsRenderTargetSetName(self, value); }
+        }
+        public bool isRelocated
+        {
+            get { return rthsRenderTargetIsRelocated(self) != 0; }
         }
 
         public static rthsRenderTarget Create()

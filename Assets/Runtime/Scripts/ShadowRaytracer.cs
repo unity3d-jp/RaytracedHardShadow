@@ -54,29 +54,25 @@ namespace UTJ.RaytracedHardShadow
         {
             public rthsMeshData meshData;
             public Mesh bakedMesh;
-            public IntPtr nativeVBPtr, nativeIBPtr;
 
             public int useCount;
 
             public void Update(Mesh mesh)
             {
-                var vb = mesh.GetNativeVertexBufferPtr(0);
-                var ib = mesh.GetNativeIndexBufferPtr();
                 bool markDynamic = bakedMesh != null;
 
                 if (meshData)
                 {
-                    if (nativeVBPtr != vb || nativeIBPtr != ib)
+                    if (meshData.isRelocated)
                     {
                         Release();
+                        if (s_dbgVerboseLog)
+                            Debug.Log(String.Format("Relocated Mesh \"{0}\"\n", mesh.name));
                         markDynamic = true;
                     }
                 }
                 if (!meshData)
                 {
-                    nativeVBPtr = vb;
-                    nativeIBPtr = ib;
-
                     meshData = rthsMeshData.Create();
                     meshData.name = mesh.name;
                     if (markDynamic)
@@ -171,7 +167,6 @@ namespace UTJ.RaytracedHardShadow
         public class RenderTargetRecord
         {
             public rthsRenderTarget rtData;
-            public IntPtr nativeTexturePtr;
 
             public int useCount;
 
@@ -183,15 +178,18 @@ namespace UTJ.RaytracedHardShadow
                 var ptr = rtex.GetNativeTexturePtr();
                 if (rtData)
                 {
-                    if (nativeTexturePtr != ptr)
+                    if (rtData.isRelocated)
+                    {
                         rtData.Release();
+                        if (s_dbgVerboseLog)
+                            Debug.Log(String.Format("Relocated RenderTexture \"{0}\"\n", rtex.name));
+                    }
                 }
                 if (!rtData)
                 {
                     rtData = rthsRenderTarget.Create();
                     rtData.name = rtex.name;
                     rtData.Setup(ptr);
-                    nativeTexturePtr = ptr;
                 }
             }
 
@@ -983,19 +981,26 @@ namespace UTJ.RaytracedHardShadow
                     flags |= rthsRenderFlag.DbgForceUpdateAS;
 
                 m_renderer.BeginScene();
-                m_renderer.SetRaytraceFlags(flags);
-                m_renderer.SetShadowRayOffset(m_ignoreSelfShadow ? 0.0f : m_shadowRayOffset);
-                m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
-                m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
-                m_renderer.SetCamera(cam);
-                EnumerateLights(
-                    l => { m_renderer.AddLight(l); },
-                    scl => { m_renderer.AddLight(scl); }
+                try
+                {
+                    m_renderer.SetRaytraceFlags(flags);
+                    m_renderer.SetShadowRayOffset(m_ignoreSelfShadow ? 0.0f : m_shadowRayOffset);
+                    m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
+                    m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
+                    m_renderer.SetCamera(cam);
+                    EnumerateLights(
+                        l => { m_renderer.AddLight(l); },
+                        scl => { m_renderer.AddLight(scl); }
                     );
-                EnumerateMeshRenderers(
-                    (mr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(mr), rmask, cmask); },
-                    (smr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(smr), rmask, cmask); }
+                    EnumerateMeshRenderers(
+                        (mr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(mr), rmask, cmask); },
+                        (smr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(smr), rmask, cmask); }
                     );
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e);
+                }
                 m_renderer.EndScene();
             }
             return true;

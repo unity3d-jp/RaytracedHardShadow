@@ -87,15 +87,16 @@ private:
 class TextureDataDXR
 {
 public:
-    GPUResourcePtr texture = nullptr; // host
+    GPUResourcePtr host_ptr = nullptr;
     int width = 0;
     int height = 0;
 
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-    ID3D12ResourcePtr  resource;
-    ID3D11Texture2DPtr temporary_d3d11;
+    ID3D12ResourcePtr  resource, host_d3d12;
+    ID3D11Texture2DPtr temporary_d3d11, host_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;
+    ULONG initial_ref = 0;
 
     TextureDataDXR();
     ~TextureDataDXR();
@@ -105,20 +106,21 @@ using TextureDataDXRPtr = std::shared_ptr<TextureDataDXR>;
 class BufferDataDXR
 {
 public:
-    GPUResourcePtr buffer = nullptr; // host
+    GPUResourcePtr host_ptr = nullptr;
     int size = 0;
 
-    ID3D12ResourcePtr resource;
-    ID3D11BufferPtr   temporary_d3d11;
+    ID3D12ResourcePtr resource, host_d3d12;
+    ID3D11BufferPtr   temporary_d3d11, host_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;
+    ULONG initial_ref = 0;
 
     BufferDataDXR();
     ~BufferDataDXR();
 };
 using BufferDataDXRPtr = std::shared_ptr<BufferDataDXR>;
 
-class MeshDataDXR
+class MeshDataDXR : public DeviceMeshData
 {
 public:
     MeshData *base = nullptr;
@@ -140,13 +142,15 @@ public:
     ID3D12ResourcePtr blas; // bottom level acceleration structure
     ID3D12ResourcePtr blas_scratch;
 
+    bool valid() const override;
+    bool isRelocated() const override;
     int getVertexStride() const;
     int getIndexStride() const;
     void clearBLAS();
 };
 using MeshDataDXRPtr = std::shared_ptr<MeshDataDXR>;
 
-class MeshInstanceDataDXR
+class MeshInstanceDataDXR : public DeviceMeshInstanceData
 {
 public:
     MeshInstanceData *base = nullptr;
@@ -160,6 +164,7 @@ public:
     ID3D12ResourcePtr blas_scratch;
     bool is_updated = false;
 
+    bool valid() const override;
     void clearBLAS();
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
@@ -176,13 +181,16 @@ public:
     void clearBLAS();
 };
 
-class RenderTargetDataDXR
+class RenderTargetDataDXR : public DeviceRenderTargetData
 {
 public:
     RenderTargetData *base = nullptr;
     TextureDataDXRPtr texture;
     ID3D12ResourcePtr adaptive_res[3]; // for adaptive sampling
     ID3D12ResourcePtr back_buffer; // back buffer for antialiasing
+
+    bool valid() const override;
+    bool isRelocated() const override;
 };
 using RenderTargetDataDXRPtr = std::shared_ptr<RenderTargetDataDXR>;
 
@@ -310,7 +318,9 @@ public:
 extern const D3D12_HEAP_PROPERTIES kDefaultHeapProps;
 extern const D3D12_HEAP_PROPERTIES kUploadHeapProps;
 extern const D3D12_HEAP_PROPERTIES kReadbackHeapProps;
+static const DWORD kTimeoutMS = 3000;
 
+ULONG GetRefCount(IUnknown *v);
 UINT SizeOfElement(DXGI_FORMAT rtf);
 DXGI_FORMAT GetDXGIFormat(RenderTargetFormat format);
 DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);

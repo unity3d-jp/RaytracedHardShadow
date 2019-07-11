@@ -115,6 +115,29 @@ void FlushDeferredCommands();
 using GPUResourcePtr = const void*;
 using CPUResourcePtr = const void*;
 
+class DeviceMeshData
+{
+public:
+    virtual ~DeviceMeshData() {};
+    virtual bool valid() const = 0;
+    virtual bool isRelocated() const = 0;
+};
+
+class DeviceMeshInstanceData
+{
+public:
+    virtual ~DeviceMeshInstanceData() {};
+    virtual bool valid() const = 0;
+};
+
+class DeviceRenderTargetData
+{
+public:
+    virtual ~DeviceRenderTargetData() {};
+    virtual bool valid() const = 0;
+    virtual bool isRelocated() const = 0;
+};
+
 
 struct BoneWeight1
 {
@@ -164,10 +187,13 @@ public:
     std::vector<BlendshapeData> blendshapes;
     bool is_dynamic = false;
 
+    DeviceMeshData *device_data = nullptr;
+
     MeshData();
     ~MeshData();
     void release();
     bool valid() const;
+    bool isRelocated() const;
 };
 using MeshDataPtr = ref_ptr<MeshData>;
 
@@ -181,6 +207,8 @@ public:
     std::vector<float4x4> bones;
     std::vector<float> blendshape_weights;
     uint32_t update_flags = 0; // combination of UpdateFlag
+
+    DeviceMeshInstanceData *device_data = nullptr;
 
     MeshInstanceData();
     ~MeshInstanceData();
@@ -220,9 +248,13 @@ public:
     int height = 0;
     RenderTargetFormat format = RenderTargetFormat::Unknown;
 
+    DeviceRenderTargetData *device_data = nullptr;
+
+
     RenderTargetData();
     ~RenderTargetData();
     void release();
+    bool isRelocated() const;
 };
 using RenderTargetDataPtr = ref_ptr<RenderTargetData>;
 

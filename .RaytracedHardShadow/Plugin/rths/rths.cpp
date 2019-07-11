@@ -31,6 +31,13 @@ rthsAPI void rthsMeshRelease(MeshData *self)
     self->release();
 }
 
+rthsAPI bool rthsMeshIsRelocated(MeshData *self)
+{
+    if (!self)
+        return false;
+    self->isRelocated();
+}
+
 rthsAPI void rthsMeshSetName(rths::MeshData *self, const char *name)
 {
     if (!self)
@@ -184,7 +191,13 @@ rthsAPI void rthsRenderTargetRelease(RenderTargetData *self)
         return;
     self->release();
 }
-rthsAPI void rthsRenderTargetSetName(rths::RenderTargetData * self, const char *name)
+rthsAPI bool rthsRenderTargetIsRelocated(RenderTargetData *self)
+{
+    if (!self)
+        return false;
+    return self->isRelocated();
+}
+rthsAPI void rthsRenderTargetSetName(RenderTargetData * self, const char *name)
 {
     if (!self)
         return;

@@ -69,6 +69,10 @@ bool MeshData::valid() const
         (cpu_vertex_buffer != nullptr && cpu_index_buffer != nullptr);
 }
 
+bool MeshData::isRelocated() const
+{
+    return device_data && device_data->isRelocated();
+}
 
 
 MeshInstanceData::MeshInstanceData()
@@ -174,6 +178,11 @@ RenderTargetData::~RenderTargetData()
 void RenderTargetData::release()
 {
     ExternalRelease(this);
+}
+
+bool RenderTargetData::isRelocated() const
+{
+    return device_data && device_data->isRelocated();
 }
 
 } // namespace rths 

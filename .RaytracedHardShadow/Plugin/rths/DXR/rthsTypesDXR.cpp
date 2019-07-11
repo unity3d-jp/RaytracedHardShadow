@@ -3,30 +3,32 @@
 #include "Foundation/rthsLog.h"
 #include "Foundation/rthsMisc.h"
 #include "rthsTypesDXR.h"
+#include "rthsGfxContextDXR.h"
 
 namespace rths {
 
-TextureDataDXR::TextureDataDXR()
+    
+DescriptorHandleDXR::operator bool() const
 {
+    return hcpu.ptr != 0 && hgpu.ptr != 0;
 }
 
-TextureDataDXR::~TextureDataDXR()
+DescriptorHeapAllocatorDXR::DescriptorHeapAllocatorDXR(ID3D12DevicePtr device, ID3D12DescriptorHeapPtr heap)
 {
-    if (handle && is_nt_handle)
-        ::CloseHandle(handle);
+    m_stride = device->GetDescriptorHandleIncrementSize(heap->GetDesc().Type);
+    m_hcpu = heap->GetCPUDescriptorHandleForHeapStart();
+    m_hgpu = heap->GetGPUDescriptorHandleForHeapStart();
 }
 
-BufferDataDXR::BufferDataDXR()
+DescriptorHandleDXR DescriptorHeapAllocatorDXR::allocate()
 {
+    DescriptorHandleDXR ret;
+    ret.hcpu = m_hcpu;
+    ret.hgpu = m_hgpu;
+    m_hcpu.ptr += m_stride;
+    m_hgpu.ptr += m_stride;
+    return ret;
 }
-
-BufferDataDXR::~BufferDataDXR()
-{
-    if (handle && is_nt_handle)
-        ::CloseHandle(handle);
-}
-
-
 
 
 FenceEventDXR::FenceEventDXR()
@@ -55,6 +57,42 @@ FenceEventDXR::operator HANDLE() const
 }
 
 
+TextureDataDXR::TextureDataDXR()
+{
+}
+
+TextureDataDXR::~TextureDataDXR()
+{
+    if (handle && is_nt_handle)
+        ::CloseHandle(handle);
+}
+
+BufferDataDXR::BufferDataDXR()
+{
+}
+
+BufferDataDXR::~BufferDataDXR()
+{
+    if (handle && is_nt_handle)
+        ::CloseHandle(handle);
+}
+
+
+bool MeshDataDXR::valid() const
+{
+    return vertex_buffer->resource && index_buffer->resource;
+}
+
+bool MeshDataDXR::isRelocated() const
+{
+    if (auto translator = GfxContextDXR::getResourceTranslator()) {
+        return
+            (vertex_buffer->host_ptr && !translator->isValidBuffer(*vertex_buffer)) ||
+            (index_buffer->host_ptr && !translator->isValidBuffer(*index_buffer));
+    }
+    return false;
+}
+
 int MeshDataDXR::getVertexStride() const
 {
     if (base->vertex_stride == 0 && vertex_buffer)
@@ -78,28 +116,10 @@ void MeshDataDXR::clearBLAS()
 }
 
 
-DescriptorHandleDXR::operator bool() const
+bool MeshInstanceDataDXR::valid() const
 {
-    return hcpu.ptr != 0 && hgpu.ptr != 0;
+    return mesh != nullptr;
 }
-
-DescriptorHeapAllocatorDXR::DescriptorHeapAllocatorDXR(ID3D12DevicePtr device, ID3D12DescriptorHeapPtr heap)
-{
-    m_stride = device->GetDescriptorHandleIncrementSize(heap->GetDesc().Type);
-    m_hcpu = heap->GetCPUDescriptorHandleForHeapStart();
-    m_hgpu = heap->GetGPUDescriptorHandleForHeapStart();
-}
-
-DescriptorHandleDXR DescriptorHeapAllocatorDXR::allocate()
-{
-    DescriptorHandleDXR ret;
-    ret.hcpu = m_hcpu;
-    ret.hgpu = m_hgpu;
-    m_hcpu.ptr += m_stride;
-    m_hgpu.ptr += m_stride;
-    return ret;
-}
-
 
 void MeshInstanceDataDXR::clearBLAS()
 {
@@ -127,6 +147,18 @@ void GeometryDataDXR::clearBLAS()
         inst->clearBLAS();
 }
 
+
+bool RenderTargetDataDXR::valid() const
+{
+    return texture->resource;
+}
+
+bool RenderTargetDataDXR::isRelocated() const
+{
+    if (auto translator = GfxContextDXR::getResourceTranslator())
+        return texture->host_ptr && !translator->isValidTexture(*texture);
+    return false;
+}
 
 
 CommandListManagerDXR::Record::Record(ID3D12DevicePtr device, D3D12_COMMAND_LIST_TYPE type, ID3D12PipelineStatePtr state)
@@ -373,6 +405,12 @@ void SetNameImpl(ID3D12Object *obj, const std::wstring& name)
     if (obj && !name.empty()) {
         obj->SetName(name.c_str());
     }
+}
+
+ULONG GetRefCount(IUnknown * v)
+{
+    v->AddRef();
+    return v->Release();
 }
 
 UINT SizeOfElement(DXGI_FORMAT rtf)

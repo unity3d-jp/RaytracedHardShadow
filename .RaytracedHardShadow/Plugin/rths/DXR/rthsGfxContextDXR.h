@@ -13,6 +13,7 @@ public:
     static bool initializeInstance();
     static void finalizeInstance();
     static GfxContextDXR* getInstance();
+    static IResourceTranslator* getResourceTranslator();
 
     bool initialize();
     void clear();

@@ -65,7 +65,7 @@ protected:
 
 private:
     T *m_self;
-    std::atomic_int m_ref_count = 1;
+    std::atomic_int m_ref_count{ 1 };
 };
 
 // resource type exposed to plugin user

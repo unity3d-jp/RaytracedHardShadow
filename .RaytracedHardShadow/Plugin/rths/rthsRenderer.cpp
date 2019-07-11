@@ -4,7 +4,8 @@
 
 namespace rths {
 
-static std::vector<ISceneCallback*> g_scene_callbacks;
+static std::vector<ISceneCallback*> g_scene_callbacks, g_scene_callbacks_tmp;
+static std::vector<IRenderer*> g_renderers, g_renderers_tmp;
 static std::mutex g_mutex_scene_callbacks;
 
 template<class Body>
@@ -52,8 +53,6 @@ ISceneCallback::~ISceneCallback()
     });
 }
 
-
-static std::vector<IRenderer*> g_renderers;
 
 RendererBase::RendererBase()
     : ref_count(this)
@@ -215,46 +214,34 @@ void RendererBase::clearMeshInstances()
 }
 
 
-static inline void MarkFrameBeginImpl()
-{
-    for (auto *cb : g_scene_callbacks)
-        cb->frameBegin();
-    for (auto renderer : g_renderers)
-        renderer->frameBegin();
-}
-
-static inline void MarkFrameEndImpl()
-{
-    for (auto renderer : g_renderers)
-        renderer->frameEnd();
-    for (auto& cb : g_scene_callbacks)
-        cb->frameEnd();
-}
-
 void MarkFrameBegin()
 {
     SceneCallbacksLock([]() {
-        MarkFrameBeginImpl();
+        g_scene_callbacks_tmp = g_scene_callbacks;
+        g_renderers_tmp = g_renderers;
     });
+    for (auto *cb : g_scene_callbacks_tmp)
+        cb->frameBegin();
+    for (auto renderer : g_renderers_tmp)
+        renderer->frameBegin();
 }
 
 void MarkFrameEnd()
 {
-    SceneCallbacksLock([]() {
-        MarkFrameEndImpl();
-    });
+    for (auto renderer : g_renderers_tmp)
+        renderer->frameEnd();
+    for (auto& cb : g_scene_callbacks_tmp)
+        cb->frameEnd();
 }
 
 void RenderAll()
 {
-    SceneCallbacksLock([]() {
-        MarkFrameBeginImpl();
-        for (auto renderer : g_renderers)
-            renderer->render();
-        for (auto renderer : g_renderers)
-            renderer->finish();
-        MarkFrameEndImpl();
-    });
+    MarkFrameBegin();
+    for (auto renderer : g_renderers_tmp)
+        renderer->render();
+    for (auto renderer : g_renderers_tmp)
+        renderer->finish();
+    MarkFrameEnd();
 }
 
 } // namespace rths

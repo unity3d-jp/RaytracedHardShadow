@@ -96,6 +96,14 @@ GfxContextDXR* GfxContextDXR::getInstance()
     return g_gfx_context.get();
 }
 
+IResourceTranslator* GfxContextDXR::getResourceTranslator()
+{
+    auto ctx = getInstance();
+    if (ctx)
+        return ctx->m_resource_translator.get();
+    return nullptr;
+}
+
 GfxContextDXR::GfxContextDXR()
 {
     if (!initialize())
@@ -512,6 +520,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
     auto& data = m_rendertarget_records[rt];
     if (!data) {
         data = std::make_shared<RenderTargetDataDXR>();
+        rt->device_data = data.get();
         data->base = rt;
         if (rt->gpu_texture && m_resource_translator) {
             data->texture = m_resource_translator->createTemporaryTexture(rt->gpu_texture);
@@ -650,6 +659,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         auto& mesh_dxr = m_mesh_records[mesh];
         if (!mesh_dxr) {
             mesh_dxr = std::make_shared<MeshDataDXR>();
+            mesh->device_data = mesh_dxr.get();
             mesh_dxr->base = mesh;
         }
 
@@ -713,6 +723,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         auto& inst_dxr = m_meshinstance_records[inst];
         if (!inst_dxr) {
             inst_dxr = std::make_shared<MeshInstanceDataDXR>();
+            inst->device_data = inst_dxr.get();
             inst_dxr->base = inst;
             inst_dxr->mesh = mesh_dxr;
         }
@@ -1146,7 +1157,7 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
 
     if (rd.fv_rays != 0) {
         m_fence->SetEventOnCompletion(rd.fv_rays, rd.fence_event);
-        ::WaitForSingleObject(rd.fence_event, INFINITE);
+        ::WaitForSingleObject(rd.fence_event, kTimeoutMS);
         rd.fv_rays = 0;
 
 #ifdef rthsEnableRenderTargetValidation
@@ -1542,7 +1553,7 @@ uint64_t GfxContextDXR::submitCopy(ID3D12GraphicsCommandList4Ptr& cl, bool immed
     m_cmd_queue_copy->Signal(m_fence, fence_value);
     if (immediate) {
         m_fence->SetEventOnCompletion(fence_value, m_event_copy);
-        ::WaitForSingleObject(m_event_copy, INFINITE);
+        ::WaitForSingleObject(m_event_copy, kTimeoutMS);
     }
     return fence_value;
 }
