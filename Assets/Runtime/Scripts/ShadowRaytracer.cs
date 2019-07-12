@@ -846,6 +846,9 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
+        // actual initialization is done in render thread (create d3d12 device if needed and initialize GPU resources).
+        // wait for complete actual initialization if 'wait' is true.
+        // if already initialized (or failed) it immediately returns its result. so calling this in every frame is no problem.
         bool InitializeRenderer(bool wait = false, double timeoutInSeconds = 3.0)
         {
             if (m_initialized)
@@ -864,8 +867,6 @@ namespace UTJ.RaytracedHardShadow
                     Debug.Log(String.Format("Initializing Renderer start ({0}f)", Time.frameCount));
             }
 
-            // actual initialization (create d3d12 device if needed and initialize GPU resources) is done in render thread.
-            // wait for complete actual initialization if 'wait' is true.
             if (wait)
             {
                 var freq = System.Diagnostics.Stopwatch.Frequency;
