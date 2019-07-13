@@ -1209,7 +1209,7 @@ namespace UTJ.RaytracedHardShadow
             }
         }
 
-        void LateUpdate()
+        void OnPreRender()
         {
             if (!Render())
                 return;
