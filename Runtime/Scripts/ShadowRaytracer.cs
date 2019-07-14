@@ -473,13 +473,6 @@ namespace UTJ.RaytracedHardShadow
             if (path == null || path.Length == 0)
                 return;
 
-#if UNITY_EDITOR
-            if (EditorApplication.isPlaying && EditorApplication.isPaused)
-            {
-                if (Render())
-                    rthsRenderer.IssueRender();
-            }
-#endif
             if (m_exportRequests == null)
                 m_exportRequests = new List<ExportRequest>();
             m_exportRequests.Add(new ExportRequest { path = path, format = format });
@@ -1158,12 +1151,11 @@ namespace UTJ.RaytracedHardShadow
         void OnValidate()
         {
             UpdateScenePaths();
-
         }
 
         void OnGUI()
         {
-            if (EditorApplication.isPlaying && EditorApplication.isPaused)
+            if (!EditorApplication.isPlaying || EditorApplication.isPaused)
             {
                 if (Event.current.type == EventType.Repaint)
                 {

@@ -2,7 +2,7 @@
 
 namespace rths {
 
-const std::string& GetErrorLog();
+std::string GetErrorLog();
 void SetErrorLog(const char *format, ...);
 void SetErrorLog(const std::string& str);
 void DebugPrintImpl(const char *fmt, ...);

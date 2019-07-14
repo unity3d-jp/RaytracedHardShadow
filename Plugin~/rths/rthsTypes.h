@@ -105,7 +105,8 @@ struct SceneData
 
 struct GlobalSettings
 {
-    bool deferred_initilization = false;
+    std::atomic_bool deferred_initilization{ false };
+    std::atomic_bool power_stable_state{ false };
 };
 
 GlobalSettings& GetGlobals();

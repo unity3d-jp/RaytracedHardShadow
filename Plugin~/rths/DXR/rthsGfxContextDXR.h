@@ -17,6 +17,7 @@ public:
 
     bool initialize();
     void clear();
+    bool setPowerStableState(bool v);
 
     void frameBegin() override;
     void prepare(RenderDataDXR& rd);
@@ -71,6 +72,7 @@ private:
     DeformerDXRPtr m_deformer;
 
     ID3D12Device5Ptr m_device;
+    bool m_power_stable_state = false;
     ID3D12CommandQueuePtr m_cmd_queue_direct, m_cmd_queue_compute, m_cmd_queue_copy;
     ID3D12FencePtr m_fence;
     uint64_t m_fence_value = 0;

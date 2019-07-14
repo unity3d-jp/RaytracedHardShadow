@@ -296,6 +296,7 @@ namespace UTJ.RaytracedHardShadowEditor
                 EditorGUILayout.PropertyField(so.FindProperty("m_dbgTimestamp"));
                 EditorGUILayout.PropertyField(so.FindProperty("m_dbgForceUpdateAS"));
                 EditorGUILayout.PropertyField(so.FindProperty("m_dbgVerboseLog"));
+                rthsGlobals.powerStableState = EditorGUILayout.Toggle("Dbg Power Stable State", rthsGlobals.powerStableState);
                 if (t.dbgTimestamp)
                     EditorGUILayout.TextArea(t.timestampLog, GUILayout.Height(80));
                 EditorGUI.indentLevel--;

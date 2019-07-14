@@ -11,12 +11,26 @@ rthsAPI const char* rthsGetReleaseDate() { return rthsReleaseDate; }
 
 rthsAPI const char* rthsGetErrorLog()
 {
-    return GetErrorLog().c_str();
+    static std::string tmp = GetErrorLog();
+    return tmp.c_str();
 }
 
+rthsAPI bool rthsGlobalsGetDeferredInitialization()
+{
+    return rths::GetGlobals().deferred_initilization;
+}
 rthsAPI void rthsGlobalsSetDeferredInitialization(bool v)
 {
     rths::GetGlobals().deferred_initilization = v;
+}
+
+rthsAPI bool rthsGlobalsGetPowerStableState()
+{
+    return rths::GetGlobals().power_stable_state;
+}
+rthsAPI void rthsGlobalsSetPowerStableState(bool v)
+{
+    rths::GetGlobals().power_stable_state = v;
 }
 
 

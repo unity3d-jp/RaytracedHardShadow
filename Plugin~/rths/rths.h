@@ -107,10 +107,14 @@ class IRenderer;
 } // namespace rths
 
 
+// global info & settings
 rthsAPI const char* rthsGetVersion();
 rthsAPI const char* rthsGetReleaseDate();
 rthsAPI const char* rthsGetErrorLog();
+rthsAPI bool rthsGlobalsGetDeferredInitialization();
 rthsAPI void rthsGlobalsSetDeferredInitialization(bool v);
+rthsAPI bool rthsGlobalsGetPowerStableState();
+rthsAPI void rthsGlobalsSetPowerStableState(bool v);
 
 // mesh interface
 rthsAPI rths::MeshData* rthsMeshCreate();

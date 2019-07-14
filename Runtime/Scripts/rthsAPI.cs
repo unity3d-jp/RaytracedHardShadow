@@ -111,7 +111,10 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsGetVersion();
         [DllImport("rths")] static extern IntPtr rthsGetReleaseDate();
         [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
+        [DllImport("rths")] static extern byte rthsGlobalsGetDeferredInitialization();
         [DllImport("rths")] static extern void rthsGlobalsSetDeferredInitialization(byte v);
+        [DllImport("rths")] static extern byte rthsGlobalsGetPowerStableState();
+        [DllImport("rths")] static extern void rthsGlobalsSetPowerStableState(byte v);
         #endregion
 
         public static string version
@@ -128,7 +131,13 @@ namespace UTJ.RaytracedHardShadow
         }
         public static bool deferredInitialization
         {
+            get { return rthsGlobalsGetDeferredInitialization() != 0; }
             set { rthsGlobalsSetDeferredInitialization((byte)(value ? 1 : 0)); }
+        }
+        public static bool powerStableState
+        {
+            get { return rthsGlobalsGetPowerStableState() != 0; }
+            set { rthsGlobalsSetPowerStableState((byte)(value ? 1 : 0)); }
         }
     }
 

@@ -3,11 +3,17 @@
 
 namespace rths {
 
+static std::mutex g_log_mutex;
 static std::string g_error_log;
 
-const std::string& GetErrorLog()
+std::string GetErrorLog()
 {
-    return g_error_log;
+    std::string ret;
+    {
+        std::unique_lock<std::mutex> lock(g_log_mutex);
+        ret = g_error_log;
+    }
+    return ret;
 }
 
 void SetErrorLog(const char *format, ...)
@@ -18,12 +24,16 @@ void SetErrorLog(const char *format, ...)
     va_list args;
     va_start(args, format);
     vsprintf(buf, format, args);
-    g_error_log = buf;
+    {
+        std::unique_lock<std::mutex> lock(g_log_mutex);
+        g_error_log = buf;
+    }
     va_end(args);
 }
 
 void SetErrorLog(const std::string& str)
 {
+    std::unique_lock<std::mutex> lock(g_log_mutex);
     g_error_log = str;
 }
 

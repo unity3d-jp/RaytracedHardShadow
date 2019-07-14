@@ -200,13 +200,9 @@ bool GfxContextDXR::initialize()
 
     // failed to create device (DXR is not supported)
     if (!m_device) {
-        SetErrorLog("DXR is not supported on this system");
+        SetErrorLog("DXR is not supported on this system.");
         return false;
     }
-#ifdef rthsEnableD3D12StablePowerState
-    m_device->SetStablePowerState(TRUE);
-#endif
-
 
     // resource translator (null if there is no host device)
     m_resource_translator = CreateResourceTranslator();
@@ -418,8 +414,35 @@ void GfxContextDXR::clear()
 
     m_resource_translator = nullptr;
     m_deformer = nullptr;
+
+    m_power_stable_state = false;
     m_device = nullptr;
 }
+
+bool GfxContextDXR::setPowerStableState(bool v)
+{
+#ifdef rthsEnableD3D12StablePowerState
+    if (m_power_stable_state == v)
+        return true;
+
+    // try to set power stable state. this requires Windows to be developer mode.
+    // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-setstablepowerstate
+    if (m_device) {
+        auto hr = m_device->SetStablePowerState((BOOL)v);
+        if (FAILED(hr)) {
+            m_power_stable_state = false;
+            checkError();
+            return false;
+        }
+        else {
+            m_power_stable_state = v;
+            return true;
+        }
+    }
+#endif
+    return false;
+}
+
 
 void GfxContextDXR::frameBegin()
 {

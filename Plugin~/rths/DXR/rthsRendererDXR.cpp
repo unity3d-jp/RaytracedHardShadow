@@ -79,6 +79,14 @@ bool RendererDXR::isRendering() const
 
 void RendererDXR::frameBegin()
 {
+    // handle power stable state change
+    auto& globals = GetGlobals();
+    auto ctx = GfxContextDXR::getInstance();
+    if (!ctx->setPowerStableState(globals.power_stable_state)) {
+        globals.power_stable_state = false;
+        ctx->initialize();
+    }
+
     if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
         // clear static meshes' BLAS
         for (auto& geom : m_render_data.geometries_prev)
