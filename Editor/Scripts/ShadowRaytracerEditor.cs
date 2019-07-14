@@ -71,34 +71,47 @@ namespace UTJ.RaytracedHardShadowEditor
 
 
         static readonly int indentSize = 16;
-        static ShadowRaytracer s_target;
+        static List<ShadowRaytracerEditor> s_instances;
 
         void OnEnable()
         {
-            s_target = target as ShadowRaytracer;
+            if (s_instances == null)
+                s_instances = new List<ShadowRaytracerEditor>();
+            s_instances.Add(this);
+            if (s_instances.Count == 1)
+            {
 #if UNITY_2019_1_OR_NEWER
-            SceneView.duringSceneGui += OnSceneGUI;
+                SceneView.duringSceneGui += OnSceneGUI;
 #else
-            SceneView.onSceneGUIDelegate += OnSceneGUI;
+                SceneView.onSceneGUIDelegate += OnSceneGUI;
 #endif
+            }
         }
 
         void OnDisable()
         {
+            s_instances.Remove(this);
+            if (s_instances.Count == 0)
+            {
 #if UNITY_2019_1_OR_NEWER
-            SceneView.duringSceneGui -= OnSceneGUI;
+                SceneView.duringSceneGui -= OnSceneGUI;
 #else
-            SceneView.onSceneGUIDelegate -= OnSceneGUI;
+                SceneView.onSceneGUIDelegate -= OnSceneGUI;
 #endif
-            s_target = null;
+            }
         }
 
         static void OnSceneGUI(SceneView sceneView)
         {
-            if (s_target == null)
-                return;
-            if (s_target.dbgTimestamp)
-                UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+            foreach (var inst in s_instances)
+            {
+                var t = inst.target as ShadowRaytracer;
+                if (t != null)
+                {
+                    if (t.dbgTimestamp)
+                        inst.Repaint();
+                }
+            }
         }
 
         public override void OnInspectorGUI()

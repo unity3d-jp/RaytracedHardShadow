@@ -1159,10 +1159,17 @@ namespace UTJ.RaytracedHardShadow
         {
             UpdateScenePaths();
 
+        }
+
+        void OnGUI()
+        {
             if (EditorApplication.isPlaying && EditorApplication.isPaused)
             {
-                if (InitializeRenderer(true) && Render())
-                    rthsRenderer.IssueRender();
+                if (Event.current.type == EventType.Repaint)
+                {
+                    if (InitializeRenderer(true) && Render())
+                        rthsRenderer.IssueRender();
+                }
             }
         }
 #endif

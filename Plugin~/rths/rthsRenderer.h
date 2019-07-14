@@ -41,10 +41,11 @@ public:
     virtual void addReversePointLight(const float3& pos, float range) = 0;
     virtual void addGeometry(GeometryData geom) = 0;
 
+    virtual bool isRendering() const = 0;
     virtual void frameBegin() = 0; // called from render thread
-    virtual void frameEnd() = 0; // called from render thread
     virtual void render() = 0; // called from render thread
     virtual void finish() = 0; // called from render thread
+    virtual void frameEnd() = 0; // called from render thread
 
     virtual bool readbackRenderTarget(void *dst) = 0;
     virtual const char* getTimestampLog() = 0;
@@ -86,6 +87,7 @@ protected:
     int m_update_count = 0;
     int m_render_count = 0;
     int m_skip_count = 0;
+    mutable std::atomic_bool m_is_rendering{false};
 
 private:
     std::vector<GeometryData> m_geometries_tmp;

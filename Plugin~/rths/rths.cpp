@@ -238,14 +238,21 @@ rthsAPI bool rthsRendererIsInitialized(IRenderer *self)
     return self->initialized();
 }
 
-rthsAPI bool rthsRendererIsValid(rths::IRenderer *self)
+rthsAPI bool rthsRendererIsValid(IRenderer *self)
 {
     if (!self)
         return false;
     return self->valid();
 }
 
-rthsAPI void rthsRendererSetName(rths::IRenderer * self, const char *name)
+rthsAPI bool rthsRendererIsRendering(IRenderer *self)
+{
+    if (!self)
+        return false;
+    return self->isRendering();
+}
+
+rthsAPI void rthsRendererSetName(IRenderer *self, const char *name)
 {
     if (!self)
         return;

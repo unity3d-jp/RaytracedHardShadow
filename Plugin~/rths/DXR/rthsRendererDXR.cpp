@@ -15,9 +15,11 @@ public:
 
     bool initialized() const override;
     bool valid() const override;
+
+    bool isRendering() const override;
+    void frameBegin() override; // called from render thread
     void render() override; // called from render thread
     void finish() override; // called from render thread
-    void frameBegin() override; // called from render thread
     void frameEnd() override; // called from render thread
 
     bool readbackRenderTarget(void *dst) override;
@@ -63,9 +65,29 @@ bool RendererDXR::initialized() const
 bool RendererDXR::valid() const
 {
     auto ctx = GfxContextDXR::getInstance();
-    if (!ctx || !ctx->checkError())
+    if (!ctx || !ctx->checkError()) {
+        m_is_rendering = false;
         return false;
+    }
     return true;
+}
+
+bool RendererDXR::isRendering() const
+{
+    return m_is_rendering;
+}
+
+void RendererDXR::frameBegin()
+{
+    if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
+        // clear static meshes' BLAS
+        for (auto& geom : m_render_data.geometries_prev)
+            geom.clearBLAS();
+
+        // mark updated to update deformable meshes' BLAS
+        for (auto& geom : m_render_data.geometries_prev)
+            geom.inst->base->markUpdated();
+    }
 }
 
 void RendererDXR::render()
@@ -75,6 +97,7 @@ void RendererDXR::render()
 
     if (m_mutex.try_lock()) {
         ++m_render_count;
+        m_is_rendering = true;
         auto ctx = GfxContextDXR::getInstance();
         ctx->prepare(m_render_data);
         ctx->setSceneData(m_render_data, m_scene_data);
@@ -96,19 +119,7 @@ void RendererDXR::finish()
     auto ctx = GfxContextDXR::getInstance();
     if (!ctx->finish(m_render_data))
         m_render_data.clear();
-}
-
-void RendererDXR::frameBegin()
-{
-    if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
-        // clear static meshes' BLAS
-        for (auto& geom : m_render_data.geometries_prev)
-            geom.clearBLAS();
-
-        // mark updated to update deformable meshes' BLAS
-        for (auto& geom : m_render_data.geometries_prev)
-            geom.inst->base->markUpdated();
-    }
+    m_is_rendering = false;
 }
 
 void RendererDXR::frameEnd()
