@@ -35,11 +35,11 @@ public:
 
     virtual void setRenderTarget(RenderTargetData *rt) = 0;
     virtual void setCamera(const float3& pos, const float4x4& view, const float4x4& proj) = 0;
-    virtual void addDirectionalLight(const float3& dir) = 0;
-    virtual void addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle) = 0;
-    virtual void addPointLight(const float3& pos, float range) = 0;
-    virtual void addReversePointLight(const float3& pos, float range) = 0;
-    virtual void addGeometry(GeometryData geom) = 0;
+    virtual void addDirectionalLight(const float3& dir, uint32_t lmask) = 0;
+    virtual void addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle, uint32_t lmask) = 0;
+    virtual void addPointLight(const float3& pos, float range, uint32_t lmask) = 0;
+    virtual void addReversePointLight(const float3& pos, float range, uint32_t lmask) = 0;
+    virtual void addMesh(MeshInstanceDataPtr mesh) = 0;
 
     virtual bool isRendering() const = 0;
     virtual void frameBegin() = 0; // called from render thread
@@ -70,27 +70,26 @@ public:
 
     void setRenderTarget(RenderTargetData *rt) override;
     void setCamera(const float3& pos, const float4x4& view, const float4x4& proj) override;
-    void addDirectionalLight(const float3& dir) override;
-    void addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle) override;
-    void addPointLight(const float3& dir, float range) override;
-    void addReversePointLight(const float3& dir, float range) override;
-    void addGeometry(GeometryData geom) override;
+    void addDirectionalLight(const float3& dir, uint32_t lmask) override;
+    void addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle, uint32_t lmask) override;
+    void addPointLight(const float3& dir, float range, uint32_t lmask) override;
+    void addReversePointLight(const float3& dir, float range, uint32_t lmask) override;
+    void addMesh(MeshInstanceDataPtr mesh) override;
 
 protected:
-    void clearMeshInstances();
-
     SceneData m_scene_data;
     RenderTargetDataPtr m_render_target;
-    std::vector<GeometryData> m_geometries;
     std::mutex m_mutex;
+    mutable std::atomic_bool m_is_updating{ false };
+    mutable std::atomic_bool m_is_rendering{ false };
+    std::atomic_int m_update_count{ 0 };
+    std::atomic_int m_render_count{ 0 };
+    std::atomic_int m_skip_count{ 0 };
 
-    int m_update_count = 0;
-    int m_render_count = 0;
-    int m_skip_count = 0;
-    mutable std::atomic_bool m_is_rendering{false};
-
-private:
-    std::vector<GeometryData> m_geometries_tmp;
+    std::vector<MeshInstanceDataPtr> m_meshes;
+    std::array<std::vector<MeshInstanceDataPtr>, rthsMaxLayers> m_layers;
+    std::array<uint32_t, rthsMaxLayers> m_layer_lut;
+    int m_active_layer_count = 0;
 };
 
 IRenderer* CreateRendererDXR();

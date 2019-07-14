@@ -115,7 +115,7 @@ TestCase(TestMinimum)
             rthsRendererAddDirectionalLight(renderer, normalize(float3{ -1.0f, -1.0f, 1.0f }));
         }
         for (auto inst : instances)
-            rthsRendererAddGeometry(renderer, inst);
+            rthsRendererAddMesh(renderer, inst);
 
         rthsRendererEndScene(renderer);
 

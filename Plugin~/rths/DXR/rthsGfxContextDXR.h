@@ -23,7 +23,7 @@ public:
     void prepare(RenderDataDXR& rd);
     void setSceneData(RenderDataDXR& rd, SceneData& data);
     void setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt);
-    void setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geometries);
+    void setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr>& meshes);
     void flush(RenderDataDXR& rd);
     bool finish(RenderDataDXR& rd);
     void frameEnd() override;

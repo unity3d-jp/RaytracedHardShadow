@@ -131,23 +131,6 @@ void MeshInstanceDataDXR::clearBLAS()
 }
 
 
-bool GeometryDataDXR::operator==(const GeometryDataDXR& v) const
-{
-    return inst == v.inst && receive_mask == v.receive_mask && cast_mask == v.cast_mask;
-}
-
-bool GeometryDataDXR::operator!=(const GeometryDataDXR& v) const
-{
-    return !(*this == v);
-}
-
-void GeometryDataDXR::clearBLAS()
-{
-    if (inst)
-        inst->clearBLAS();
-}
-
-
 bool RenderTargetDataDXR::valid() const
 {
     return texture->resource;

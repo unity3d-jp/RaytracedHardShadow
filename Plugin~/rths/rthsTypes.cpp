@@ -64,9 +64,9 @@ void MeshData::release()
 
 bool MeshData::valid() const
 {
-    return
+    return this && (
         (gpu_vertex_buffer != nullptr && gpu_index_buffer != nullptr) ||
-        (cpu_vertex_buffer != nullptr && cpu_index_buffer != nullptr);
+        (cpu_vertex_buffer != nullptr && cpu_index_buffer != nullptr) );
 }
 
 bool MeshData::isRelocated() const
@@ -91,7 +91,7 @@ void MeshInstanceData::release()
 
 bool MeshInstanceData::valid() const
 {
-    return mesh && mesh->valid();
+    return this && mesh->valid();
 }
 
 bool MeshInstanceData::isUpdated(UpdateFlag v) const
@@ -151,17 +151,6 @@ void MeshInstanceData::setBlendshapeWeights(const float *v, size_t n)
             markUpdated(UpdateFlag::Blendshape);
         blendshape_weights.assign(v, v + n);
     }
-}
-
-bool GeometryData::valid() const
-{
-    return (receive_mask | cast_mask) != 0 && instance && instance->valid();
-}
-
-void GeometryData::markUpdated()
-{
-    if (instance)
-        instance->markUpdated();
 }
 
 

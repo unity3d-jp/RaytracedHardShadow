@@ -81,12 +81,12 @@ void RendererDXR::frameBegin()
 {
     if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
         // clear static meshes' BLAS
-        for (auto& geom : m_render_data.geometries_prev)
-            geom.clearBLAS();
+        for (auto& inst : m_render_data.instances_prev)
+            inst->clearBLAS();
 
         // mark updated to update deformable meshes' BLAS
-        for (auto& geom : m_render_data.geometries_prev)
-            geom.inst->base->markUpdated();
+        for (auto& inst : m_render_data.instances_prev)
+            inst->base->markUpdated();
     }
 }
 
@@ -102,7 +102,7 @@ void RendererDXR::render()
         ctx->prepare(m_render_data);
         ctx->setSceneData(m_render_data, m_scene_data);
         ctx->setRenderTarget(m_render_data, m_render_target);
-        ctx->setGeometries(m_render_data, m_geometries);
+        ctx->setMeshes(m_render_data, m_meshes);
         ctx->flush(m_render_data);
         m_mutex.unlock();
     }

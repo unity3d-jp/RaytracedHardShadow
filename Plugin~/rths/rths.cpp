@@ -326,39 +326,39 @@ rthsAPI void rthsRendererSetCamera(IRenderer *self, float3 pos, float4x4 view, f
     self->setCamera(pos, view, proj);
 }
 
-rthsAPI void rthsRendererAddDirectionalLight(IRenderer *self, float3 dir)
+rthsAPI void rthsRendererAddDirectionalLight(IRenderer *self, float3 dir, uint32_t lmask)
 {
     if (!self)
         return;
-    self->addDirectionalLight(dir);
+    self->addDirectionalLight(dir, lmask);
 }
 
-rthsAPI void rthsRendererAddSpotLight(IRenderer *self, float3 pos, float3 dir, float range, float spot_angle)
+rthsAPI void rthsRendererAddSpotLight(IRenderer *self, float3 pos, float3 dir, float range, float spot_angle, uint32_t lmask)
 {
     if (!self)
         return;
-    self->addSpotLight(pos, dir, range, spot_angle);
+    self->addSpotLight(pos, dir, range, spot_angle, lmask);
 }
 
-rthsAPI void rthsRendererAddPointLight(IRenderer *self, float3 pos, float range)
+rthsAPI void rthsRendererAddPointLight(IRenderer *self, float3 pos, float range, uint32_t lmask)
 {
     if (!self)
         return;
-    self->addPointLight(pos, range);
+    self->addPointLight(pos, range, lmask);
 }
 
-rthsAPI void rthsRendererAddReversePointLight(IRenderer *self, float3 pos, float range)
+rthsAPI void rthsRendererAddReversePointLight(IRenderer *self, float3 pos, float range, uint32_t lmask)
 {
     if (!self)
         return;
-    self->addReversePointLight(pos, range);
+    self->addReversePointLight(pos, range, lmask);
 }
 
-rthsAPI void rthsRendererAddGeometry(IRenderer *self, rths::MeshInstanceData *mesh, uint8_t rmask, uint8_t cmask)
+rthsAPI void rthsRendererAddMesh(IRenderer *self, rths::MeshInstanceData *mesh)
 {
     if (!self)
         return;
-    self->addGeometry({ mesh, rmask, cmask });
+    self->addMesh(mesh);
 }
 
 rthsAPI void rthsRendererStartRender(IRenderer *self)

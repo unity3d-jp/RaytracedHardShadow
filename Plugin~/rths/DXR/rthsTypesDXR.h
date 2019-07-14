@@ -169,18 +169,6 @@ public:
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 
-class GeometryDataDXR
-{
-public:
-    MeshInstanceDataDXRPtr inst;
-    uint8_t receive_mask;
-    uint8_t cast_mask;
-
-    bool operator==(const GeometryDataDXR& v) const;
-    bool operator!=(const GeometryDataDXR& v) const;
-    void clearBLAS();
-};
-
 class RenderTargetDataDXR : public DeviceRenderTargetData
 {
 public:
@@ -292,7 +280,7 @@ public:
     DescriptorHandleDXR adaptive_uavs[3], adaptive_srvs[3];
     DescriptorHandleDXR back_buffer_uav, back_buffer_srv;
 
-    std::vector<GeometryDataDXR> geometries, geometries_prev;
+    std::vector<MeshInstanceDataDXRPtr> instances, instances_prev;
     SceneData scene_data_prev{};
     ID3D12ResourcePtr instance_desc;
     ID3D12ResourcePtr tlas_scratch;

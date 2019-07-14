@@ -78,39 +78,36 @@ void RendererBase::beginScene()
 {
     m_mutex.lock();
     ++m_update_count;
+    m_is_updating = true;
+
     m_scene_data.render_flags = 0;
     m_scene_data.light_count = 0;
-    m_geometries.clear();
+
+    m_meshes.clear();
+    for (uint32_t i = 0; i < rthsMaxLayers; ++i) {
+        m_layers[i].clear();
+        m_layer_lut[i] = 0;
+    }
+    m_active_layer_count = 0;
 }
 
 void RendererBase::endScene()
 {
-    if (!m_geometries.empty()) {
-        // filter duplicated instances with merging hit masks
+    std::stable_sort(m_meshes.begin(), m_meshes.end(),
+        [](auto& a, auto& b) { return a->layer < b->layer; });
+    for (auto& o : m_meshes)
+        m_layers[o->layer].push_back(o);
 
-        std::sort(m_geometries.begin(), m_geometries.end(),
-            [](const auto& a, const auto& b) { return *a.instance < *b.instance; });
-        m_geometries_tmp.clear();
-        m_geometries_tmp.reserve(m_geometries.size());
-
-        GeometryData prev{ nullptr, 0 };
-        for (auto& geom : m_geometries) {
-            if (!prev.instance) {
-                prev = geom;
-            }
-            else if (*prev.instance == *geom.instance) {
-                // duplicated instance. just merge hit masks.
-                prev.receive_mask |= geom.receive_mask;
-                prev.cast_mask |= geom.cast_mask;
-            }
-            else {
-                m_geometries_tmp.push_back(prev);
-                prev = geom;
-            }
+    int active_layer_count = 0;
+    for (int i = 0; i < rthsMaxLayers; ++i) {
+        if (!m_layers[i].empty()) {
+            m_layer_lut[i] = active_layer_count;
+            ++active_layer_count;
         }
-        m_geometries_tmp.push_back(prev);
-        std::swap(m_geometries, m_geometries_tmp);
     }
+    m_active_layer_count = active_layer_count;
+
+    m_is_updating = false;
     m_mutex.unlock();
 }
 
@@ -153,7 +150,7 @@ void RendererBase::setCamera(const float3& pos, const float4x4& view, const floa
     }
 }
 
-void RendererBase::addDirectionalLight(const float3& dir)
+void RendererBase::addDirectionalLight(const float3& dir, uint32_t lmask)
 {
     if (m_scene_data.light_count == kMaxLights) {
         SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
@@ -162,9 +159,10 @@ void RendererBase::addDirectionalLight(const float3& dir)
     auto& dst = m_scene_data.lights[m_scene_data.light_count++];
     dst.light_type = LightType::Directional;
     dst.direction = dir;
+    dst.layer_mask_cpu = lmask;
 }
 
-void RendererBase::addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle)
+void RendererBase::addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle, uint32_t lmask)
 {
     if (m_scene_data.light_count == kMaxLights) {
         SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
@@ -176,9 +174,10 @@ void RendererBase::addSpotLight(const float3& pos, const float3& dir, float rang
     dst.range = range;
     dst.direction = dir;
     dst.spot_angle = spot_angle * DegToRad;
+    dst.layer_mask_cpu = lmask;
 }
 
-void RendererBase::addPointLight(const float3& pos, float range)
+void RendererBase::addPointLight(const float3& pos, float range, uint32_t lmask)
 {
     if (m_scene_data.light_count == kMaxLights) {
         SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
@@ -188,9 +187,10 @@ void RendererBase::addPointLight(const float3& pos, float range)
     dst.light_type = LightType::Point;
     dst.position = pos;
     dst.range = range;
+    dst.layer_mask_cpu = lmask;
 }
 
-void RendererBase::addReversePointLight(const float3& pos, float range)
+void RendererBase::addReversePointLight(const float3& pos, float range, uint32_t lmask)
 {
     if (m_scene_data.light_count == kMaxLights) {
         SetErrorLog("exceeded max lights (%d)\n", kMaxLights);
@@ -200,17 +200,13 @@ void RendererBase::addReversePointLight(const float3& pos, float range)
     dst.light_type = LightType::ReversePoint;
     dst.position = pos;
     dst.range = range;
+    dst.layer_mask_cpu = lmask;
 }
 
-void RendererBase::addGeometry(GeometryData geom)
+void RendererBase::addMesh(MeshInstanceDataPtr mesh)
 {
-    if (geom.valid())
-        m_geometries.push_back(geom);
-}
-
-void RendererBase::clearMeshInstances()
-{
-    m_geometries.clear();
+    if (mesh->valid())
+        m_meshes.push_back(mesh);
 }
 
 

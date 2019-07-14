@@ -654,7 +654,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
 #endif // rthsEnableRenderTargetValidation
 }
 
-void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& geoms)
+void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr>& instances)
 {
     if (!valid() || !checkError())
         return;
@@ -684,12 +684,11 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
         return data;
     };
 
-    int task_granularity = ceildiv((int)geoms.size(), rd.max_parallel_command_lists);
-    rd.geometries.clear();
+    int task_granularity = ceildiv((int)instances.size(), rd.max_parallel_command_lists);
+    rd.instances.clear();
 
     bool needs_build_tlas = false;
-    for (auto& geom : geoms) {
-        auto& inst = geom.instance;
+    for (auto& inst : instances) {
         auto& mesh = inst->mesh;
         if (mesh->vertex_count == 0 || mesh->index_count == 0)
             continue;
@@ -765,7 +764,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             inst_dxr->base = inst;
             inst_dxr->mesh = mesh_dxr;
         }
-        rd.geometries.push_back({ inst_dxr, geom.receive_mask, geom.cast_mask });
+        rd.instances.push_back(inst_dxr);
     }
     if (translated_gpu_buffer_count > 0) {
         // fence for complete buffer copy
@@ -777,8 +776,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     if (gpu_skinning) {
         int deform_count = 0;
         m_deformer->prepare(rd);
-        for (auto& geom_dxr : rd.geometries) {
-            if (m_deformer->deform(rd, *geom_dxr.inst))
+        for (auto& inst_dxr : rd.instances) {
+            if (m_deformer->deform(rd, *inst_dxr))
                 ++deform_count;
         }
         m_deformer->flush(rd);
@@ -789,12 +788,12 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
 
     // build BLAS
-    size_t geometry_count = rd.geometries.size();
+    size_t geometry_count = rd.instances.size();
     auto cl_blas = m_clm_direct->get();
     rthsTimestampQuery(rd.timestamp, cl_blas, "Building BLAS begin");
     int blas_update_count = 0;
-    for (auto& geom_dxr : rd.geometries) {
-        auto& inst_dxr = *geom_dxr.inst;
+    for (auto& pinst_dxr : rd.instances) {
+        auto& inst_dxr = *pinst_dxr;
         auto& mesh_dxr = *inst_dxr.mesh;
         auto& inst = *inst_dxr.base;
         auto& mesh = *mesh_dxr.base;
@@ -930,7 +929,7 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
     if (!needs_build_tlas) {
         // if there are no BLAS updates, check geometry list is the same as last render.
         // if true, no TLAS update is needed.
-        needs_build_tlas = rd.geometries != rd.geometries_prev;
+        needs_build_tlas = rd.instances != rd.instances_prev;
     }
 
 
@@ -958,15 +957,14 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
             D3D12_RAYTRACING_INSTANCE_DESC *instance_descs;
             rd.instance_desc->Map(0, nullptr, (void**)&instance_descs);
             for (size_t i = 0; i < geometry_count; i++) {
-                auto& geom_dxr = rd.geometries[i];
-                auto& inst_dxr = *geom_dxr.inst;
+                auto& inst_dxr = *rd.instances[i];
                 bool deformed = gpu_skinning && inst_dxr.deformed_vertices;
                 auto& blas = deformed ? inst_dxr.blas_deformed : inst_dxr.mesh->blas;
 
                 D3D12_RAYTRACING_INSTANCE_DESC tmp{};
                 (float3x4&)tmp.Transform = to_float3x4(inst_dxr.base->transform);
                 tmp.InstanceID = i; // This value will be exposed to the shader via InstanceID()
-                tmp.InstanceMask = (geom_dxr.receive_mask & (uint8_t)HitMask::Receiver) | geom_dxr.cast_mask;
+                tmp.InstanceMask = (UINT8)inst_dxr.base->mask;
                 tmp.InstanceContributionToHitGroupIndex = 0;
                 tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
                 tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
@@ -1051,9 +1049,8 @@ void GfxContextDXR::setGeometries(RenderDataDXR& rd, std::vector<GeometryData>& 
 
         InstanceData *dst;
         if (SUCCEEDED(rd.instance_data->Map(0, nullptr, (void**)&dst))) {
-            for (auto& geom_dxr : rd.geometries) {
+            for (auto& inst_dxr : rd.instances) {
                 InstanceData tmp{};
-                tmp.related_caster_mask = geom_dxr.receive_mask & (uint8_t)HitMask::AllCaster;
                 *dst++ = tmp;
             }
             rd.instance_data->Unmap(0, nullptr);
@@ -1220,8 +1217,8 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
         return false;
     }
     else {
-        std::swap(rd.geometries, rd.geometries_prev);
-        rd.geometries.clear();
+        std::swap(rd.instances, rd.instances_prev);
+        rd.instances.clear();
 
         rthsTimestampUpdateLog(rd.timestamp, m_cmd_queue_direct);
 

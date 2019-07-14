@@ -6,6 +6,8 @@
 
 namespace rths {
 
+const int rthsMaxLayers = 32;
+
 enum class RenderFlag : uint32_t
 {
     CullBackFaces           = 0x00000001,
@@ -31,12 +33,12 @@ enum class LightType : uint32_t
     ReversePoint= 4,
 };
 
-enum class HitMask : uint8_t
+enum class CullFlag : uint8_t
 {
-    Receiver    = 0x01,
-    Caster      = 0x02,
-    Both        = Receiver | Caster,
-    AllCaster   = 0xfe,
+    None        = 0x00,
+    Back        = 0x01,
+    Front       = 0x02,
+    Both        = Back | Front, // hidden
 };
 
 enum class UpdateFlag : uint32_t
@@ -79,7 +81,9 @@ struct CameraData
 struct LightData
 {
     LightType light_type{};
-    uint32_t pad[3];
+    uint32_t layer_mask_cpu{};
+    uint32_t layer_mask_gpu{};
+    uint32_t pad[1];
 
     float3 position{};
     float range{};
@@ -209,6 +213,11 @@ public:
     std::vector<float> blendshape_weights;
     uint32_t update_flags = 0; // combination of UpdateFlag
 
+    uint32_t layer = 0;
+    uint8_t cull_flags_object = 0; // combination of CullFlag
+    uint8_t cull_flags_shadow = 0; // combination of CullFlag
+    uint32_t mask = 0;
+
     DeviceMeshInstanceData *device_data = nullptr;
 
     MeshInstanceData();
@@ -223,21 +232,6 @@ public:
     void setBlendshapeWeights(const float *v, size_t n);
 };
 using MeshInstanceDataPtr = ref_ptr<MeshInstanceData>;
-
-
-// one instance may be rendered multiple times with different hit mask in one frame.
-// (e.g. one renderer render the object as a receiver, another one render it as a caster)
-// so, hit mask must be separated from MeshInstanceData.
-class GeometryData
-{
-public:
-    MeshInstanceDataPtr instance;
-    uint8_t receive_mask;
-    uint8_t cast_mask;
-
-    bool valid() const;
-    void markUpdated(); // for debug
-};
 
 
 class RenderTargetData : public SharedResource<RenderTargetData>

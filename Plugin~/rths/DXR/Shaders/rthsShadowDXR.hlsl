@@ -16,13 +16,6 @@ enum RENDER_FLAG
     RF_KEEP_SELF_DROP_SHADOW= 0x00000008,
 };
 
-enum HIT_MASK
-{
-    HM_RECEIVER = 0x01,
-    HM_CASTER = 0x02,
-    HM_BOTH = HM_RECEIVER | HM_CASTER,
-};
-
 struct CameraData
 {
     float4x4 view;
@@ -36,7 +29,9 @@ struct CameraData
 struct LightData
 {
     uint light_type;
-    uint3 pad1;
+    uint layer_mask_cpu;
+    uint layer_mask_gpu;
+    uint1 pad1;
 
     float3 position;
     float range;
@@ -134,7 +129,7 @@ RayPayload ShootCameraRay(float2 offset = 0.0f)
     if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
-    TraceRay(g_TLAS, ray_flags, HM_RECEIVER, 0, 0, 0, ray, payload);
+    TraceRay(g_TLAS, ray_flags, 0x01, 0, 0, 0, ray, payload);
     return payload;
 }
 
