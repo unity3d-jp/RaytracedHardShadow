@@ -48,7 +48,7 @@ public:
     virtual void frameEnd() = 0; // called from render thread
 
     virtual bool readbackRenderTarget(void *dst) = 0;
-    virtual const char* getTimestampLog() = 0;
+    virtual std::string getTimestampLog() = 0;
     virtual void* getRenderTexturePtr() = 0;
 };
 

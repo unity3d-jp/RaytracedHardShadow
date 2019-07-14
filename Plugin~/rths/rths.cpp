@@ -11,8 +11,14 @@ rthsAPI const char* rthsGetReleaseDate() { return rthsReleaseDate; }
 
 rthsAPI const char* rthsGetErrorLog()
 {
-    static std::string tmp = GetErrorLog();
-    return tmp.c_str();
+    static std::string s_log;
+    s_log = GetErrorLog();
+    return s_log.c_str();
+}
+
+rthsAPI void rthsClearErrorLog()
+{
+    ClearErrorLog();
 }
 
 rthsAPI bool rthsGlobalsGetDeferredInitialization()
@@ -380,7 +386,9 @@ rthsAPI const char* rthsRendererGetTimestampLog(IRenderer *self)
 {
     if (!self)
         return nullptr;
-    return self->getTimestampLog();
+    static std::string s_log;
+    s_log = self->getTimestampLog();
+    return s_log.c_str();
 }
 
 rthsAPI GPUResourcePtr rthsRendererGetRenderTexturePtr(IRenderer *self)

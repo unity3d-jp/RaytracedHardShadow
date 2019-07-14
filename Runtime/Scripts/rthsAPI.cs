@@ -111,6 +111,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsGetVersion();
         [DllImport("rths")] static extern IntPtr rthsGetReleaseDate();
         [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
+        [DllImport("rths")] static extern void rthsClearErrorLog();
         [DllImport("rths")] static extern byte rthsGlobalsGetDeferredInitialization();
         [DllImport("rths")] static extern void rthsGlobalsSetDeferredInitialization(byte v);
         [DllImport("rths")] static extern byte rthsGlobalsGetPowerStableState();
@@ -139,6 +140,8 @@ namespace UTJ.RaytracedHardShadow
             get { return rthsGlobalsGetPowerStableState() != 0; }
             set { rthsGlobalsSetPowerStableState((byte)(value ? 1 : 0)); }
         }
+
+        public static void ClearErrorLog() { rthsClearErrorLog(); }
     }
 
     public struct rthsMeshData

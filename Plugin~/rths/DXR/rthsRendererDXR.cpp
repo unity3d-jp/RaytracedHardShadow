@@ -23,7 +23,7 @@ public:
     void frameEnd() override; // called from render thread
 
     bool readbackRenderTarget(void *dst) override;
-    const char* getTimestampLog() override;
+    std::string getTimestampLog() override;
     void* getRenderTexturePtr() override;
 
 private:
@@ -79,14 +79,6 @@ bool RendererDXR::isRendering() const
 
 void RendererDXR::frameBegin()
 {
-    // handle power stable state change
-    auto& globals = GetGlobals();
-    auto ctx = GfxContextDXR::getInstance();
-    if (!ctx->setPowerStableState(globals.power_stable_state)) {
-        globals.power_stable_state = false;
-        ctx->initialize();
-    }
-
     if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
         // clear static meshes' BLAS
         for (auto& geom : m_render_data.geometries_prev)
@@ -143,13 +135,18 @@ bool RendererDXR::readbackRenderTarget(void *dst)
     return ctx->readbackRenderTarget(m_render_data, dst);
 }
 
-const char* RendererDXR::getTimestampLog()
+std::string RendererDXR::getTimestampLog()
 {
+    std::string ret;
 #ifdef rthsEnableTimestamp
-    if (m_render_data.timestamp)
-        return m_render_data.timestamp->getLog().c_str();
+    if (m_render_data.timestamp) {
+        if (m_mutex.try_lock()) {
+            ret = m_render_data.timestamp->getLog();
+            m_mutex.unlock();
+        }
+    }
 #endif // rthsEnableTimestamp
-    return nullptr;
+    return ret;
 }
 
 void* RendererDXR::getRenderTexturePtr()

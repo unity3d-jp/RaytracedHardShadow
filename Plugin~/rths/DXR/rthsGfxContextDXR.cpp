@@ -200,7 +200,7 @@ bool GfxContextDXR::initialize()
 
     // failed to create device (DXR is not supported)
     if (!m_device) {
-        SetErrorLog("DXR is not supported on this system.");
+        SetErrorLog("Initialization failed. DXR is not supported on this system.");
         return false;
     }
 
@@ -422,21 +422,30 @@ void GfxContextDXR::clear()
 bool GfxContextDXR::setPowerStableState(bool v)
 {
 #ifdef rthsEnableD3D12StablePowerState
-    if (m_power_stable_state == v)
-        return true;
-
     // try to set power stable state. this requires Windows to be developer mode.
     // https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-setstablepowerstate
     if (m_device) {
-        auto hr = m_device->SetStablePowerState((BOOL)v);
-        if (FAILED(hr)) {
-            m_power_stable_state = false;
-            checkError();
+        if (m_power_stable_state == v) {
+            return true;
+        }
+        else if (!IsDeveloperMode()) {
+            SetErrorLog(
+                "Enabling power stable state requires Windows to be developer mode. "
+                "Check Windows Settings -> Update & Security -> For Developers -> Use developer features. "
+                "(Restarting application is required to apply changes)");
             return false;
         }
         else {
-            m_power_stable_state = v;
-            return true;
+            auto hr = m_device->SetStablePowerState((BOOL)v);
+            if (SUCCEEDED(hr)) {
+                m_power_stable_state = v;
+                return true;
+            }
+            else {
+                m_power_stable_state = false;
+                checkError();
+                return false;
+            }
         }
     }
 #endif
@@ -446,10 +455,16 @@ bool GfxContextDXR::setPowerStableState(bool v)
 
 void GfxContextDXR::frameBegin()
 {
+    // clear state flags
     for (auto& kvp : m_meshinstance_records) {
         kvp.second->is_updated = false;
     }
     m_fv_last_rays = 0;
+
+    // handle power stable state change
+    auto& globals = GetGlobals();
+    if (!setPowerStableState(globals.power_stable_state))
+        globals.power_stable_state = false;
 }
 
 void GfxContextDXR::prepare(RenderDataDXR& rd)

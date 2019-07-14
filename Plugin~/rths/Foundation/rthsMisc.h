@@ -15,6 +15,6 @@ std::string ToMBS(const std::wstring& src);
 std::wstring ToWCS(const char *src);
 std::wstring ToWCS(const std::string& src);
 
-bool IsDeveloperModeEnabled();
+bool IsDeveloperMode();
 
 } // namespace rths

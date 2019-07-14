@@ -37,6 +37,12 @@ void SetErrorLog(const std::string& str)
     g_error_log = str;
 }
 
+void ClearErrorLog()
+{
+    std::unique_lock<std::mutex> lock(g_log_mutex);
+    g_error_log.clear();
+}
+
 void DebugPrintImpl(const char *fmt, ...)
 {
     va_list args;

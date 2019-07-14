@@ -85,8 +85,9 @@ std::wstring ToWCS(const std::string & src)
     return ToWCS(src.c_str());
 }
 
+
 // thanks: https://stackoverflow.com/a/41232108
-bool IsDeveloperModeEnabled()
+static bool IsDeveloperModeImpl()
 {
 #ifdef _WIN32
     HKEY hKey;
@@ -104,4 +105,16 @@ bool IsDeveloperModeEnabled()
     return false;
 #endif
 }
+// IsDeveloperModeImpl() returns current Windows' mode and can desync applications' actual mode.
+// (applications require a restart to apply changes after mode change)
+// so, initialize only once to minimize the potential of desync.
+// this is not a perfect solution, but I couldn't find a method to get applications actual mode.
+static bool g_is_developer_mode = IsDeveloperModeImpl();
+
+bool IsDeveloperMode()
+{
+    return g_is_developer_mode;
+}
+
+
 } // namespace rths

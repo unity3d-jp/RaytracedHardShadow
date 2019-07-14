@@ -697,6 +697,18 @@ namespace UTJ.RaytracedHardShadow
         }
 #endif
 
+        static bool FeedErrorLog()
+        {
+            var errorLog = rthsGlobals.errorLog;
+            if (errorLog.Length > 0)
+            {
+                Debug.LogError("ShadowRaytracer: " + errorLog);
+                rthsGlobals.ClearErrorLog();
+                return true;
+            }
+            return false;
+        }
+
         public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
         {
             // C# 7.0 supports function in function but we stick to the old way for compatibility
@@ -895,8 +907,7 @@ namespace UTJ.RaytracedHardShadow
                 else
                 {
                     m_renderer.Release();
-
-                    Debug.LogError("ShadowRaytracer: Initialization failed - " + rthsGlobals.errorLog);
+                    FeedErrorLog();
                     this.enabled = false;
                 }
             }
@@ -928,6 +939,9 @@ namespace UTJ.RaytracedHardShadow
         {
             if (!m_initialized || !m_renderer)
                 return false;
+#if UNITY_EDITOR
+            FeedErrorLog();
+#endif
 
             var cam = GetComponent<Camera>();
             if (cam == null)
@@ -1182,6 +1196,7 @@ namespace UTJ.RaytracedHardShadow
             m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
 #endif
 #if UNITY_EDITOR
+            // handle script recompile
             if (EditorApplication.isCompiling && !m_isCompiling)
             {
                 // on compile begin

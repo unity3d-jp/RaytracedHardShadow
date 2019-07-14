@@ -111,6 +111,7 @@ class IRenderer;
 rthsAPI const char* rthsGetVersion();
 rthsAPI const char* rthsGetReleaseDate();
 rthsAPI const char* rthsGetErrorLog();
+rthsAPI void rthsClearErrorLog();
 rthsAPI bool rthsGlobalsGetDeferredInitialization();
 rthsAPI void rthsGlobalsSetDeferredInitialization(bool v);
 rthsAPI bool rthsGlobalsGetPowerStableState();
