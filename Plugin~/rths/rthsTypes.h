@@ -33,12 +33,10 @@ enum class LightType : uint32_t
     ReversePoint= 4,
 };
 
-enum class CullFlag : uint8_t
+enum class InstanceFlag : uint32_t
 {
-    None        = 0x00,
-    Back        = 0x01,
-    Front       = 0x02,
-    Both        = Back | Front, // hidden
+    VisibleFromCameras = 0x01,
+    VisibleFromLights = 0x02,
 };
 
 enum class UpdateFlag : uint32_t
@@ -73,9 +71,10 @@ struct CameraData
         float3 position;
         float4 position4;
     };
-    float near_plane;
-    float far_plane;
-    float2 pad1;
+    float near_plane{};
+    float far_plane{};
+    uint32_t layer_mask_cpu{};
+    uint32_t layer_mask_gpu{};
 };
 
 struct LightData
@@ -105,6 +104,13 @@ struct SceneData
 
     bool operator==(SceneData& v) const { return std::memcmp(this, &v, sizeof(*this)) == 0; }
     bool operator!=(SceneData& v) const { return !(*this == v); }
+
+    template<class Body>
+    void eachLight(const Body& body)
+    {
+        for (uint32_t li = 0; li < light_count; ++li)
+            body(lights[li]);
+    }
 };
 
 struct GlobalSettings

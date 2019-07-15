@@ -13,7 +13,7 @@ namespace rths {
 
 struct InstanceData
 {
-    uint32_t related_caster_mask;
+    uint32_t flags; // combination of InstanceFlags
 };
 
 extern ID3D12Device *g_host_d3d12_device;

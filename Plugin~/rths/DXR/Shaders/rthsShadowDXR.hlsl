@@ -16,6 +16,12 @@ enum RENDER_FLAG
     RF_KEEP_SELF_DROP_SHADOW= 0x00000008,
 };
 
+enum INSTANCE_FLAG
+{
+    IF_VISUBLE_FROM_CAMERAS = 0x01,
+    IF_VISUBLE_FROM_LIGHTS = 0x02,
+};
+
 struct CameraData
 {
     float4x4 view;
@@ -23,7 +29,8 @@ struct CameraData
     float4 position;
     float near_plane;
     float far_plane;
-    float2 pad1;
+    uint layer_mask_cpu;
+    uint layer_mask_gpu;
 };
 
 struct LightData
@@ -74,7 +81,8 @@ float3 CameraUp()       { return g_scene_data.camera.view[1].xyz; }
 float3 CameraForward()  { return -g_scene_data.camera.view[2].xyz; }
 float CameraFocalLength()   { return abs(g_scene_data.camera.proj[1][1]); }
 float CameraNearPlane()     { return g_scene_data.camera.near_plane; }
-float CameraFarPlane()      { return g_scene_data.camera.far_plane; }
+float CameraFarPlane() { return g_scene_data.camera.far_plane; }
+uint CameraLayerMask() { return g_scene_data.camera.layer_mask_gpu; }
 
 int   RenderFlags()         { return g_scene_data.render_flags; }
 float ShadowRayOffset()     { return g_scene_data.shadow_ray_offset; }
@@ -84,7 +92,6 @@ int LightCount() { return g_scene_data.light_count; }
 LightData GetLight(int i) { return g_scene_data.lights[i]; }
 
 float3 HitPosition() { return WorldRayOrigin() + WorldRayDirection() * (RayTCurrent() - ShadowRayOffset()); }
-uint RelatedCasterMask() { return g_instance_data[InstanceID()].related_caster_mask; }
 
 // a & b must be normalized
 float angle_between(float3 a, float3 b) { return acos(clamp(dot(a, b), 0, 1)); }
@@ -129,7 +136,7 @@ RayPayload ShootCameraRay(float2 offset = 0.0f)
     if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
-    TraceRay(g_TLAS, ray_flags, 0x01, 0, 0, 0, ray, payload);
+    TraceRay(g_TLAS, ray_flags, CameraLayerMask(), 0, 0, 0, ray, payload);
     return payload;
 }
 
@@ -253,7 +260,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
             ray.Direction = -light.direction.xyz;
             ray.TMin = 0.0f;
             ray.TMax = CameraFarPlane();
-            TraceRay(g_TLAS, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
+            TraceRay(g_TLAS, ray_flags, light.layer_mask_gpu, 1, 0, 1, ray, payload);
         }
         else if (light.light_type == LT_SPOT) {
             // spot light
@@ -266,7 +273,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(g_TLAS, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
+                TraceRay(g_TLAS, ray_flags, light.layer_mask_gpu, 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_POINT) {
@@ -281,7 +288,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(g_TLAS, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
+                TraceRay(g_TLAS, ray_flags, light.layer_mask_gpu, 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_REVERSE_POINT) {
@@ -296,7 +303,7 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
                 ray.Direction = -dir;
                 ray.TMin = 0.0f;
                 ray.TMax = light.range - distance;
-                TraceRay(g_TLAS, ray_flags, RelatedCasterMask(), 1, 0, 1, ray, payload);
+                TraceRay(g_TLAS, ray_flags, light.layer_mask_gpu, 1, 0, 1, ray, payload);
             }
         }
     }

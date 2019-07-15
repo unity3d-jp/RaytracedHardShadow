@@ -98,14 +98,35 @@ void RendererBase::endScene()
     for (auto& o : m_meshes)
         m_layers[o->layer].push_back(o);
 
+    // setup CPU layer -> GPU layer look up table
     int active_layer_count = 0;
-    for (int i = 0; i < rthsMaxLayers; ++i) {
-        if (!m_layers[i].empty()) {
-            m_layer_lut[i] = active_layer_count;
+    for (int li = 0; li < rthsMaxLayers; ++li) {
+        if (!m_layers[li].empty()) {
+            m_layer_lut[li] = active_layer_count;
             ++active_layer_count;
         }
     }
     m_active_layer_count = active_layer_count;
+
+    // setup GPU layer mask.
+    for (int li = 0; li < rthsMaxLayers; ++li) {
+        uint32_t layer_mask = 0x1 << m_layer_lut[li];
+        for (auto& obj : m_layers[li])
+            obj->mask = layer_mask;
+    }
+    auto to_gpu_layer_mask = [this](uint32_t cpu_layer_mask) {
+        uint32_t ret = 0;
+        for (int li = 0; li < rthsMaxLayers; ++li) {
+            if ((cpu_layer_mask & (1 << li)) != 0)
+                ret |= 1 << m_layer_lut[li];
+        }
+        return ret;
+    };
+    m_scene_data.camera.layer_mask_gpu = to_gpu_layer_mask(m_scene_data.camera.layer_mask_cpu);
+    m_scene_data.eachLight([&](LightData& ld) {
+        ld.layer_mask_gpu = to_gpu_layer_mask(ld.layer_mask_cpu);
+    });
+
 
     m_is_updating = false;
     m_mutex.unlock();
@@ -131,12 +152,11 @@ void RendererBase::setRenderTarget(RenderTargetData *rt)
     m_render_target = rt;
 }
 
-void RendererBase::setCamera(const float3& pos, const float4x4& view, const float4x4& proj)
+void RendererBase::setCamera(const float3& pos, const float4x4& view, const float4x4& proj, uint32_t lmask)
 {
     m_scene_data.camera.view = view;
     m_scene_data.camera.proj = proj;
     m_scene_data.camera.position = pos;
-
     {
         auto m22 = -proj[2][2];
         auto m32 = -proj[3][2];
@@ -146,8 +166,8 @@ void RendererBase::setCamera(const float3& pos, const float4x4& view, const floa
             std::swap(tmp_near, tmp_far);
         m_scene_data.camera.near_plane = tmp_near;
         m_scene_data.camera.far_plane = tmp_far;
-
     }
+    m_scene_data.camera.layer_mask_cpu = lmask;
 }
 
 void RendererBase::addDirectionalLight(const float3& dir, uint32_t lmask)

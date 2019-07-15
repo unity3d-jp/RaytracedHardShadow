@@ -34,7 +34,7 @@ public:
     virtual void setSelfShadowThreshold(float v) = 0;
 
     virtual void setRenderTarget(RenderTargetData *rt) = 0;
-    virtual void setCamera(const float3& pos, const float4x4& view, const float4x4& proj) = 0;
+    virtual void setCamera(const float3& pos, const float4x4& view, const float4x4& proj, uint32_t lmask) = 0;
     virtual void addDirectionalLight(const float3& dir, uint32_t lmask) = 0;
     virtual void addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle, uint32_t lmask) = 0;
     virtual void addPointLight(const float3& pos, float range, uint32_t lmask) = 0;
@@ -69,7 +69,7 @@ public:
     void setSelfShadowThreshold(float v) override;
 
     void setRenderTarget(RenderTargetData *rt) override;
-    void setCamera(const float3& pos, const float4x4& view, const float4x4& proj) override;
+    void setCamera(const float3& pos, const float4x4& view, const float4x4& proj, uint32_t lmask) override;
     void addDirectionalLight(const float3& dir, uint32_t lmask) override;
     void addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle, uint32_t lmask) override;
     void addPointLight(const float3& dir, float range, uint32_t lmask) override;

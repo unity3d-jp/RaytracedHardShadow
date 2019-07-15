@@ -181,6 +181,12 @@ rthsAPI void rthsMeshInstanceSetName(rths::MeshInstanceData * self, const char *
         return;
     self->name = name ? name : std::string();
 }
+rthsAPI void rthsMeshInstanceSetLayer(rths::MeshInstanceData *self, int layer)
+{
+    if (!self)
+        return;
+    self->layer = layer;
+}
 rthsAPI void rthsMeshInstanceSetTransform(MeshInstanceData *self, float4x4 transform)
 {
     if (!self)
@@ -319,11 +325,11 @@ rthsAPI void rthsRendererSetSelfShadowThreshold(IRenderer *self, float v)
     self->setSelfShadowThreshold(v);
 }
 
-rthsAPI void rthsRendererSetCamera(IRenderer *self, float3 pos, float4x4 view, float4x4 proj)
+rthsAPI void rthsRendererSetCamera(IRenderer *self, float3 pos, float4x4 view, float4x4 proj, uint32_t lmask)
 {
     if (!self)
         return;
-    self->setCamera(pos, view, proj);
+    self->setCamera(pos, view, proj, lmask);
 }
 
 rthsAPI void rthsRendererAddDirectionalLight(IRenderer *self, float3 dir, uint32_t lmask)

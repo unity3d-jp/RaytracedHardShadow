@@ -129,7 +129,8 @@ namespace UTJ.RaytracedHardShadow
                     instData = rthsMeshInstanceData.Create(md);
                     instData.name = go.name;
                 }
-                instData.SetTransform(trans);
+                instData.transform = trans;
+                instData.layer = go.layer;
             }
 
             public void Update(rthsMeshData md, MeshRenderer mr)
@@ -768,10 +769,10 @@ namespace UTJ.RaytracedHardShadow
         }
 
         public void EnumerateMeshRenderers(
-            Action<MeshRenderer, rthsHitMask, rthsHitMask> bodyMR,
-            Action<SkinnedMeshRenderer, rthsHitMask, rthsHitMask> bodySMR)
+            Action<MeshRenderer> bodyMR,
+            Action<SkinnedMeshRenderer> bodySMR)
         {
-            Action<GameObject[], rthsHitMask, rthsHitMask> processGOs = (gos, rmask, cmask) =>
+            Action<GameObject[]> processGOs = (gos) =>
             {
                 foreach (var go in gos)
                 {
@@ -780,14 +781,14 @@ namespace UTJ.RaytracedHardShadow
 
                     foreach (var mr in go.GetComponentsInChildren<MeshRenderer>())
                         if (mr.enabled)
-                            bodyMR.Invoke(mr, rmask, cmask);
+                            bodyMR.Invoke(mr);
                     foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
                         if (smr.enabled)
-                            bodySMR.Invoke(smr, rmask, cmask);
+                            bodySMR.Invoke(smr);
                 }
             };
 
-            Action<string[], rthsHitMask, rthsHitMask> processScenes = (scenePaths, rmask, cmask) =>
+            Action<string[]> processScenes = (scenePaths) =>
             {
                 foreach (var scenePath in scenePaths)
                 {
@@ -800,21 +801,21 @@ namespace UTJ.RaytracedHardShadow
                         var scene = SceneManager.GetSceneAt(si);
                         if (scene.isLoaded && scene.path == scenePath)
                         {
-                            processGOs(scene.GetRootGameObjects(), rmask, cmask);
+                            processGOs(scene.GetRootGameObjects());
                             break;
                         }
                     }
                 }
             };
 
-            Action<rthsHitMask, rthsHitMask> processEntireScene = (rmask, cmask) =>
+            Action processEntireScene = () =>
             {
                 foreach (var mr in FindObjectsOfType<MeshRenderer>())
                     if (mr.enabled)
-                        bodyMR.Invoke(mr, rmask, cmask);
+                        bodyMR.Invoke(mr);
                 foreach (var smr in FindObjectsOfType<SkinnedMeshRenderer>())
                     if (smr.enabled)
-                        bodySMR.Invoke(smr, rmask, cmask);
+                        bodySMR.Invoke(smr);
             };
 
             if (m_separateCastersAndReceivers)
@@ -822,31 +823,28 @@ namespace UTJ.RaytracedHardShadow
                 int shift = 0;
                 foreach (var layer in m_layers)
                 {
-                    var cmask = (rthsHitMask)((uint)rthsHitMask.Caster << shift);
-                    var rmask = (rthsHitMask.Rceiver | cmask);
                     switch (layer.receiverScope)
                     {
-                        case ObjectScope.EntireScene: processEntireScene(rmask, 0); break;
-                        case ObjectScope.Scenes: processScenes(layer.receiverScenePaths, rmask, 0); break;
-                        case ObjectScope.Objects: processGOs(layer.receiverObjects, rmask, 0); break;
+                        case ObjectScope.EntireScene: processEntireScene(); break;
+                        case ObjectScope.Scenes: processScenes(layer.receiverScenePaths); break;
+                        case ObjectScope.Objects: processGOs(layer.receiverObjects); break;
                     }
                     switch (layer.casterScope)
                     {
-                        case ObjectScope.EntireScene: processEntireScene(0, cmask); break;
-                        case ObjectScope.Scenes: processScenes(layer.casterScenePaths, 0, cmask); break;
-                        case ObjectScope.Objects: processGOs(layer.casterObjects, 0, cmask); break;
+                        case ObjectScope.EntireScene: processEntireScene(); break;
+                        case ObjectScope.Scenes: processScenes(layer.casterScenePaths); break;
+                        case ObjectScope.Objects: processGOs(layer.casterObjects); break;
                     }
                     shift += 1;
                 }
             }
             else
             {
-                var mask = rthsHitMask.Both;
                 switch (m_geometryScope)
                 {
-                    case ObjectScope.EntireScene: processEntireScene(mask, mask); break;
-                    case ObjectScope.Scenes: processScenes(m_geometryScenePaths, mask, mask); break;
-                    case ObjectScope.Objects: processGOs(m_geometryObjects, mask, mask); break;
+                    case ObjectScope.EntireScene: processEntireScene(); break;
+                    case ObjectScope.Scenes: processScenes(m_geometryScenePaths); break;
+                    case ObjectScope.Objects: processGOs(m_geometryObjects); break;
                 }
             }
         }
@@ -1018,8 +1016,8 @@ namespace UTJ.RaytracedHardShadow
                         scl => { m_renderer.AddLight(scl); }
                     );
                     EnumerateMeshRenderers(
-                        (mr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(mr), rmask, cmask); },
-                        (smr, rmask, cmask) => { m_renderer.AddGeometry(GetMeshInstanceData(smr), rmask, cmask); }
+                        (mr) => { m_renderer.AddMesh(GetMeshInstanceData(mr)); },
+                        (smr) => { m_renderer.AddMesh(GetMeshInstanceData(smr)); }
                     );
                 }
                 catch (Exception e)
