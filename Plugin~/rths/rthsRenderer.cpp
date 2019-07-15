@@ -112,7 +112,7 @@ void RendererBase::endScene()
     for (int li = 0; li < rthsMaxLayers; ++li) {
         uint32_t layer_mask = 0x1 << m_layer_lut[li];
         for (auto& obj : m_layers[li])
-            obj->mask = layer_mask;
+            obj->layer_mask = layer_mask;
     }
     auto to_gpu_layer_mask = [this](uint32_t cpu_layer_mask) {
         uint32_t ret = 0;

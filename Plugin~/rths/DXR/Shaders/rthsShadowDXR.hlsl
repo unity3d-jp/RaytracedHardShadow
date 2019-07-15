@@ -18,8 +18,9 @@ enum RENDER_FLAG
 
 enum INSTANCE_FLAG
 {
-    IF_VISUBLE_FROM_CAMERAS = 0x01,
-    IF_VISUBLE_FROM_LIGHTS = 0x02,
+    IF_VISIBLE_FROM_CAMERAS = 0x01,
+    IF_VISIBLE_FROM_LIGHTS  = 0x02,
+    IF_RECEIVE_SHADOWS      = 0x04,
 };
 
 struct CameraData
@@ -59,7 +60,7 @@ struct SceneData
 
 struct InstanceData
 {
-    uint related_caster_mask;
+    uint instance_flags;
 };
 
 
@@ -92,6 +93,8 @@ int LightCount() { return g_scene_data.light_count; }
 LightData GetLight(int i) { return g_scene_data.lights[i]; }
 
 float3 HitPosition() { return WorldRayOrigin() + WorldRayDirection() * (RayTCurrent() - ShadowRayOffset()); }
+
+uint InstanceFlags() { return g_instance_data[InstanceID()].instance_flags; }
 
 // a & b must be normalized
 float angle_between(float3 a, float3 b) { return acos(clamp(dot(a, b), 0, 1)); }

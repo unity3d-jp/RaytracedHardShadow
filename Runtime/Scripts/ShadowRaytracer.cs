@@ -31,25 +31,6 @@ namespace UTJ.RaytracedHardShadow
 #endif
         }
 
-        [Serializable]
-        public class Layer
-        {
-#if UNITY_EDITOR
-            public bool fold = true;
-#endif
-            public ObjectScope receiverScope;
-            public ObjectScope casterScope;
-#if UNITY_EDITOR
-            public SceneAsset[] receiverScenes;
-            public SceneAsset[] casterScenes;
-#endif
-            // keep scene paths in *ScenePaths fields to handle scene scope at runtime
-            public string[] receiverScenePaths;
-            public string[] casterScenePaths;
-            public GameObject[] receiverObjects;
-            public GameObject[] casterObjects;
-        }
-
         public class MeshRecord
         {
             public rthsMeshData meshData;
@@ -230,14 +211,12 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] string[] m_lightScenePaths;
         [SerializeField] GameObject[] m_lightObjects;
 
-        [SerializeField] bool m_separateCastersAndReceivers;
         [SerializeField] ObjectScope m_geometryScope;
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_geometryScenes;
 #endif
         [SerializeField] string[] m_geometryScenePaths;
         [SerializeField] GameObject[] m_geometryObjects;
-        [SerializeField] List<Layer> m_layers = new List<Layer> { new Layer() };
 
         [SerializeField] bool m_GPUSkinning = true;
         [SerializeField] bool m_adaptiveSampling = false;
@@ -348,11 +327,6 @@ namespace UTJ.RaytracedHardShadow
             set { m_lightObjects = value; }
         }
 
-        public bool separateCastersAndReceivers
-        {
-            get { return m_separateCastersAndReceivers; }
-            set { m_separateCastersAndReceivers = value; }
-        }
         public ObjectScope geometryScope
         {
             get { return m_geometryScope; }
@@ -375,10 +349,6 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_geometryObjects; }
             set { m_geometryObjects = value; }
-        }
-        public int layerCount
-        {
-            get { return m_layers.Count; }
         }
 
         public bool GPUSkinning
@@ -421,50 +391,14 @@ namespace UTJ.RaytracedHardShadow
 
         #region public methods
         // user must call UpdateScenePaths() manually if made changes to the layer
-        public Layer GetLayer(int i)
-        {
-            return m_layers[i];
-        }
-
-        // user must call UpdateScenePaths() manually if made changes to the layer
-        // fail if layer count is already max (kMaxLayers)
-        public Layer AddLayer()
-        {
-            if (m_layers.Count == kMaxLayers)
-                return null;
-
-            var ret = new Layer();
-            m_layers.Add(ret);
-            return ret;
-        }
-
-        public bool RemoveLayer(Layer l)
-        {
-            return m_layers.Remove(l);
-        }
-
         // serialize SceneAssets as string paths to use at runtime
         public void UpdateScenePaths()
         {
 #if UNITY_EDITOR
             if (m_lightScope == ObjectScope.Scenes)
                 ToPaths(ref m_lightScenePaths, m_lightScenes);
-
-            if (m_separateCastersAndReceivers)
-            {
-                foreach (var layer in m_layers)
-                {
-                    if (layer.casterScope == ObjectScope.Scenes)
-                        ToPaths(ref layer.casterScenePaths, layer.casterScenes);
-                    if (layer.receiverScope == ObjectScope.Scenes)
-                        ToPaths(ref layer.receiverScenePaths, layer.receiverScenes);
-                }
-            }
-            else
-            {
-                if (m_geometryScope == ObjectScope.Scenes)
-                    ToPaths(ref m_geometryScenePaths, m_geometryScenes);
-            }
+            if (m_geometryScope == ObjectScope.Scenes)
+                ToPaths(ref m_geometryScenePaths, m_geometryScenes);
 #endif
         }
 
@@ -818,34 +752,11 @@ namespace UTJ.RaytracedHardShadow
                         bodySMR.Invoke(smr);
             };
 
-            if (m_separateCastersAndReceivers)
+            switch (m_geometryScope)
             {
-                int shift = 0;
-                foreach (var layer in m_layers)
-                {
-                    switch (layer.receiverScope)
-                    {
-                        case ObjectScope.EntireScene: processEntireScene(); break;
-                        case ObjectScope.Scenes: processScenes(layer.receiverScenePaths); break;
-                        case ObjectScope.Objects: processGOs(layer.receiverObjects); break;
-                    }
-                    switch (layer.casterScope)
-                    {
-                        case ObjectScope.EntireScene: processEntireScene(); break;
-                        case ObjectScope.Scenes: processScenes(layer.casterScenePaths); break;
-                        case ObjectScope.Objects: processGOs(layer.casterObjects); break;
-                    }
-                    shift += 1;
-                }
-            }
-            else
-            {
-                switch (m_geometryScope)
-                {
-                    case ObjectScope.EntireScene: processEntireScene(); break;
-                    case ObjectScope.Scenes: processScenes(m_geometryScenePaths); break;
-                    case ObjectScope.Objects: processGOs(m_geometryObjects); break;
-                }
+                case ObjectScope.EntireScene: processEntireScene(); break;
+                case ObjectScope.Scenes: processScenes(m_geometryScenePaths); break;
+                case ObjectScope.Objects: processGOs(m_geometryObjects); break;
             }
         }
 

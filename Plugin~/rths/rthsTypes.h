@@ -35,8 +35,11 @@ enum class LightType : uint32_t
 
 enum class InstanceFlag : uint32_t
 {
-    VisibleFromCameras = 0x01,
-    VisibleFromLights = 0x02,
+    VisibleFromCameras  = 0x01,
+    VisibleFromLights   = 0x02,
+    ReceiveShadows      = 0x04,
+
+    Default = VisibleFromCameras | VisibleFromLights | ReceiveShadows,
 };
 
 enum class UpdateFlag : uint32_t
@@ -220,9 +223,8 @@ public:
     uint32_t update_flags = 0; // combination of UpdateFlag
 
     uint32_t layer = 0;
-    uint8_t cull_flags_object = 0; // combination of CullFlag
-    uint8_t cull_flags_shadow = 0; // combination of CullFlag
-    uint32_t mask = 0;
+    uint32_t layer_mask = 0;
+    uint32_t instance_flags = (uint32_t)InstanceFlag::Default;
 
     DeviceMeshInstanceData *device_data = nullptr;
 

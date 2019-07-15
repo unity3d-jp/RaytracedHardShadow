@@ -13,7 +13,7 @@ namespace rths {
 
 struct InstanceData
 {
-    uint32_t flags; // combination of InstanceFlags
+    uint32_t instance_flags; // combination of InstanceFlags
 };
 
 extern ID3D12Device *g_host_d3d12_device;
@@ -964,7 +964,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
                 D3D12_RAYTRACING_INSTANCE_DESC tmp{};
                 (float3x4&)tmp.Transform = to_float3x4(inst_dxr.base->transform);
                 tmp.InstanceID = i; // This value will be exposed to the shader via InstanceID()
-                tmp.InstanceMask = (UINT8)inst_dxr.base->mask;
+                tmp.InstanceMask = (UINT8)inst_dxr.base->layer_mask;
                 tmp.InstanceContributionToHitGroupIndex = 0;
                 tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
                 tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
@@ -1051,6 +1051,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         if (SUCCEEDED(rd.instance_data->Map(0, nullptr, (void**)&dst))) {
             for (auto& inst_dxr : rd.instances) {
                 InstanceData tmp{};
+                tmp.instance_flags = inst_dxr->base->instance_flags;
                 *dst++ = tmp;
             }
             rd.instance_data->Unmap(0, nullptr);
@@ -1228,6 +1229,9 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
 
 void GfxContextDXR::frameEnd()
 {
+    if (!valid() || !checkError())
+        return;
+
     m_deformer->reset();
     m_clm_direct->reset();
     m_clm_copy->reset();

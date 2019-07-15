@@ -490,7 +490,7 @@ namespace UTJ.RaytracedHardShadow
 
         public bool AddLight(Light light)
         {
-            var mask = (uint)light.renderingLayerMask;
+            var mask = (uint)light.cullingMask;
             var trans = light.transform;
             switch (light.type)
             {
