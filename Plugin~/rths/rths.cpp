@@ -175,17 +175,23 @@ rthsAPI void rthsMeshInstanceRelease(MeshInstanceData *self)
         return;
     self->release();
 }
-rthsAPI void rthsMeshInstanceSetName(rths::MeshInstanceData * self, const char *name)
+rthsAPI void rthsMeshInstanceSetName(rths::MeshInstanceData *self, const char *name)
 {
     if (!self)
         return;
     self->name = name ? name : std::string();
 }
-rthsAPI void rthsMeshInstanceSetLayer(rths::MeshInstanceData *self, int layer)
+rthsAPI void rthsMeshInstanceSetFlags(rths::MeshInstanceData *self, uint32_t flags)
 {
     if (!self)
         return;
-    self->layer = layer;
+    self->setFlags(flags);
+}
+rthsAPI void rthsMeshInstanceSetLayer(rths::MeshInstanceData *self, uint32_t layer)
+{
+    if (!self)
+        return;
+    self->setLayer(layer);
 }
 rthsAPI void rthsMeshInstanceSetTransform(MeshInstanceData *self, float4x4 transform)
 {

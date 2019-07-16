@@ -82,6 +82,17 @@ namespace UTJ.RaytracedHardShadow
         DbgForceUpdateAS        = 0x02000000,
     }
 
+    [Flags]
+    public enum rthsInstanceFlag : uint
+    {
+        ReceiveShadows  = 0x01,
+        CastShadows     = 0x02,
+        CullFront       = 0x10,
+        CullBack        = 0x20,
+        CullFrontShadow = 0x40,
+        CullBackShadow  = 0x80,
+    };
+
     public enum rthsRenderTargetFormat
     {
         Unknown = 0,
@@ -248,6 +259,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsMeshInstanceCreate(rthsMeshData mesh);
         [DllImport("rths")] static extern void rthsMeshInstanceRelease(IntPtr self);
         [DllImport("rths")] static extern void rthsMeshInstanceSetName(IntPtr self, string name);
+        [DllImport("rths")] static extern void rthsMeshInstanceSetFlags(IntPtr self, uint flags);
         [DllImport("rths")] static extern void rthsMeshInstanceSetLayer(IntPtr self, int layer);
         [DllImport("rths")] static extern void rthsMeshInstanceSetTransform(IntPtr self, Matrix4x4 transform);
         [DllImport("rths")] static extern void rthsMeshInstanceSetBones(IntPtr self, Matrix4x4[] bones, int num_bones);
@@ -262,6 +274,10 @@ namespace UTJ.RaytracedHardShadow
         public string name
         {
             set { rthsMeshInstanceSetName(self, value); }
+        }
+        public uint flags
+        {
+            set { rthsMeshInstanceSetFlags(self, value); }
         }
         public int layer
         {

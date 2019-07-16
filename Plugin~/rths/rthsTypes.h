@@ -35,21 +35,25 @@ enum class LightType : uint32_t
 
 enum class InstanceFlag : uint32_t
 {
-    VisibleFromCameras  = 0x01,
-    VisibleFromLights   = 0x02,
-    ReceiveShadows      = 0x04,
+    ReceiveShadows  = 0x01,
+    CastShadows     = 0x02,
+    CullFront       = 0x10,
+    CullBack        = 0x20,
+    CullFrontShadow = 0x40,
+    CullBackShadow  = 0x80,
 
-    Default = VisibleFromCameras | VisibleFromLights | ReceiveShadows,
+    Default = ReceiveShadows | CastShadows | CullBack,
 };
 
 enum class UpdateFlag : uint32_t
 {
-    None = 0,
-    Transform = 1,
-    Blendshape = 2,
-    Bones = 4,
+    None        = 0x00,
+    Transform   = 0x01,
+    Blendshape  = 0x02,
+    Bones       = 0x04,
+    Flags       = 0x08,
 
-    Any = Transform | Blendshape | Bones,
+    Any = Transform | Blendshape | Bones | Flags,
 };
 
 enum class RenderTargetFormat : uint32_t
@@ -238,6 +242,8 @@ public:
     void setTransform(const float4x4& v);
     void setBones(const float4x4 *v, size_t n);
     void setBlendshapeWeights(const float *v, size_t n);
+    void setFlags(uint32_t v);
+    void setLayer(uint32_t v);
 };
 using MeshInstanceDataPtr = ref_ptr<MeshInstanceData>;
 

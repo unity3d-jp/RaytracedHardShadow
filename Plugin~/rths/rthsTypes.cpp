@@ -153,6 +153,22 @@ void MeshInstanceData::setBlendshapeWeights(const float *v, size_t n)
     }
 }
 
+void MeshInstanceData::setFlags(uint32_t v)
+{
+    if (instance_flags != v) {
+        markUpdated(UpdateFlag::Flags);
+        instance_flags = v;
+    }
+}
+
+void MeshInstanceData::setLayer(uint32_t v)
+{
+    if (layer != v) {
+        markUpdated(UpdateFlag::Flags);
+        layer = v;
+    }
+}
+
 
 
 RenderTargetData::RenderTargetData()

@@ -33,15 +33,21 @@ static const WCHAR* kRayGenShaders[]{
     L"RayGenAntialiasing",
 };
 static const WCHAR* kMissShaders[]{
-    L"Miss1",
-    L"Miss2" ,
+    L"MissCamera",
+    L"MissLight" ,
 };
 static const WCHAR* kHitGroups[]{
     L"CameraToObj",
     L"ObjToLights" ,
 };
-static const WCHAR* kAnyHitShader = L"AnyHit";
-static const WCHAR* kClosestHitShader = L"ClosestHit";
+static const WCHAR* kAnyHitShaders[]{
+    L"AnyHitCamera",
+    L"AnyHitLight",
+};
+static const WCHAR* kClosestHitShaders[]{
+    L"ClosestHitCamera",
+    nullptr
+};
 
 const D3D12_HEAP_PROPERTIES kDefaultHeapProps =
 {
@@ -301,17 +307,15 @@ bool GfxContextDXR::initialize()
         // zero exports means 'export all'
         add_subobject(D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &dxil_desc);
 
-        D3D12_HIT_GROUP_DESC hit_desc1{};
-        hit_desc1.HitGroupExport = kHitGroups[0];
-        hit_desc1.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-        hit_desc1.ClosestHitShaderImport = kClosestHitShader;
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc1);
-
-        D3D12_HIT_GROUP_DESC hit_desc2{};
-        hit_desc2.HitGroupExport = kHitGroups[1];
-        hit_desc2.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-        hit_desc2.AnyHitShaderImport = kAnyHitShader;
-        add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc2);
+        D3D12_HIT_GROUP_DESC hit_descs[_countof(kHitGroups)]{};
+        for (int i = 0; i < _countof(hit_descs); ++i) {
+            auto& hit_desc = hit_descs[i];
+            hit_desc.HitGroupExport = kHitGroups[i];
+            hit_desc.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+            hit_desc.AnyHitShaderImport = kAnyHitShaders[i];
+            hit_desc.ClosestHitShaderImport = kClosestHitShaders[i];
+            add_subobject(D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit_desc);
+        }
 
         D3D12_RAYTRACING_SHADER_CONFIG rt_shader_desc{};
         rt_shader_desc.MaxPayloadSizeInBytes = sizeof(float) * 4;

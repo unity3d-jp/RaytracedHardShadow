@@ -63,12 +63,16 @@ enum class RenderFlag : uint32_t
     DbgForceUpdateAS        = 0x02000000,
 };
 
-enum class HitMask : uint8_t
+enum class InstanceFlag : uint32_t
 {
-    Receiver    = 0x01,
-    Caster      = 0x02,
-    Both        = Receiver | Caster,
-    AllCaster   = 0xfe,
+    ReceiveShadows  = 0x01,
+    CastShadows     = 0x02,
+    CullFront       = 0x10,
+    CullBack        = 0x20,
+    CullFrontShadow = 0x40,
+    CullBackShadow  = 0x80,
+
+    Default = ReceiveShadows | CastShadows | CullBack,
 };
 
 enum class RenderTargetFormat : uint32_t
@@ -137,7 +141,8 @@ rthsAPI void rthsMeshMarkDyncmic(rths::MeshData *self, bool v);
 rthsAPI rths::MeshInstanceData* rthsMeshInstanceCreate(rths::MeshData *mesh);
 rthsAPI void rthsMeshInstanceRelease(rths::MeshInstanceData *self);
 rthsAPI void rthsMeshInstanceSetName(rths::MeshInstanceData *self, const char *name);
-rthsAPI void rthsMeshInstanceSetLayer(rths::MeshInstanceData *self, int layer);
+rthsAPI void rthsMeshInstanceSetFlags(rths::MeshInstanceData *self, uint32_t flags);
+rthsAPI void rthsMeshInstanceSetLayer(rths::MeshInstanceData *self, uint32_t layer);
 rthsAPI void rthsMeshInstanceSetTransform(rths::MeshInstanceData *self, rths::float4x4 transform);
 rthsAPI void rthsMeshInstanceSetBones(rths::MeshInstanceData *self, const rths::float4x4 *bones, int num_bones);
 rthsAPI void rthsMeshInstanceSetBlendshapeWeights(rths::MeshInstanceData *self, const float *bsw, int num_bsw);

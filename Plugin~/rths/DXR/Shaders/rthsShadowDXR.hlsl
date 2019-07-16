@@ -135,7 +135,7 @@ RayPayload ShootCameraRay(float2 offset = 0.0f)
 
     RayDesc ray = GetCameraRay(offset);
     int render_flags = RenderFlags();
-    int ray_flags = RAY_FLAG_FORCE_OPAQUE;
+    int ray_flags = 0;
     if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
@@ -221,19 +221,13 @@ void RayGenAntialiasing()
 
 
 [shader("miss")]
-void Miss1(inout RayPayload payload : SV_RayPayload)
+void MissCamera(inout RayPayload payload : SV_RayPayload)
 {
     // nothing todo here
 }
 
-[shader("miss")]
-void Miss2(inout RayPayload payload : SV_RayPayload)
-{
-    payload.shadow += (1.0f / LightCount());
-}
-
 [shader("closesthit")]
-void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
+void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
     payload.instance_id = InstanceID();
 
@@ -313,7 +307,20 @@ void ClosestHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInte
 }
 
 [shader("anyhit")]
-void AnyHit(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
+void AnyHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
+{
+
+}
+
+
+[shader("miss")]
+void MissLight(inout RayPayload payload : SV_RayPayload)
+{
+    payload.shadow += (1.0f / LightCount());
+}
+
+[shader("anyhit")]
+void AnyHitLight(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
     // this shader is called only when 'ignore self shadow' is enabled.
 
