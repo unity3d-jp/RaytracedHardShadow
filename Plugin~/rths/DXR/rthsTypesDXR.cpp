@@ -85,10 +85,12 @@ bool MeshDataDXR::valid() const
 
 bool MeshDataDXR::isRelocated() const
 {
-    if (auto translator = GfxContextDXR::getResourceTranslator()) {
-        return
-            (vertex_buffer->host_ptr && !translator->isValidBuffer(*vertex_buffer)) ||
-            (index_buffer->host_ptr && !translator->isValidBuffer(*index_buffer));
+    if (vertex_buffer && index_buffer) {
+        if (auto translator = GfxContextDXR::getResourceTranslator()) {
+            return
+                (vertex_buffer->host_ptr && !translator->isValidBuffer(*vertex_buffer)) ||
+                (index_buffer->host_ptr && !translator->isValidBuffer(*index_buffer));
+        }
     }
     return false;
 }
