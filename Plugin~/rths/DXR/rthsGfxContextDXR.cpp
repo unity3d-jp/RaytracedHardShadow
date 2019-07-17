@@ -14,6 +14,7 @@ namespace rths {
 struct InstanceData
 {
     uint32_t instance_flags; // combination of InstanceFlags
+    uint32_t layer_mask;
 };
 
 extern ID3D12Device *g_host_d3d12_device;
@@ -974,6 +975,8 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
                 if (inst_dxr.base->hasFlag(InstanceFlag::ShadowsOnly) ||
                     !inst_dxr.base->hasFlag(InstanceFlag::CastShadows))
                     tmp.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+                if (inst_dxr.base->hasFlag(InstanceFlag::ShadowsOnly))
+                    tmp.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
                 tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
                 instance_descs[i] = tmp;
             }
@@ -1059,6 +1062,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
             for (auto& inst_dxr : rd.instances) {
                 InstanceData tmp{};
                 tmp.instance_flags = inst_dxr->base->instance_flags;
+                tmp.layer_mask = inst_dxr->base->layer_mask;
                 *dst++ = tmp;
             }
             rd.instance_data->Unmap(0, nullptr);

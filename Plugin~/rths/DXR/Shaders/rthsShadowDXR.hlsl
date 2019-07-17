@@ -61,6 +61,7 @@ struct SceneData
 struct InstanceData
 {
     uint instance_flags;
+    uint layer_mask;
 };
 
 
@@ -95,6 +96,7 @@ LightData GetLight(int i) { return g_scene_data.lights[i]; }
 float3 HitPosition() { return WorldRayOrigin() + WorldRayDirection() * (RayTCurrent() - ShadowRayOffset()); }
 
 uint InstanceFlags() { return g_instance_data[InstanceID()].instance_flags; }
+uint InstanceLayerMask() { return g_instance_data[InstanceID()].layer_mask; }
 
 // a & b must be normalized
 float angle_between(float3 a, float3 b) { return acos(clamp(dot(a, b), 0, 1)); }
@@ -245,6 +247,8 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
     // shoot shadow ray (hit position -> light)
 
     uint instance_flags = InstanceFlags();
+    uint instance_layer_mask = InstanceLayerMask();
+
     uint render_flags = RenderFlags();
     uint ray_flags = 0;
     if (render_flags & RF_CULL_BACK_FACES) {
@@ -261,6 +265,9 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
     int li;
     for (li = 0; li < LightCount(); ++li) {
         LightData light = GetLight(li);
+        if ((instance_layer_mask & light.layer_mask_gpu) == 0)
+            continue;
+
         uint mask = (instance_flags & IF_RECEIVE_SHADOWS) == 0 ? 0 :
             light.layer_mask_gpu & CameraLayerMask();
 
