@@ -74,6 +74,12 @@ namespace UTJ.RaytracedHardShadow
     }
 
     [Flags]
+    public enum rthsGlobalFlag : uint
+    {
+        DeferredInitialization = 0x01,
+    };
+
+    [Flags]
     public enum rthsRenderFlag : uint
     {
         CullBackFaces           = 0x00000001,
@@ -125,8 +131,8 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsClearErrorLog();
         [DllImport("rths")] static extern rthsDebugFlag rthsGlobalsGetDebugFlags();
         [DllImport("rths")] static extern void rthsGlobalsSetDebugFlags(rthsDebugFlag v);
-        [DllImport("rths")] static extern byte rthsGlobalsGetDeferredInitialization();
-        [DllImport("rths")] static extern void rthsGlobalsSetDeferredInitialization(byte v);
+        [DllImport("rths")] static extern rthsGlobalFlag rthsGlobalsGetFlags();
+        [DllImport("rths")] static extern void rthsGlobalsSetFlags(rthsGlobalFlag v);
         #endregion
 
         public static string version
@@ -146,10 +152,10 @@ namespace UTJ.RaytracedHardShadow
             get { return rthsGlobalsGetDebugFlags(); }
             set { rthsGlobalsSetDebugFlags(value); }
         }
-        public static bool deferredInitialization
+        public static rthsGlobalFlag flags
         {
-            get { return rthsGlobalsGetDeferredInitialization() != 0; }
-            set { rthsGlobalsSetDeferredInitialization((byte)(value ? 1 : 0)); }
+            get { return rthsGlobalsGetFlags(); }
+            set { rthsGlobalsSetFlags(value); }
         }
 
         public static void ClearErrorLog() { rthsClearErrorLog(); }
@@ -466,7 +472,7 @@ namespace UTJ.RaytracedHardShadow
 
         public static rthsRenderer Create()
         {
-            rthsGlobals.deferredInitialization = true;
+            rthsGlobals.flags = rthsGlobalFlag.DeferredInitialization;
             var ret = new rthsRenderer { self = rthsRendererCreate() };
             IssueFlushDeferredCommands();
             return ret;
@@ -507,14 +513,15 @@ namespace UTJ.RaytracedHardShadow
             rthsRendererSetSelfShadowThreshold(self, v);
         }
 
-        public void SetCamera(Camera cam)
+        public void SetCamera(Camera cam, bool useCullingMask = true)
         {
-            rthsRendererSetCamera(self, cam.transform.position, cam.worldToCameraMatrix, cam.projectionMatrix, (uint)cam.cullingMask);
+            uint mask = useCullingMask ? (uint)cam.cullingMask : ~0u;
+            rthsRendererSetCamera(self, cam.transform.position, cam.worldToCameraMatrix, cam.projectionMatrix, mask);
         }
 
-        public bool AddLight(Light light)
+        public bool AddLight(Light light, bool useCullingMask = true)
         {
-            var mask = (uint)light.cullingMask;
+            uint mask = useCullingMask ? (uint)light.cullingMask : ~0u;
             var trans = light.transform;
             switch (light.type)
             {

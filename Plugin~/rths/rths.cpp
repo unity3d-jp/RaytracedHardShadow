@@ -28,13 +28,13 @@ rthsAPI void rthsGlobalsSetDebugFlags(uint32_t v)
 {
     rths::GetGlobals().debug_flags = v;
 }
-rthsAPI bool rthsGlobalsGetDeferredInitialization()
+rthsAPI uint32_t rthsGlobalsGetFlags()
 {
-    return rths::GetGlobals().deferred_initilization;
+    return rths::GetGlobals().flags;
 }
-rthsAPI void rthsGlobalsSetDeferredInitialization(bool v)
+rthsAPI void rthsGlobalsSetFlags(uint32_t v)
 {
-    rths::GetGlobals().deferred_initilization = v;
+    rths::GetGlobals().flags = v;
 }
 
 

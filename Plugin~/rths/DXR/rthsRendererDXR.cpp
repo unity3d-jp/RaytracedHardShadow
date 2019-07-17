@@ -39,7 +39,7 @@ RendererDXR::RendererDXR()
         m_is_initialized = true;
     };
 
-    if (GetGlobals().deferred_initilization)
+    if (GetGlobals().hasFlag(GlobalFlag::DeferredInitialization))
         AddDeferredCommand(do_init);
     else
         do_init();
@@ -94,11 +94,10 @@ void RendererDXR::frameBegin()
 
 void RendererDXR::render()
 {
-    if (!valid())
+    if (!valid() || !m_ready_to_render)
         return;
 
     if (m_mutex.try_lock()) {
-        ++m_render_count;
         m_is_rendering = true;
         auto ctx = GfxContextDXR::getInstance();
         ctx->prepare(m_render_data);
@@ -106,22 +105,19 @@ void RendererDXR::render()
         ctx->setRenderTarget(m_render_data, m_render_target);
         ctx->setMeshes(m_render_data, m_meshes);
         ctx->flush(m_render_data);
-        m_mutex.unlock();
-    }
-    else {
-        ++m_skip_count;
     }
 }
 
 void RendererDXR::finish()
 {
-    if (!valid())
+    if (!m_is_rendering)
         return;
 
     auto ctx = GfxContextDXR::getInstance();
     if (!ctx->finish(m_render_data))
         m_render_data.clear();
     m_is_rendering = false;
+    m_mutex.unlock();
 }
 
 void RendererDXR::frameEnd()

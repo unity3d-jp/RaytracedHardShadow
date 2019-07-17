@@ -166,6 +166,8 @@ namespace UTJ.RaytracedHardShadowEditor
             {
                 EditorGUILayout.PropertyField(so.FindProperty("m_shadowRayOffset"));
             }
+            EditorGUILayout.PropertyField(so.FindProperty("m_useCameraCullingMask"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_useLightCullingMask"));
             EditorGUILayout.Space();
 
             // lights

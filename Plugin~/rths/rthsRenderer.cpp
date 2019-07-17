@@ -77,7 +77,6 @@ void RendererBase::release()
 void RendererBase::beginScene()
 {
     m_mutex.lock();
-    ++m_update_count;
     m_is_updating = true;
 
     m_scene_data.render_flags = 0;
@@ -132,6 +131,7 @@ void RendererBase::endScene()
 
 
     m_is_updating = false;
+    m_ready_to_render = true;
     m_mutex.unlock();
 }
 

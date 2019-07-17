@@ -919,14 +919,6 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         inst.clearUpdateFlags(); // prevent other renderers to build BLAS again
     }
 
-#ifdef rthsEnableTimestamp
-    if (rd.hasFlag(RenderFlag::ParallelCommandList) && rd.timestamp->isEnabled()) {
-        // make sure all building BLAS commands are finished before timestamp is set
-        auto fv = incrementFenceValue();
-        m_cmd_queue_direct->Signal(getFence(), fv);
-        m_cmd_queue_direct->Wait(getFence(), fv);
-    }
-#endif
     rthsTimestampQuery(rd.timestamp, cl_blas, "Building BLAS end");
     cl_blas->Close();
     rd.fv_blas = submitDirectCommandList(cl_blas, rd.fv_deform);
@@ -1096,7 +1088,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
 {
     if (!valid() || !checkError())
         return;
-    if (!rd.render_target || !rd.render_target->texture->resource) {
+    if (!rd.render_target || !rd.render_target->valid()) {
         SetErrorLog("GfxContext::flush(): render target is null\n");
         return;
     }

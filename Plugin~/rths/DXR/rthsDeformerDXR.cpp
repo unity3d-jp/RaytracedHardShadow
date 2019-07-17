@@ -354,14 +354,6 @@ uint64_t DeformerDXR::flush(RenderDataDXR& rd)
         return 0;
 
     auto cq = getComputeQueue();
-#ifdef rthsEnableTimestamp
-    if (rd.hasFlag(RenderFlag::ParallelCommandList) && rd.timestamp->isEnabled()) {
-        // make sure all deform commands are finished before timestamp is set
-        auto fv = incrementFenceValue();
-        cq->Signal(getFence(), fv);
-        cq->Wait(getFence(), fv);
-    }
-#endif
     rthsTimestampQuery(rd.timestamp, rd.cl_deform, "Deform end");
     rd.cl_deform->Close();
     auto ret = GfxContextDXR::getInstance()->submitComputeCommandList(rd.cl_deform, rd.fv_translate);

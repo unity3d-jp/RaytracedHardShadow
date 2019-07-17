@@ -80,11 +80,9 @@ protected:
     SceneData m_scene_data;
     RenderTargetDataPtr m_render_target;
     std::mutex m_mutex;
+    std::atomic_bool m_ready_to_render{ false };
     mutable std::atomic_bool m_is_updating{ false };
     mutable std::atomic_bool m_is_rendering{ false };
-    std::atomic_int m_update_count{ 0 };
-    std::atomic_int m_render_count{ 0 };
-    std::atomic_int m_skip_count{ 0 };
 
     std::vector<MeshInstanceDataPtr> m_meshes;
     std::array<uint32_t, rthsMaxLayers> m_layer_mesh_count;

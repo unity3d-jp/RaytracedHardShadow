@@ -16,6 +16,11 @@ enum class DebugFlag : uint32_t
     PowerStableState    = 0x08,
 };
 
+enum class GlobalFlag : uint32_t
+{
+    DeferredInitialization  = 0x01,
+};
+
 enum class RenderFlag : uint32_t
 {
     CullBackFaces           = 0x00000001,
@@ -28,7 +33,6 @@ enum class RenderFlag : uint32_t
     Antialiasing            = 0x00000200,
     GPUSkinning             = 0x00010000,
     ClampBlendShapeWights   = 0x00020000,
-    ParallelCommandList     = 0x00040000,
 };
 
 enum class LightType : uint32_t
@@ -132,12 +136,14 @@ struct SceneData
 
 struct GlobalSettings
 {
-    std::atomic_uint32_t debug_flags{ 0 };
-    std::atomic_bool deferred_initilization{ false };
+    std::atomic_uint32_t debug_flags{ 0 }; // combination of DebugFlag
+    std::atomic_uint32_t flags{ 0 }; // combination of GlobalFlag
 
     void enableDebugFlag(DebugFlag flag);
     void disableDebugFlag(DebugFlag flag);
     bool hasDebugFlag(DebugFlag flag) const;
+
+    bool hasFlag(GlobalFlag v) const;
 };
 
 GlobalSettings& GetGlobals();
@@ -289,7 +295,7 @@ using RenderTargetDataPtr = ref_ptr<RenderTargetData>;
 template<class T>
 inline void ExternalRelease(T *self)
 {
-    if (GetGlobals().deferred_initilization)
+    if (GetGlobals().hasFlag(GlobalFlag::DeferredInitialization))
         AddDeferredCommand([self]() { self->internalRelease(); });
     else
         self->internalRelease();

@@ -54,6 +54,11 @@ enum class DebugFlag : uint32_t
     PowerStableState    = 0x08,
 };
 
+enum class GlobalFlag : uint32_t
+{
+    DeferredInitialization = 0x01,
+};
+
 enum class RenderFlag : uint32_t
 {
     CullBackFaces           = 0x00000001,
@@ -125,8 +130,8 @@ rthsAPI const char* rthsGetErrorLog();
 rthsAPI void rthsClearErrorLog();
 rthsAPI uint32_t rthsGlobalsGetDebugFlags();
 rthsAPI void rthsGlobalsSetDebugFlags(uint32_t v);
-rthsAPI bool rthsGlobalsGetDeferredInitialization();
-rthsAPI void rthsGlobalsSetDeferredInitialization(bool v);
+rthsAPI uint32_t rthsGlobalsGetFlags();
+rthsAPI void rthsGlobalsSetFlags(uint32_t v);
 
 // mesh interface
 rthsAPI rths::MeshData* rthsMeshCreate();

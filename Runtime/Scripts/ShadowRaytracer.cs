@@ -240,6 +240,9 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] float m_selfShadowThreshold = 0.0001f;
         [SerializeField] float m_shadowRayOffset = 0.0001f;
 
+        [SerializeField] bool m_useCameraCullingMask = true;
+        [SerializeField] bool m_useLightCullingMask = true;
+
         [SerializeField] ObjectScope m_lightScope;
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_lightScenes;
@@ -274,7 +277,7 @@ namespace UTJ.RaytracedHardShadow
         bool m_initialized = false;
         List<ExportRequest> m_exportRequests;
 
-        static int s_instanceCount, s_updateCount;
+        static int s_instanceCount, s_updateCount, s_renderCount;
         static bool s_dbgVerboseLog = false;
         static Dictionary<Mesh, MeshRecord> s_meshDataCache;
         static Dictionary<Component, MeshRecord> s_bakedMeshDataCache;
@@ -336,6 +339,16 @@ namespace UTJ.RaytracedHardShadow
             set { m_shadowRayOffset = value; }
         }
 
+        public bool useCameraCullingMask
+        {
+            get { return m_useCameraCullingMask; }
+            set { m_useCameraCullingMask = value; }
+        }
+        public bool useLightCullingMask
+        {
+            get { return m_useLightCullingMask; }
+            set { m_useLightCullingMask = value; }
+        }
 
         public ObjectScope lightScope
         {
@@ -941,9 +954,9 @@ namespace UTJ.RaytracedHardShadow
                     m_renderer.SetShadowRayOffset(m_ignoreSelfShadow ? 0.0f : m_shadowRayOffset);
                     m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
                     m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
-                    m_renderer.SetCamera(cam);
+                    m_renderer.SetCamera(cam, m_useCameraCullingMask);
                     EnumerateLights(
-                        l => { m_renderer.AddLight(l); },
+                        l => { m_renderer.AddLight(l, m_useLightCullingMask); },
                         scl => { m_renderer.AddLight(scl); }
                     );
                     EnumerateMeshRenderers(
@@ -1142,26 +1155,36 @@ namespace UTJ.RaytracedHardShadow
             if (!m_initialized || !m_renderer)
                 return;
 
-            // first instance reset update count and clear cache
-            if (s_updateCount != 0)
+            // first instance reset render count and clear cache
+            if (s_updateCount++ == 0)
             {
-                s_updateCount = 0;
                 s_dbgVerboseLog = m_dbgVerboseLog;
                 ClearBakedMeshRecords();
                 EraseUnusedMeshRecords();
             }
         }
 
+        void LateUpdate()
+        {
+            s_updateCount = 0;
+            s_renderCount = 0;
+        }
+
         void OnPreRender()
         {
-            if (!Render())
+            if (!m_initialized || !m_renderer)
                 return;
 
-            if (++s_updateCount == s_instanceCount)
+            // note: on Editor, Update() and OnPreRender() is not 1 on 1.
+            //       multiple OnPreRender() can happen because of rapaint event.
+
+            Render();
+            if (++s_renderCount == s_instanceCount)
             {
                 // last instance issues render event.
                 // all renderers do actual rendering tasks in render thread.
                 rthsRenderer.IssueRender();
+                s_renderCount = 0;
             }
         }
         #endregion
