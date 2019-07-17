@@ -66,6 +66,7 @@ private:
     UINT m_stride{};
     D3D12_CPU_DESCRIPTOR_HANDLE m_hcpu{};
     D3D12_GPU_DESCRIPTOR_HANDLE m_hgpu{};
+    UINT m_count = 0;
 };
 
 // thin wrapper for Windows' event
@@ -168,12 +169,14 @@ public:
 };
 using MeshInstanceDataDXRPtr = std::shared_ptr<MeshInstanceDataDXR>;
 
+const int kAdaptiveCascades = 3;
+
 class RenderTargetDataDXR : public DeviceRenderTargetData
 {
 public:
     RenderTargetData *base = nullptr;
     TextureDataDXRPtr texture;
-    ID3D12ResourcePtr adaptive_res[3]; // for adaptive sampling
+    ID3D12ResourcePtr adaptive_res[kAdaptiveCascades]; // for adaptive sampling
     ID3D12ResourcePtr back_buffer; // back buffer for antialiasing
 
     bool valid() const override;
@@ -292,11 +295,11 @@ public:
 
     ID3D12GraphicsCommandList4Ptr cl_deform;
     ID3D12DescriptorHeapPtr desc_heap;
-    DescriptorHandleDXR render_target_uav;
+    DescriptorHandleDXR render_target_uavs[2];
     DescriptorHandleDXR instance_data_srv;
     DescriptorHandleDXR scene_data_cbv;
-    DescriptorHandleDXR adaptive_uavs[3], adaptive_srvs[3];
-    DescriptorHandleDXR back_buffer_uav, back_buffer_srv;
+    DescriptorHandleDXR adaptive_uavs[kAdaptiveCascades][2], adaptive_srvs[kAdaptiveCascades][2];
+    DescriptorHandleDXR back_buffer_uavs[2], back_buffer_srvs[2];
 
     std::vector<MeshInstanceDataDXRPtr> instances, instances_prev;
     SceneData scene_data_prev{};
@@ -326,8 +329,9 @@ static const DWORD kTimeoutMS = 3000;
 ULONG GetRefCount(IUnknown *v);
 UINT SizeOfElement(DXGI_FORMAT rtf);
 DXGI_FORMAT GetDXGIFormat(RenderTargetFormat format);
-DXGI_FORMAT GetTypedFormatDXR(DXGI_FORMAT format);
-DXGI_FORMAT GetTypelessFormatDXR(DXGI_FORMAT format);
+DXGI_FORMAT GetFloatFormat(DXGI_FORMAT format);
+DXGI_FORMAT GetUIntFormat(DXGI_FORMAT format);
+DXGI_FORMAT GetTypelessFormat(DXGI_FORMAT format);
 std::string ToString(ID3DBlob *blob);
 void PrintStateObjectDesc(const D3D12_STATE_OBJECT_DESC* desc);
 
