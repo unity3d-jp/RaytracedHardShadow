@@ -690,9 +690,9 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         return data;
     };
 
-    rd.instances.clear();
 
     bool needs_build_tlas = false;
+    rd.instances.clear();
     for (auto& inst : instances) {
         auto& mesh = inst->mesh;
         if (mesh->vertex_count == 0 || mesh->index_count == 0)
@@ -1252,8 +1252,6 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
     }
     else {
         std::swap(rd.instances, rd.instances_prev);
-        rd.instances.clear();
-
         rthsTimestampUpdateLog(rd.timestamp, m_cmd_queue_direct);
 
         return true;

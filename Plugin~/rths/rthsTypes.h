@@ -104,9 +104,11 @@ struct LightData
 struct SceneData
 {
     uint32_t render_flags; // combination of RenderFlag
+    uint32_t layer_count;
     uint32_t light_count;
     float shadow_ray_offset;
     float self_shadow_threshold;
+    float pad2[3];
 
     CameraData camera;
     LightData lights[kMaxLights];

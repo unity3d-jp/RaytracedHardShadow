@@ -50,9 +50,11 @@ struct LightData
 struct SceneData
 {
     uint render_flags;
+    uint layer_count;
     uint light_count;
     float shadow_ray_offset;
     float self_shadow_threshold;
+    float3 pad;
 
     CameraData camera;
     LightData lights[kMaxLights];
@@ -93,6 +95,7 @@ uint  RenderFlags()         { return g_scene_data.render_flags; }
 float ShadowRayOffset()     { return g_scene_data.shadow_ray_offset; }
 float SelfShadowThreshold() { return g_scene_data.self_shadow_threshold; }
 
+uint LayerCount() { return g_scene_data.layer_count; }
 int LightCount() { return g_scene_data.light_count; }
 LightData GetLight(int i) { return g_scene_data.lights[i]; }
 
@@ -103,15 +106,25 @@ uint InstanceLayerMask() { return g_instance_data[InstanceID()].layer_mask; }
 
 // a & b must be normalized
 float angle_between(float3 a, float3 b) { return acos(clamp(dot(a, b), 0, 1)); }
-
-
+uint shift_mask(uint mask, uint shift) { return (mask >> shift) & 0xff; }
 
 
 struct RayPayload
 {
     float shadow;
+    float t;
     uint instance_id;     // instance id for first ray
 };
+void init(inout RayPayload a)
+{
+    a.shadow = 0.0;
+    a.t = 1e+100;
+}
+void select_by_t(inout RayPayload a, in RayPayload b)
+{
+    if (b.t < a.t)
+        a = b;
+}
 
 RayDesc GetCameraRay(float2 offset = 0.0f)
 {
@@ -136,7 +149,7 @@ RayDesc GetCameraRay(float2 offset = 0.0f)
 RayPayload ShootCameraRay(float2 offset = 0.0f)
 {
     RayPayload payload;
-    payload.shadow = 0.0;
+    init(payload);
 
     RayDesc ray = GetCameraRay(offset);
     uint render_flags = RenderFlags();
@@ -144,7 +157,28 @@ RayPayload ShootCameraRay(float2 offset = 0.0f)
     if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
-    TraceRay(g_tlas0, ray_flags, CameraLayerMask(), 0, 0, 0, ray, payload);
+    uint layer_mask = CameraLayerMask();
+    TraceRay(g_tlas0, ray_flags, shift_mask(layer_mask, 0), 0, 0, 0, ray, payload);
+
+    uint layer_count = LayerCount();
+    if (layer_count >= 8) {
+        RayPayload tmp;
+        init(tmp);
+        TraceRay(g_tlas1, ray_flags, shift_mask(layer_mask, 8), 0, 0, 0, ray, tmp);
+        select_by_t(payload, tmp);
+
+        if (layer_count >= 16) {
+            init(tmp);
+            TraceRay(g_tlas2, ray_flags, shift_mask(layer_mask, 16), 0, 0, 0, ray, tmp);
+            select_by_t(payload, tmp);
+
+            if (layer_count >= 24) {
+                init(tmp);
+                TraceRay(g_tlas3, ray_flags, shift_mask(layer_mask, 24), 0, 0, 0, ray, tmp);
+                select_by_t(payload, tmp);
+            }
+        }
+    }
     return payload;
 }
 
@@ -242,9 +276,36 @@ void AnyHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIn
     }
 }
 
+void ShootShadowRay(uint flags, uint mask, in RayDesc ray, inout RayPayload payload)
+{
+    float shadow_old = payload.shadow;
+    TraceRay(g_tlas0, flags, shift_mask(mask, 8), 1, 0, 1, ray, payload);
+
+    uint layer_count = LayerCount();
+    if (layer_count >= 8) {
+        RayPayload tmp = payload;
+        tmp.shadow = shadow_old;
+        TraceRay(g_tlas1, flags, shift_mask(mask, 8), 1, 0, 1, ray, tmp);
+        payload.shadow = min(payload.shadow, tmp.shadow);
+
+        if (layer_count >= 16) {
+            tmp.shadow = shadow_old;
+            TraceRay(g_tlas2, flags, shift_mask(mask, 16), 1, 0, 1, ray, tmp);
+            payload.shadow = min(payload.shadow, tmp.shadow);
+
+            if (layer_count >= 24) {
+                tmp.shadow = shadow_old;
+                TraceRay(g_tlas3, flags, shift_mask(mask, 24), 1, 0, 1, ray, tmp);
+                payload.shadow = min(payload.shadow, tmp.shadow);
+            }
+        }
+    }
+}
+
 [shader("closesthit")]
 void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
+    payload.t = RayTCurrent();
     payload.instance_id = InstanceID();
 
     // shoot shadow ray (hit position -> light)
@@ -281,7 +342,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
             ray.Direction = -light.direction.xyz;
             ray.TMin = 0.0f;
             ray.TMax = CameraFarPlane();
-            TraceRay(g_tlas0, ray_flags, mask, 1, 0, 1, ray, payload);
+            ShootShadowRay(ray_flags, mask, ray, payload);
         }
         else if (light.light_type == LT_SPOT) {
             // spot light
@@ -294,7 +355,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(g_tlas0, ray_flags, mask, 1, 0, 1, ray, payload);
+                ShootShadowRay(ray_flags, mask, ray, payload);
             }
         }
         else if (light.light_type == LT_POINT) {
@@ -309,7 +370,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(g_tlas0, ray_flags, mask, 1, 0, 1, ray, payload);
+                ShootShadowRay(ray_flags, mask, ray, payload);
             }
         }
         else if (light.light_type == LT_REVERSE_POINT) {
@@ -324,7 +385,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = -dir;
                 ray.TMin = 0.0f;
                 ray.TMax = light.range - distance;
-                TraceRay(g_tlas0, ray_flags, mask, 1, 0, 1, ray, payload);
+                ShootShadowRay(ray_flags, mask, ray, payload);
             }
         }
     }

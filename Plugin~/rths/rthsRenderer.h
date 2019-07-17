@@ -89,7 +89,6 @@ protected:
     std::vector<MeshInstanceDataPtr> m_meshes;
     std::array<std::vector<MeshInstanceDataPtr>, rthsMaxLayers> m_layers;
     std::array<uint32_t, rthsMaxLayers> m_layer_lut;
-    int m_active_layer_count = 0;
 };
 
 IRenderer* CreateRendererDXR();

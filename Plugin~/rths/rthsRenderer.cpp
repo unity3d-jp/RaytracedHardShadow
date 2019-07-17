@@ -88,7 +88,6 @@ void RendererBase::beginScene()
         m_layers[i].clear();
         m_layer_lut[i] = 0;
     }
-    m_active_layer_count = 0;
 }
 
 void RendererBase::endScene()
@@ -101,12 +100,17 @@ void RendererBase::endScene()
     // setup CPU layer -> GPU layer look up table
     int active_layer_count = 0;
     for (int li = 0; li < rthsMaxLayers; ++li) {
+#ifdef rthsDisableLayerCompaction
+        m_layer_lut[li] = active_layer_count;
+        ++active_layer_count;
+#else
         if (!m_layers[li].empty()) {
             m_layer_lut[li] = active_layer_count;
             ++active_layer_count;
         }
+#endif
     }
-    m_active_layer_count = active_layer_count;
+    m_scene_data.layer_count = active_layer_count;
 
     // setup GPU layer mask.
     for (int li = 0; li < rthsMaxLayers; ++li) {

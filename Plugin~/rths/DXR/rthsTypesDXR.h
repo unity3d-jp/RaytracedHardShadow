@@ -1,7 +1,6 @@
 #pragma once
 #ifdef _WIN32
 #include "rthsTypes.h"
-#include "rthsDXRSettings.h"
 
 namespace rths {
 
@@ -272,6 +271,7 @@ const int kMaxTLASCount = 4;
 class SceneDataDXR
 {
     SceneData base;
+    int active_tlas_count;
 };
 
 class TLASDataDXR
