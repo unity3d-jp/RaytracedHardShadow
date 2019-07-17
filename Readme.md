@@ -1,8 +1,5 @@
 ![demo](https://user-images.githubusercontent.com/1488611/60965577-1ca89700-a351-11e9-9b7d-962a6a7e1aed.png)
 # Raytraced Hard Shadow
-[English](https://translate.google.com/translate?sl=ja&tl=en&u=https://github.com/unity3d-jp/RaytracedHardShadow)
-
-
 レイトレーシングにより、ピクセル単位の正確なハードシャドウを生成するプラグインです。[UnityChanToonShader](https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project) などと併用することを想定した、アニメ用影システムとなります。
 
 実行には DirectX Raytracing (DXR) が動作する環境が必要です。
@@ -72,11 +69,7 @@ Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は 
 ## 制限事項、既知の問題など
 - レンダリング対象は現在 MeshRenderer と SkinnedMeshRenderer のみ対応しています。
   - ParticleSystem、Terrain などは未対応です。
-- アルファテスト、半透明、Stencil による切り抜きは未対応です。
-  - これらは将来的に対応する可能性があります。
-- シェーダ内でモデルが変化する処理を入れている場合、それは影側には反映されず不一致が発生します。
-  - 頂点シェーダで特殊な変形を行っている場合や、Geometry Shader や Tessellation でポリゴンの増減を行っている場合などが該当します。
-  - これらは対応が難しく、将来的にも対応する見込みは薄いです。
+- アルファテストや半透明は未対応です。
 
 ## 開発者向け
 プラグインのビルド手順: [Building.md](Documentation~/Building.md)

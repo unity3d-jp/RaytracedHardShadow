@@ -29,5 +29,5 @@ obj/
 TestLocal/
 TestLocal.meta
 
-RaytracedHardShadow~/*.csproj
-RaytracedHardShadow~/*.sln
+.RaytracedHardShadow/*.csproj
+.RaytracedHardShadow/*.sln
