@@ -85,7 +85,7 @@ float CameraNearPlane()     { return g_scene_data.camera.near_plane; }
 float CameraFarPlane() { return g_scene_data.camera.far_plane; }
 uint CameraLayerMask() { return g_scene_data.camera.layer_mask_gpu; }
 
-int   RenderFlags()         { return g_scene_data.render_flags; }
+uint  RenderFlags()         { return g_scene_data.render_flags; }
 float ShadowRayOffset()     { return g_scene_data.shadow_ray_offset; }
 float SelfShadowThreshold() { return g_scene_data.self_shadow_threshold; }
 
@@ -134,8 +134,8 @@ RayPayload ShootCameraRay(float2 offset = 0.0f)
     payload.shadow = 0.0;
 
     RayDesc ray = GetCameraRay(offset);
-    int render_flags = RenderFlags();
-    int ray_flags = 0;
+    uint render_flags = RenderFlags();
+    uint ray_flags = 0;
     if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
@@ -229,8 +229,9 @@ void MissCamera(inout RayPayload payload : SV_RayPayload)
 [shader("anyhit")]
 void AnyHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
-    uint iflags = InstanceFlags();
-    if (iflags & IF_SHADOWS_ONLY) {
+    // ignore hit if the object is marked 'shadow only'
+    uint instance_flags = InstanceFlags();
+    if (instance_flags & IF_SHADOWS_ONLY) {
         IgnoreHit();
         return;
     }
@@ -243,8 +244,9 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
 
     // shoot shadow ray (hit position -> light)
 
-    int render_flags = RenderFlags();
-    int ray_flags = 0;
+    uint instance_flags = InstanceFlags();
+    uint render_flags = RenderFlags();
+    uint ray_flags = 0;
     if (render_flags & RF_CULL_BACK_FACES) {
         if (render_flags & RF_FLIP_CASTER_FACES)
             ray_flags |= RAY_FLAG_CULL_FRONT_FACING_TRIANGLES;
@@ -259,6 +261,8 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
     int li;
     for (li = 0; li < LightCount(); ++li) {
         LightData light = GetLight(li);
+        uint mask = (instance_flags & IF_RECEIVE_SHADOWS) == 0 ? 0 :
+            light.layer_mask_gpu & CameraLayerMask();
 
         if (light.light_type == LT_DIRECTIONAL) {
             // directional light
@@ -267,7 +271,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
             ray.Direction = -light.direction.xyz;
             ray.TMin = 0.0f;
             ray.TMax = CameraFarPlane();
-            TraceRay(g_TLAS, ray_flags, light.layer_mask_gpu, 1, 0, 1, ray, payload);
+            TraceRay(g_TLAS, ray_flags, mask, 1, 0, 1, ray, payload);
         }
         else if (light.light_type == LT_SPOT) {
             // spot light
@@ -280,7 +284,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(g_TLAS, ray_flags, light.layer_mask_gpu, 1, 0, 1, ray, payload);
+                TraceRay(g_TLAS, ray_flags, mask, 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_POINT) {
@@ -295,7 +299,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(g_TLAS, ray_flags, light.layer_mask_gpu, 1, 0, 1, ray, payload);
+                TraceRay(g_TLAS, ray_flags, mask, 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_REVERSE_POINT) {
@@ -310,7 +314,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = -dir;
                 ray.TMin = 0.0f;
                 ray.TMax = light.range - distance;
-                TraceRay(g_TLAS, ray_flags, light.layer_mask_gpu, 1, 0, 1, ray, payload);
+                TraceRay(g_TLAS, ray_flags, mask, 1, 0, 1, ray, payload);
             }
         }
     }
@@ -326,18 +330,26 @@ void MissLight(inout RayPayload payload : SV_RayPayload)
 [shader("anyhit")]
 void AnyHitLight(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
-    // this shader is called only when 'ignore self shadow' is enabled.
-
-    // this condition means:
-    // - always ignore zero-distance shadow
-    //   (comparing instance ID is not enough because in some cases meshes are separated but seamlessly continuous. e.g. head and body)
-    // - always ignore shadow cast by self back faces (relevanet only when 'cull back faces' is disabled)
-    // - ignore non-zero-distance self shadow if 'keep self drop shadow' is disabled
-    if ( RayTCurrent() < SelfShadowThreshold() ||
-        (payload.instance_id == InstanceID() && ((RenderFlags() & RF_KEEP_SELF_DROP_SHADOW) == 0 || HitKind() == HIT_KIND_TRIANGLE_BACK_FACE)) )
-    {
+    // ignore the object if it doesn't marked cast shadows.
+    uint instance_flags = InstanceFlags();
+    if ((instance_flags & IF_CAST_SHADOWS) == 0) {
         IgnoreHit();
         return;
     }
-    AcceptHitAndEndSearch();
+
+    uint render_flags = RenderFlags();
+    if (render_flags & RF_IGNORE_SELF_SHADOW) {
+        // this condition means:
+        // - always ignore zero-distance shadow
+        //   (comparing instance ID is not enough because in some cases meshes are separated but seamlessly continuous. e.g. head and body)
+        // - always ignore shadow cast by self back faces (relevanet only when 'cull back faces' is disabled)
+        // - ignore non-zero-distance self shadow if 'keep self drop shadow' is disabled
+        if (RayTCurrent() < SelfShadowThreshold() ||
+            (payload.instance_id == InstanceID() && ((RenderFlags() & RF_KEEP_SELF_DROP_SHADOW) == 0 || HitKind() == HIT_KIND_TRIANGLE_BACK_FACE)))
+        {
+            IgnoreHit();
+            return;
+        }
+        AcceptHitAndEndSearch();
+    }
 }

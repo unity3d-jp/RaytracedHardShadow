@@ -971,7 +971,8 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
                 tmp.InstanceMask = (UINT8)inst_dxr.base->layer_mask;
                 tmp.InstanceContributionToHitGroupIndex = 0;
                 tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-                if (inst_dxr.base->hasFlag(InstanceFlag::ShadowsOnly))
+                if (inst_dxr.base->hasFlag(InstanceFlag::ShadowsOnly) ||
+                    !inst_dxr.base->hasFlag(InstanceFlag::CastShadows))
                     tmp.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
                 tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
                 instance_descs[i] = tmp;
