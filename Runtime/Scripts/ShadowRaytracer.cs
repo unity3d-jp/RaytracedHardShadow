@@ -261,8 +261,6 @@ namespace UTJ.RaytracedHardShadow
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
         [SerializeField] bool m_clampBlendshapeWeights = true;
 
-        [SerializeField] bool m_dbgTimestamp = false;
-        [SerializeField] bool m_dbgForceUpdateAS = false;
         [SerializeField] bool m_dbgVerboseLog = false;
 
 #if UNITY_EDITOR
@@ -408,16 +406,6 @@ namespace UTJ.RaytracedHardShadow
             set { m_parallelCommandList = value; }
         }
 
-        public bool dbgTimestamp
-        {
-            get { return m_dbgTimestamp; }
-            set { m_dbgTimestamp = value; }
-        }
-        public bool dbgForceUpdateAS
-        {
-            get { return m_dbgForceUpdateAS; }
-            set { m_dbgForceUpdateAS = value; }
-        }
         public string timestampLog
         {
             get { return m_renderer.timestampLog; }
@@ -945,10 +933,6 @@ namespace UTJ.RaytracedHardShadow
                     flags |= rthsRenderFlag.ParallelCommandList;
                 if (m_clampBlendshapeWeights)
                     flags |= rthsRenderFlag.ClampBlendShapeWights;
-                if (m_dbgTimestamp)
-                    flags |= rthsRenderFlag.DbgTimestamp;
-                if (m_dbgForceUpdateAS)
-                    flags |= rthsRenderFlag.DbgForceUpdateAS;
 
                 m_renderer.BeginScene();
                 try

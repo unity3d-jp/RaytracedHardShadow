@@ -87,7 +87,7 @@ protected:
     std::atomic_int m_skip_count{ 0 };
 
     std::vector<MeshInstanceDataPtr> m_meshes;
-    std::array<std::vector<MeshInstanceDataPtr>, rthsMaxLayers> m_layers;
+    std::array<uint32_t, rthsMaxLayers> m_layer_mesh_count;
     std::array<uint32_t, rthsMaxLayers> m_layer_lut;
 };
 

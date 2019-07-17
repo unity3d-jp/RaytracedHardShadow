@@ -279,7 +279,7 @@ void AnyHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIn
 void ShootShadowRay(uint flags, uint mask, in RayDesc ray, inout RayPayload payload)
 {
     float shadow_old = payload.shadow;
-    TraceRay(g_tlas0, flags, shift_mask(mask, 8), 1, 0, 1, ray, payload);
+    TraceRay(g_tlas0, flags, shift_mask(mask, 0), 1, 0, 1, ray, payload);
 
     uint layer_count = LayerCount();
     if (layer_count >= 8) {

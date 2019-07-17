@@ -81,7 +81,7 @@ bool RendererDXR::isRendering() const
 
 void RendererDXR::frameBegin()
 {
-    if (m_render_data.hasFlag(RenderFlag::DbgForceUpdateAS)) {
+    if (GetGlobals().hasDebugFlag(DebugFlag::ForceUpdateAS)) {
         // clear static meshes' BLAS
         for (auto& inst : m_render_data.instances_prev)
             inst->clearBLAS();

@@ -103,12 +103,13 @@ namespace UTJ.RaytracedHardShadowEditor
 
         static void OnSceneGUI(SceneView sceneView)
         {
-            foreach (var inst in s_instances)
+            bool timestamp = (rthsGlobals.debugFlags & rthsDebugFlag.Timestamp) != 0;
+            if (timestamp)
             {
-                var t = inst.target as ShadowRaytracer;
-                if (t != null)
+                foreach (var inst in s_instances)
                 {
-                    if (t.dbgTimestamp)
+                    var t = inst.target as ShadowRaytracer;
+                    if (t != null)
                         inst.Repaint();
                 }
             }
@@ -210,12 +211,35 @@ namespace UTJ.RaytracedHardShadowEditor
             foldDebug.boolValue = EditorGUILayout.Foldout(foldDebug.boolValue, "Debug");
             if(foldDebug.boolValue)
             {
+                var debugFlags = rthsGlobals.debugFlags;
+                bool timestamp          = (debugFlags & rthsDebugFlag.Timestamp) != 0;
+                bool noLayerCompaction  = (debugFlags & rthsDebugFlag.NoLayerCompaction) != 0;
+                bool forceUpdateAS      = (debugFlags & rthsDebugFlag.ForceUpdateAS) != 0;
+                bool powerStableState   = (debugFlags & rthsDebugFlag.PowerStableState) != 0;
+
                 EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(so.FindProperty("m_dbgTimestamp"));
-                EditorGUILayout.PropertyField(so.FindProperty("m_dbgForceUpdateAS"));
-                EditorGUILayout.PropertyField(so.FindProperty("m_dbgVerboseLog"));
-                rthsGlobals.powerStableState = EditorGUILayout.Toggle("Dbg Power Stable State", rthsGlobals.powerStableState);
-                if (t.dbgTimestamp)
+                EditorGUI.BeginChangeCheck();
+                timestamp           = EditorGUILayout.Toggle("Timestamp", timestamp);
+                noLayerCompaction   = EditorGUILayout.Toggle("No Layer Compaction", noLayerCompaction);
+                forceUpdateAS       = EditorGUILayout.Toggle("Force Update AS", forceUpdateAS);
+                powerStableState    = EditorGUILayout.Toggle("Power Stable State", powerStableState);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    rthsDebugFlag v = 0;
+                    if (timestamp)
+                        v |= rthsDebugFlag.Timestamp;
+                    if (noLayerCompaction)
+                        v |= rthsDebugFlag.NoLayerCompaction;
+                    if (forceUpdateAS)
+                        v |= rthsDebugFlag.ForceUpdateAS;
+                    if (powerStableState)
+                        v |= rthsDebugFlag.PowerStableState;
+                    rthsGlobals.debugFlags = v;
+                }
+
+                EditorGUILayout.PropertyField(so.FindProperty("m_dbgVerboseLog"), new GUIContent("Verbose Log"));
+
+                if (timestamp)
                     EditorGUILayout.TextArea(t.timestampLog, GUILayout.Height(80));
                 EditorGUI.indentLevel--;
             }

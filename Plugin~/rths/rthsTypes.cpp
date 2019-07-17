@@ -3,6 +3,21 @@
 
 namespace rths {
 
+void GlobalSettings::enableDebugFlag(DebugFlag flag)
+{
+    debug_flags = debug_flags | (uint32_t)flag;
+}
+
+void GlobalSettings::disableDebugFlag(DebugFlag flag)
+{
+    debug_flags = debug_flags & (~(uint32_t)flag);
+}
+
+bool GlobalSettings::hasDebugFlag(DebugFlag flag) const
+{
+    return (debug_flags & (uint32_t)flag) != 0;
+}
+
 GlobalSettings& GetGlobals()
 {
     static GlobalSettings s_globals;

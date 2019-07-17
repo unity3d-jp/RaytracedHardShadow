@@ -65,6 +65,15 @@ namespace UTJ.RaytracedHardShadow
     }
 
     [Flags]
+    public enum rthsDebugFlag : uint
+    {
+        Timestamp           = 0x01,
+        NoLayerCompaction   = 0x02,
+        ForceUpdateAS       = 0x04,
+        PowerStableState    = 0x08,
+    }
+
+    [Flags]
     public enum rthsRenderFlag : uint
     {
         CullBackFaces           = 0x00000001,
@@ -78,8 +87,6 @@ namespace UTJ.RaytracedHardShadow
         GPUSkinning             = 0x00010000,
         ClampBlendShapeWights   = 0x00020000,
         ParallelCommandList     = 0x00040000,
-        DbgTimestamp            = 0x01000000,
-        DbgForceUpdateAS        = 0x02000000,
     }
 
     [Flags]
@@ -116,10 +123,10 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsGetReleaseDate();
         [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
         [DllImport("rths")] static extern void rthsClearErrorLog();
+        [DllImport("rths")] static extern rthsDebugFlag rthsGlobalsGetDebugFlags();
+        [DllImport("rths")] static extern void rthsGlobalsSetDebugFlags(rthsDebugFlag v);
         [DllImport("rths")] static extern byte rthsGlobalsGetDeferredInitialization();
         [DllImport("rths")] static extern void rthsGlobalsSetDeferredInitialization(byte v);
-        [DllImport("rths")] static extern byte rthsGlobalsGetPowerStableState();
-        [DllImport("rths")] static extern void rthsGlobalsSetPowerStableState(byte v);
         #endregion
 
         public static string version
@@ -134,15 +141,15 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return Misc.CString(rthsGetErrorLog()); }
         }
+        public static rthsDebugFlag debugFlags
+        {
+            get { return rthsGlobalsGetDebugFlags(); }
+            set { rthsGlobalsSetDebugFlags(value); }
+        }
         public static bool deferredInitialization
         {
             get { return rthsGlobalsGetDeferredInitialization() != 0; }
             set { rthsGlobalsSetDeferredInitialization((byte)(value ? 1 : 0)); }
-        }
-        public static bool powerStableState
-        {
-            get { return rthsGlobalsGetPowerStableState() != 0; }
-            set { rthsGlobalsSetPowerStableState((byte)(value ? 1 : 0)); }
         }
 
         public static void ClearErrorLog() { rthsClearErrorLog(); }

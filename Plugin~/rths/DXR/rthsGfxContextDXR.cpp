@@ -468,8 +468,8 @@ void GfxContextDXR::frameBegin()
 
     // handle power stable state change
     auto& globals = GetGlobals();
-    if (!setPowerStableState(globals.power_stable_state))
-        globals.power_stable_state = false;
+    if (!setPowerStableState(globals.hasDebugFlag(DebugFlag::PowerStableState)))
+        globals.disableDebugFlag(DebugFlag::PowerStableState);
 }
 
 void GfxContextDXR::prepare(RenderDataDXR& rd)
@@ -522,7 +522,7 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
 
     rthsTimestampInitialize(rd.timestamp, m_device);
     rthsTimestampReset(rd.timestamp);
-    rthsTimestampSetEnable(rd.timestamp, rd.hasFlag(RenderFlag::DbgTimestamp));
+    rthsTimestampSetEnable(rd.timestamp, GetGlobals().hasDebugFlag(DebugFlag::Timestamp));
 
     // reset fence values
     rd.fv_translate = rd.fv_deform = rd.fv_blas = rd.fv_tlas = rd.fv_rays = 0;

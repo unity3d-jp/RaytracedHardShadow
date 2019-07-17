@@ -20,7 +20,14 @@ rthsAPI void rthsClearErrorLog()
 {
     ClearErrorLog();
 }
-
+rthsAPI uint32_t rthsGlobalsGetDebugFlags()
+{
+    return rths::GetGlobals().debug_flags;
+}
+rthsAPI void rthsGlobalsSetDebugFlags(uint32_t v)
+{
+    rths::GetGlobals().debug_flags = v;
+}
 rthsAPI bool rthsGlobalsGetDeferredInitialization()
 {
     return rths::GetGlobals().deferred_initilization;
@@ -28,15 +35,6 @@ rthsAPI bool rthsGlobalsGetDeferredInitialization()
 rthsAPI void rthsGlobalsSetDeferredInitialization(bool v)
 {
     rths::GetGlobals().deferred_initilization = v;
-}
-
-rthsAPI bool rthsGlobalsGetPowerStableState()
-{
-    return rths::GetGlobals().power_stable_state;
-}
-rthsAPI void rthsGlobalsSetPowerStableState(bool v)
-{
-    rths::GetGlobals().power_stable_state = v;
 }
 
 

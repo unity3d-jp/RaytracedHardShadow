@@ -46,6 +46,14 @@ struct float4x4
     }
 };
 
+enum class DebugFlag : uint32_t
+{
+    Timestamp           = 0x01,
+    NoLayerCompaction   = 0x02,
+    ForceUpdateAS       = 0x04,
+    PowerStableState    = 0x08,
+};
+
 enum class RenderFlag : uint32_t
 {
     CullBackFaces           = 0x00000001,
@@ -59,8 +67,6 @@ enum class RenderFlag : uint32_t
     GPUSkinning             = 0x00010000,
     ClampBlendShapeWights   = 0x00020000,
     ParallelCommandList     = 0x00040000,
-    DbgTimestamp            = 0x01000000,
-    DbgForceUpdateAS        = 0x02000000,
 };
 
 enum class InstanceFlag : uint32_t
@@ -117,10 +123,10 @@ rthsAPI const char* rthsGetVersion();
 rthsAPI const char* rthsGetReleaseDate();
 rthsAPI const char* rthsGetErrorLog();
 rthsAPI void rthsClearErrorLog();
+rthsAPI uint32_t rthsGlobalsGetDebugFlags();
+rthsAPI void rthsGlobalsSetDebugFlags(uint32_t v);
 rthsAPI bool rthsGlobalsGetDeferredInitialization();
 rthsAPI void rthsGlobalsSetDeferredInitialization(bool v);
-rthsAPI bool rthsGlobalsGetPowerStableState();
-rthsAPI void rthsGlobalsSetPowerStableState(bool v);
 
 // mesh interface
 rthsAPI rths::MeshData* rthsMeshCreate();

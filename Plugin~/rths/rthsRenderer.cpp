@@ -85,7 +85,7 @@ void RendererBase::beginScene()
 
     m_meshes.clear();
     for (uint32_t i = 0; i < rthsMaxLayers; ++i) {
-        m_layers[i].clear();
+        m_layer_mesh_count[i] = 0;
         m_layer_lut[i] = 0;
     }
 }
@@ -95,29 +95,28 @@ void RendererBase::endScene()
     std::stable_sort(m_meshes.begin(), m_meshes.end(),
         [](auto& a, auto& b) { return a->layer < b->layer; });
     for (auto& o : m_meshes)
-        m_layers[o->layer].push_back(o);
+        m_layer_mesh_count[o->layer]++;
 
     // setup CPU layer -> GPU layer look up table
     int active_layer_count = 0;
-    for (int li = 0; li < rthsMaxLayers; ++li) {
-#ifdef rthsDisableLayerCompaction
-        m_layer_lut[li] = active_layer_count;
-        ++active_layer_count;
-#else
-        if (!m_layers[li].empty()) {
+    if (GetGlobals().hasDebugFlag(DebugFlag::NoLayerCompaction)) {
+        for (int li = 0; li < rthsMaxLayers; ++li) {
             m_layer_lut[li] = active_layer_count;
             ++active_layer_count;
         }
-#endif
+}
+    else {
+        for (int li = 0; li < rthsMaxLayers; ++li) {
+            m_layer_lut[li] = active_layer_count;
+            if (m_layer_mesh_count[li])
+                ++active_layer_count;
+        }
     }
     m_scene_data.layer_count = active_layer_count;
 
     // setup GPU layer mask.
-    for (int li = 0; li < rthsMaxLayers; ++li) {
-        uint32_t layer_mask = 0x1 << m_layer_lut[li];
-        for (auto& obj : m_layers[li])
-            obj->layer_mask = layer_mask;
-    }
+    for (auto& inst : m_meshes)
+        inst->layer_mask = 0x1 << m_layer_lut[inst->layer];
     auto to_gpu_layer_mask = [this](uint32_t cpu_layer_mask) {
         uint32_t ret = 0;
         for (int li = 0; li < rthsMaxLayers; ++li) {

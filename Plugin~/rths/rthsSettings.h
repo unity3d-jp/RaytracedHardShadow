@@ -20,7 +20,6 @@
     //#define rthsEnableBufferValidation
     //#define rthsEnableRenderTargetValidation
     //#define rthsForceSoftwareDevice
-    //#define rthsDisableLayerCompaction
 #endif // rthsDebug
 
 #define rthsEnableResourceName

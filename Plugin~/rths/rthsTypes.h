@@ -8,6 +8,14 @@ namespace rths {
 
 const int rthsMaxLayers = 32;
 
+enum class DebugFlag : uint32_t
+{
+    Timestamp           = 0x01,
+    NoLayerCompaction   = 0x02,
+    ForceUpdateAS       = 0x04,
+    PowerStableState    = 0x08,
+};
+
 enum class RenderFlag : uint32_t
 {
     CullBackFaces           = 0x00000001,
@@ -21,8 +29,6 @@ enum class RenderFlag : uint32_t
     GPUSkinning             = 0x00010000,
     ClampBlendShapeWights   = 0x00020000,
     ParallelCommandList     = 0x00040000,
-    DbgTimestamp            = 0x01000000,
-    DbgForceUpdateAS        = 0x02000000,
 };
 
 enum class LightType : uint32_t
@@ -126,11 +132,16 @@ struct SceneData
 
 struct GlobalSettings
 {
+    std::atomic_uint32_t debug_flags{ 0 };
     std::atomic_bool deferred_initilization{ false };
-    std::atomic_bool power_stable_state{ false };
+
+    void enableDebugFlag(DebugFlag flag);
+    void disableDebugFlag(DebugFlag flag);
+    bool hasDebugFlag(DebugFlag flag) const;
 };
 
 GlobalSettings& GetGlobals();
+
 void AddDeferredCommand(const std::function<void()>& v);
 void FlushDeferredCommands();
 
