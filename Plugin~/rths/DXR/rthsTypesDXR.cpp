@@ -80,7 +80,7 @@ BufferDataDXR::~BufferDataDXR()
 
 bool MeshDataDXR::valid() const
 {
-    return vertex_buffer->resource && index_buffer->resource;
+    return this && vertex_buffer->resource && index_buffer->resource;
 }
 
 bool MeshDataDXR::isRelocated() const
@@ -120,7 +120,7 @@ void MeshDataDXR::clearBLAS()
 
 bool MeshInstanceDataDXR::valid() const
 {
-    return mesh != nullptr;
+    return this && mesh;
 }
 
 void MeshInstanceDataDXR::clearBLAS()
@@ -135,7 +135,7 @@ void MeshInstanceDataDXR::clearBLAS()
 
 bool RenderTargetDataDXR::valid() const
 {
-    return texture->resource;
+    return this && texture && texture->resource;
 }
 
 bool RenderTargetDataDXR::isRelocated() const
@@ -240,7 +240,7 @@ TimestampDXR::TimestampDXR(ID3D12DevicePtr device, int max_sample)
 
 bool TimestampDXR::valid() const
 {
-    return m_query_heap && m_timestamp_buffer;
+    return this && m_query_heap && m_timestamp_buffer;
 }
 
 bool TimestampDXR::isEnabled() const

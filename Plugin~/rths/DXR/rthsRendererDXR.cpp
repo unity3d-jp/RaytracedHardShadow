@@ -64,6 +64,8 @@ bool RendererDXR::initialized() const
 
 bool RendererDXR::valid() const
 {
+    if (!this)
+        return false;
     auto ctx = GfxContextDXR::getInstance();
     if (!ctx || !ctx->checkError()) {
         m_is_rendering = false;
