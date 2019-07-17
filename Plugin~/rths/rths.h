@@ -66,7 +66,8 @@ enum class RenderFlag : uint32_t
 enum class InstanceFlag : uint32_t
 {
     ReceiveShadows  = 0x01,
-    CastShadows     = 0x02,
+    ShadowsOnly     = 0x02,
+    CastShadows     = 0x04,
     CullFront       = 0x10,
     CullBack        = 0x20,
     CullFrontShadow = 0x40,

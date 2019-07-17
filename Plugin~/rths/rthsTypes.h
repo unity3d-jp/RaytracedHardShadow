@@ -36,7 +36,8 @@ enum class LightType : uint32_t
 enum class InstanceFlag : uint32_t
 {
     ReceiveShadows  = 0x01,
-    CastShadows     = 0x02,
+    ShadowsOnly     = 0x02,
+    CastShadows     = 0x04,
     CullFront       = 0x10,
     CullBack        = 0x20,
     CullFrontShadow = 0x40,
@@ -53,6 +54,7 @@ enum class UpdateFlag : uint32_t
     Bones       = 0x04,
     Flags       = 0x08,
 
+    Deform = Transform | Blendshape | Bones,
     Any = Transform | Blendshape | Bones | Flags,
 };
 
@@ -237,8 +239,10 @@ public:
     void release();
     bool valid() const;
     bool isUpdated(UpdateFlag v) const;
+    void clearUpdateFlags();
     void markUpdated(UpdateFlag v);
     void markUpdated(); // for debug
+    bool hasFlag(InstanceFlag flag) const;
     void setTransform(const float4x4& v);
     void setBones(const float4x4 *v, size_t n);
     void setBlendshapeWeights(const float *v, size_t n);

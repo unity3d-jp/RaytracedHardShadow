@@ -99,6 +99,11 @@ bool MeshInstanceData::isUpdated(UpdateFlag v) const
     return (update_flags & uint32_t(v)) != 0;
 }
 
+void MeshInstanceData::clearUpdateFlags()
+{
+    update_flags = 0;
+}
+
 void MeshInstanceData::markUpdated(UpdateFlag v)
 {
     update_flags |= (uint32_t)v;
@@ -113,6 +118,11 @@ void MeshInstanceData::markUpdated()
         if (!mesh->blendshapes.empty())
             markUpdated(UpdateFlag::Blendshape);
     }
+}
+
+bool MeshInstanceData::hasFlag(InstanceFlag v) const
+{
+    return (instance_flags & uint32_t(v)) != 0;
 }
 
 void MeshInstanceData::setTransform(const float4x4 &v)

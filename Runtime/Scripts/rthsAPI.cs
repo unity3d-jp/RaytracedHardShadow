@@ -86,7 +86,8 @@ namespace UTJ.RaytracedHardShadow
     public enum rthsInstanceFlag : uint
     {
         ReceiveShadows  = 0x01,
-        CastShadows     = 0x02,
+        ShadowsOnly     = 0x02,
+        CastShadows     = 0x04,
         CullFront       = 0x10,
         CullBack        = 0x20,
         CullFrontShadow = 0x40,
@@ -259,7 +260,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsMeshInstanceCreate(rthsMeshData mesh);
         [DllImport("rths")] static extern void rthsMeshInstanceRelease(IntPtr self);
         [DllImport("rths")] static extern void rthsMeshInstanceSetName(IntPtr self, string name);
-        [DllImport("rths")] static extern void rthsMeshInstanceSetFlags(IntPtr self, uint flags);
+        [DllImport("rths")] static extern void rthsMeshInstanceSetFlags(IntPtr self, rthsInstanceFlag flags);
         [DllImport("rths")] static extern void rthsMeshInstanceSetLayer(IntPtr self, int layer);
         [DllImport("rths")] static extern void rthsMeshInstanceSetTransform(IntPtr self, Matrix4x4 transform);
         [DllImport("rths")] static extern void rthsMeshInstanceSetBones(IntPtr self, Matrix4x4[] bones, int num_bones);
@@ -275,7 +276,7 @@ namespace UTJ.RaytracedHardShadow
         {
             set { rthsMeshInstanceSetName(self, value); }
         }
-        public uint flags
+        public rthsInstanceFlag flags
         {
             set { rthsMeshInstanceSetFlags(self, value); }
         }

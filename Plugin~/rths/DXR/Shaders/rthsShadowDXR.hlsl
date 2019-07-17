@@ -18,9 +18,9 @@ enum RENDER_FLAG
 
 enum INSTANCE_FLAG
 {
-    IF_VISIBLE_FROM_CAMERAS = 0x01,
-    IF_VISIBLE_FROM_LIGHTS  = 0x02,
-    IF_RECEIVE_SHADOWS      = 0x04,
+    IF_RECEIVE_SHADOWS  = 0x01,
+    IF_SHADOWS_ONLY     = 0x02,
+    IF_CAST_SHADOWS     = 0x04,
 };
 
 struct CameraData
@@ -226,6 +226,16 @@ void MissCamera(inout RayPayload payload : SV_RayPayload)
     // nothing todo here
 }
 
+[shader("anyhit")]
+void AnyHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
+{
+    uint iflags = InstanceFlags();
+    if (iflags & IF_SHADOWS_ONLY) {
+        IgnoreHit();
+        return;
+    }
+}
+
 [shader("closesthit")]
 void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
@@ -304,12 +314,6 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
             }
         }
     }
-}
-
-[shader("anyhit")]
-void AnyHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
-{
-
 }
 
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -100,7 +101,31 @@ namespace UTJ.RaytracedHardShadow
             public rthsMeshData meshData;
             public int useCount;
 
-            public void Update(rthsMeshData md, Matrix4x4 trans, GameObject go)
+            static rthsInstanceFlag ToFlags(bool receiveShadows, ShadowCastingMode mode)
+            {
+                rthsInstanceFlag ret = 0;
+                if (receiveShadows)
+                    ret |= rthsInstanceFlag.ReceiveShadows;
+                switch (mode)
+                {
+                    case ShadowCastingMode.Off:
+                        break;
+                    case ShadowCastingMode.On:
+                        ret |= rthsInstanceFlag.CastShadows;
+                        ret |= rthsInstanceFlag.CullBackShadow;
+                        break;
+                    case ShadowCastingMode.TwoSided:
+                        ret |= rthsInstanceFlag.CastShadows;
+                        break;
+                    case ShadowCastingMode.ShadowsOnly:
+                        ret |= rthsInstanceFlag.ShadowsOnly;
+                        ret |= rthsInstanceFlag.CastShadows;
+                        break;
+                }
+                return ret;
+            }
+
+            public void Update(rthsMeshData md, rthsInstanceFlag flags, Matrix4x4 trans, GameObject go)
             {
                 if (instData && meshData != md)
                     instData.Release();
@@ -111,31 +136,42 @@ namespace UTJ.RaytracedHardShadow
                     instData.name = go.name;
                 }
                 instData.transform = trans;
+                instData.flags = flags;
                 instData.layer = go.layer;
             }
 
             public void Update(rthsMeshData md, MeshRenderer mr)
             {
-                Update(md, mr.localToWorldMatrix, mr.gameObject);
+                rthsInstanceFlag flags = ToFlags(mr.receiveShadows, mr.shadowCastingMode);
+                Update(md, flags, mr.localToWorldMatrix, mr.gameObject);
             }
 
-            public void Update(rthsMeshData md, SkinnedMeshRenderer smr)
+            public void Update(rthsMeshData md, SkinnedMeshRenderer smr, bool useDeformData)
             {
-                var bones = smr.bones;
-                if (bones.Length > 0)
+                rthsInstanceFlag flags = ToFlags(smr.receiveShadows, smr.shadowCastingMode);
+
+                if (useDeformData)
                 {
-                    // skinned
-                    var rootBone = smr.rootBone;
-                    var rootMatrix = rootBone != null ? rootBone.localToWorldMatrix : Matrix4x4.identity;
-                    Update(md, rootMatrix, smr.gameObject);
-                    instData.SetBones(bones);
+                    var bones = smr.bones;
+                    if (bones.Length > 0)
+                    {
+                        // skinned
+                        var rootBone = smr.rootBone;
+                        var rootMatrix = rootBone != null ? rootBone.localToWorldMatrix : Matrix4x4.identity;
+                        Update(md, flags, rootMatrix, smr.gameObject);
+                        instData.SetBones(bones);
+                    }
+                    else
+                    {
+                        // non-skinned
+                        Update(md, flags, smr.localToWorldMatrix, smr.gameObject);
+                    }
+                    instData.SetBlendshapeWeights(smr);
                 }
                 else
                 {
-                    // non-skinned
-                    Update(md, smr.localToWorldMatrix, smr.gameObject);
+                    Update(md, flags, smr.localToWorldMatrix, smr.gameObject);
                 }
-                instData.SetBlendshapeWeights(smr);
             }
 
             public void Release()
@@ -599,11 +635,11 @@ namespace UTJ.RaytracedHardShadow
             bool requireBake = cloth != null || (!m_GPUSkinning && (smr.rootBone != null || smr.sharedMesh.blendShapeCount != 0));
             if (requireBake)
             {
-                rec.Update(GetBakedMeshData(smr), smr.localToWorldMatrix, smr.gameObject);
+                rec.Update(GetBakedMeshData(smr), smr, false);
             }
             else
             {
-                rec.Update(GetMeshData(smr.sharedMesh), smr);
+                rec.Update(GetMeshData(smr.sharedMesh), smr, true);
             }
             return rec.instData;
         }

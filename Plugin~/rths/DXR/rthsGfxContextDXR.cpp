@@ -792,7 +792,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
 
 
     // build BLAS
-    size_t geometry_count = rd.instances.size();
+    size_t instance_count = rd.instances.size();
     auto cl_blas = m_clm_direct->get();
     rthsTimestampQuery(rd.timestamp, cl_blas, "Building BLAS begin");
     int blas_update_count = 0;
@@ -809,7 +809,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         // inst_dxr.blas_updated keeps if blas is updated in the frame.
 
         if (gpu_skinning && inst_dxr.deformed_vertices) {
-            if (!inst_dxr.blas_deformed || inst.isUpdated(UpdateFlag::Any)) {
+            if (!inst_dxr.blas_deformed || inst.isUpdated(UpdateFlag::Deform)) {
                 // BLAS for deformable meshes
 
                 bool perform_update = inst_dxr.blas_deformed != nullptr;
@@ -908,14 +908,14 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
                 inst_dxr.is_updated = true;
                 ++blas_update_count;
             }
-            else if (inst.isUpdated(UpdateFlag::Transform)) {
-                // transform was updated. so TLAS needs to be updated.
+            else if (inst.isUpdated(UpdateFlag::Any)) {
+                // transform or flags are updated. so TLAS needs to be updated.
                 inst_dxr.is_updated = true;
             }
         }
         if (inst_dxr.is_updated)
             needs_build_tlas = true;
-        inst.update_flags = 0; // prevent other renderers to build BLAS again
+        inst.clearUpdateFlags(); // prevent other renderers to build BLAS again
     }
 
 #ifdef rthsEnableTimestamp
@@ -945,22 +945,22 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
         inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
         inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-        inputs.NumDescs = (UINT)geometry_count;
+        inputs.NumDescs = (UINT)instance_count;
         inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 
 
         // instance desc buffer
-        ReuseOrExpandBuffer(rd.instance_desc, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), geometry_count, 4096, [this, &rd](size_t size) {
+        ReuseOrExpandBuffer(rd.instance_desc, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), instance_count, 4096, [this, &rd](size_t size) {
             auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
             rthsSetName(ret, rd.name + " Instance Desk");
             return ret;
         });
 
         // create instance desc
-        if (geometry_count > 0) {
+        if (instance_count > 0) {
             D3D12_RAYTRACING_INSTANCE_DESC *instance_descs;
             rd.instance_desc->Map(0, nullptr, (void**)&instance_descs);
-            for (size_t i = 0; i < geometry_count; i++) {
+            for (size_t i = 0; i < instance_count; i++) {
                 auto& inst_dxr = *rd.instances[i];
                 bool deformed = gpu_skinning && inst_dxr.deformed_vertices;
                 auto& blas = deformed ? inst_dxr.blas_deformed : inst_dxr.mesh->blas;
@@ -970,7 +970,9 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
                 tmp.InstanceID = i; // This value will be exposed to the shader via InstanceID()
                 tmp.InstanceMask = (UINT8)inst_dxr.base->layer_mask;
                 tmp.InstanceContributionToHitGroupIndex = 0;
-                tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE; // D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE
+                tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+                if (inst_dxr.base->hasFlag(InstanceFlag::ShadowsOnly))
+                    tmp.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
                 tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
                 instance_descs[i] = tmp;
             }
@@ -1033,7 +1035,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
     // setup per-instance data
     if (needs_build_tlas) {
         size_t stride = sizeof(InstanceData);
-        bool expanded = ReuseOrExpandBuffer(rd.instance_data, stride, geometry_count, 4096, [this, &rd](size_t size) {
+        bool expanded = ReuseOrExpandBuffer(rd.instance_data, stride, instance_count, 4096, [this, &rd](size_t size) {
             auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
             rthsSetName(ret, rd.name + " Instance Data");
             return ret;
