@@ -69,12 +69,15 @@ struct InstanceData
 RWTexture2D<float> g_output : register(u0);
 
 // slot 1
-RaytracingAccelerationStructure g_TLAS : register(t0);
-StructuredBuffer<InstanceData> g_instance_data : register(t1);
+RaytracingAccelerationStructure g_tlas0 : register(t0);
+RaytracingAccelerationStructure g_tlas1 : register(t1);
+RaytracingAccelerationStructure g_tlas2 : register(t2);
+RaytracingAccelerationStructure g_tlas3 : register(t3);
+StructuredBuffer<InstanceData> g_instance_data : register(t4);
 ConstantBuffer<SceneData> g_scene_data : register(b0);
 
 // slot 2
-Texture2D<float> g_prev_result : register(t2);
+Texture2D<float> g_prev_result : register(t5);
 
 
 float3 CameraPosition() { return g_scene_data.camera.position.xyz; }
@@ -141,7 +144,7 @@ RayPayload ShootCameraRay(float2 offset = 0.0f)
     if (render_flags & RF_CULL_BACK_FACES)
         ray_flags |= RAY_FLAG_CULL_BACK_FACING_TRIANGLES;
 
-    TraceRay(g_TLAS, ray_flags, CameraLayerMask(), 0, 0, 0, ray, payload);
+    TraceRay(g_tlas0, ray_flags, CameraLayerMask(), 0, 0, 0, ray, payload);
     return payload;
 }
 
@@ -278,7 +281,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
             ray.Direction = -light.direction.xyz;
             ray.TMin = 0.0f;
             ray.TMax = CameraFarPlane();
-            TraceRay(g_TLAS, ray_flags, mask, 1, 0, 1, ray, payload);
+            TraceRay(g_tlas0, ray_flags, mask, 1, 0, 1, ray, payload);
         }
         else if (light.light_type == LT_SPOT) {
             // spot light
@@ -291,7 +294,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(g_TLAS, ray_flags, mask, 1, 0, 1, ray, payload);
+                TraceRay(g_tlas0, ray_flags, mask, 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_POINT) {
@@ -306,7 +309,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                TraceRay(g_TLAS, ray_flags, mask, 1, 0, 1, ray, payload);
+                TraceRay(g_tlas0, ray_flags, mask, 1, 0, 1, ray, payload);
             }
         }
         else if (light.light_type == LT_REVERSE_POINT) {
@@ -321,7 +324,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = -dir;
                 ray.TMin = 0.0f;
                 ray.TMax = light.range - distance;
-                TraceRay(g_TLAS, ray_flags, mask, 1, 0, 1, ray, payload);
+                TraceRay(g_tlas0, ray_flags, mask, 1, 0, 1, ray, payload);
             }
         }
     }

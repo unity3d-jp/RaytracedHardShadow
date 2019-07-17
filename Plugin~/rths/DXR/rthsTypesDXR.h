@@ -267,6 +267,24 @@ private:
 };
 using CommandListManagerDXRPtr = std::shared_ptr<CommandListManagerDXR>;
 
+const int kMaxTLASCount = 4;
+
+class SceneDataDXR
+{
+    SceneData base;
+};
+
+class TLASDataDXR
+{
+public:
+    ID3D12ResourcePtr instance_desc;
+    ID3D12ResourcePtr scratch;
+    ID3D12ResourcePtr buffer;
+    DescriptorHandleDXR srv;
+    uint32_t nth = 0;
+    uint32_t instance_offset = 0;
+};
+
 class RenderDataDXR
 {
 public:
@@ -275,24 +293,21 @@ public:
     ID3D12GraphicsCommandList4Ptr cl_deform;
     ID3D12DescriptorHeapPtr desc_heap;
     DescriptorHandleDXR render_target_uav;
-    DescriptorHandleDXR tlas_srv, instance_data_srv;
+    DescriptorHandleDXR instance_data_srv;
     DescriptorHandleDXR scene_data_cbv;
     DescriptorHandleDXR adaptive_uavs[3], adaptive_srvs[3];
     DescriptorHandleDXR back_buffer_uav, back_buffer_srv;
 
     std::vector<MeshInstanceDataDXRPtr> instances, instances_prev;
     SceneData scene_data_prev{};
-    ID3D12ResourcePtr instance_desc;
-    ID3D12ResourcePtr tlas_scratch;
-    ID3D12ResourcePtr tlas;
+    TLASDataDXR tlas_data[kMaxTLASCount];
     ID3D12ResourcePtr scene_data;
     ID3D12ResourcePtr instance_data;
     RenderTargetDataDXRPtr render_target;
 
     uint64_t fv_translate = 0, fv_deform = 0, fv_blas = 0, fv_tlas = 0, fv_rays = 0;
     FenceEventDXR fence_event;
-    int render_flags = 0;
-    int max_parallel_command_lists = 8;
+    uint32_t render_flags = 0;
 
 #ifdef rthsEnableTimestamp
     TimestampDXRPtr timestamp;
