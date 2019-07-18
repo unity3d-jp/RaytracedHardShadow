@@ -269,8 +269,6 @@ private:
 };
 using CommandListManagerDXRPtr = std::shared_ptr<CommandListManagerDXR>;
 
-const int kMaxTLASCount = 4;
-
 class SceneDataDXR
 {
     SceneData base;
@@ -284,8 +282,6 @@ public:
     ID3D12ResourcePtr scratch;
     ID3D12ResourcePtr buffer;
     DescriptorHandleDXR srv;
-    uint32_t nth = 0;
-    uint32_t instance_offset = 0;
 };
 
 class RenderDataDXR
@@ -303,7 +299,7 @@ public:
 
     std::vector<MeshInstanceDataDXRPtr> instances, instances_prev;
     SceneData scene_data_prev{};
-    TLASDataDXR tlas_data[kMaxTLASCount];
+    TLASDataDXR tlas_data;
     ID3D12ResourcePtr scene_data;
     ID3D12ResourcePtr instance_data;
     RenderTargetDataDXRPtr render_target;

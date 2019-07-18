@@ -247,11 +247,11 @@ bool GfxContextDXR::initialize()
             { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
         D3D12_DESCRIPTOR_RANGE ranges1[] = {
-            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, kMaxTLASCount + 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
             { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
         D3D12_DESCRIPTOR_RANGE ranges2[] = {
-            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, kMaxTLASCount + 1, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 2, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
 
         D3D12_ROOT_PARAMETER params[3]{};
@@ -488,8 +488,7 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
 
         auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, rd.desc_heap);
         rd.render_target_uav = handle_allocator.allocate();
-        for (int i = 0; i < kMaxTLASCount; ++i)
-            rd.tlas_data[i].srv = handle_allocator.allocate();
+        rd.tlas_data.srv = handle_allocator.allocate();
         rd.instance_data_srv = handle_allocator.allocate();
         rd.scene_data_cbv = handle_allocator.allocate();
         for (int i = 0; i < kAdaptiveCascades; ++i)
@@ -933,115 +932,101 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
     auto cl_tlas = m_clm_direct->get();
     rthsTimestampQuery(rd.timestamp, cl_tlas, "Building TLAS begin");
     if (needs_build_tlas) {
-        auto build_tlas = [&](TLASDataDXR& td) -> UINT {
-            // get the size of the TLAS buffers
-            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
-            inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-            inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
-            inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        auto& td = rd.tlas_data;
 
+        // get the size of the TLAS buffers
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
+        inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+        inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
+        inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 
-            // instance desc buffer
-            ReuseOrExpandBuffer(td.instance_desc, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), instance_count, 4096, [this, &rd](size_t size) {
-                auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
-                rthsSetName(ret, rd.name + " Instance Desk");
+        // instance desc buffer
+        ReuseOrExpandBuffer(td.instance_desc, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), instance_count, 4096, [this, &rd](size_t size) {
+            auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, kUploadHeapProps);
+            rthsSetName(ret, rd.name + " Instance Desk");
+            return ret;
+        });
+
+        // create instance desc
+        {
+            UINT num_descs = 0;
+
+            D3D12_RAYTRACING_INSTANCE_DESC *instance_descs;
+            td.instance_desc->Map(0, nullptr, (void**)&instance_descs);
+            for (size_t i = 0; i < instance_count; i++) {
+                auto& inst_dxr = *rd.instances[i];
+                auto& inst = *inst_dxr.base;
+
+                UINT8 mask = 0x00;
+                if (!inst.hasFlag(InstanceFlag::ShadowsOnly))
+                    mask |= 0x01;
+                if (inst.hasFlag(InstanceFlag::CastShadows))
+                    mask |= 0x02;
+
+                bool deformed = gpu_skinning && inst_dxr.deformed_vertices;
+                auto& blas = deformed ? inst_dxr.blas_deformed : inst_dxr.mesh->blas;
+
+                D3D12_RAYTRACING_INSTANCE_DESC tmp{};
+                (float3x4&)tmp.Transform = to_float3x4(inst_dxr.base->transform);
+                tmp.InstanceID = i;
+                tmp.InstanceMask = mask;
+                tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+                if (inst_dxr.base->hasFlag(InstanceFlag::ShadowsOnly))
+                    tmp.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
+                tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
+                instance_descs[num_descs++] = tmp;
+            }
+            td.instance_desc->Unmap(0, nullptr);
+
+            inputs.NumDescs = num_descs;
+            inputs.InstanceDescs = td.instance_desc->GetGPUVirtualAddress();
+        }
+
+        // create TLAS
+        {
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+            m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
+
+            // scratch buffer
+            ReuseOrExpandBuffer(td.scratch, 1, info.ScratchDataSizeInBytes, 1024 * 64, [this, &rd](size_t size) {
+                auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
+                rthsSetName(ret, rd.name + " TLAS Scratch");
                 return ret;
             });
 
-            // create instance desc
-            {
-                UINT num_descs = 0;
-                UINT shift = td.nth * 8;
-
-                D3D12_RAYTRACING_INSTANCE_DESC *instance_descs;
-                td.instance_desc->Map(0, nullptr, (void**)&instance_descs);
-                for (size_t i = td.instance_offset; i < instance_count; i++) {
-                    auto& inst_dxr = *rd.instances[i];
-
-                    // rd.instances is sorted by layer. pick objects that have layer masks within 0xff << shift.
-                    UINT8 layer_mask = (UINT8)((inst_dxr.base->layer_mask >> shift) & 0xff);
-                    if (layer_mask == 0)
-                        break;
-
-                    bool deformed = gpu_skinning && inst_dxr.deformed_vertices;
-                    auto& blas = deformed ? inst_dxr.blas_deformed : inst_dxr.mesh->blas;
-
-                    D3D12_RAYTRACING_INSTANCE_DESC tmp{};
-                    (float3x4&)tmp.Transform = to_float3x4(inst_dxr.base->transform);
-                    tmp.InstanceID = i;
-                    tmp.InstanceMask = layer_mask;
-                    tmp.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-                    if (inst_dxr.base->hasFlag(InstanceFlag::ShadowsOnly) ||
-                        !inst_dxr.base->hasFlag(InstanceFlag::CastShadows))
-                        tmp.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
-                    if (inst_dxr.base->hasFlag(InstanceFlag::ShadowsOnly))
-                        tmp.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
-                    tmp.AccelerationStructure = blas->GetGPUVirtualAddress();
-                    instance_descs[num_descs++] = tmp;
-                }
-                td.instance_desc->Unmap(0, nullptr);
-
-                inputs.NumDescs = num_descs;
-                inputs.InstanceDescs = td.instance_desc->GetGPUVirtualAddress();
+            // TLAS buffer
+            bool expanded = ReuseOrExpandBuffer(td.buffer, 1, info.ResultDataMaxSizeInBytes, 1024 * 256, [this, &rd](size_t size) {
+                auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
+                rthsSetName(ret, rd.name + " TLAS");
+                return ret;
+            });
+            if (expanded) {
+                // SRV
+                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+                srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+                srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                srv_desc.RaytracingAccelerationStructure.Location = td.buffer->GetGPUVirtualAddress();
+                m_device->CreateShaderResourceView(nullptr, &srv_desc, td.srv.hcpu);
             }
 
-            // create TLAS
-            {
-                D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-                m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
+            as_desc.DestAccelerationStructureData = td.buffer->GetGPUVirtualAddress();
+            as_desc.Inputs = inputs;
+            if (td.instance_desc)
+                as_desc.Inputs.InstanceDescs = td.instance_desc->GetGPUVirtualAddress();
+            if (td.scratch)
+                as_desc.ScratchAccelerationStructureData = td.scratch->GetGPUVirtualAddress();
 
-                // scratch buffer
-                ReuseOrExpandBuffer(td.scratch, 1, info.ScratchDataSizeInBytes, 1024 * 64, [this, &rd](size_t size) {
-                    auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kDefaultHeapProps);
-                    rthsSetName(ret, rd.name + " TLAS Scratch");
-                    return ret;
-                });
+            // build
+            cl_tlas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
+        }
 
-                // TLAS buffer
-                bool expanded = ReuseOrExpandBuffer(td.buffer, 1, info.ResultDataMaxSizeInBytes, 1024 * 256, [this, &rd](size_t size) {
-                    auto ret = createBuffer(size, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kDefaultHeapProps);
-                    rthsSetName(ret, rd.name + " TLAS");
-                    return ret;
-                });
-                if (expanded) {
-                    // SRV
-                    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-                    srv_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-                    srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                    srv_desc.RaytracingAccelerationStructure.Location = td.buffer->GetGPUVirtualAddress();
-                    m_device->CreateShaderResourceView(nullptr, &srv_desc, td.srv.hcpu);
-                }
-
-                D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
-                as_desc.DestAccelerationStructureData = td.buffer->GetGPUVirtualAddress();
-                as_desc.Inputs = inputs;
-                if (td.instance_desc)
-                    as_desc.Inputs.InstanceDescs = td.instance_desc->GetGPUVirtualAddress();
-                if (td.scratch)
-                    as_desc.ScratchAccelerationStructureData = td.scratch->GetGPUVirtualAddress();
-
-                // build
-                cl_tlas->BuildRaytracingAccelerationStructure(&as_desc, 0, nullptr);
-            }
-
-            // add UAV barrier
-            {
-                D3D12_RESOURCE_BARRIER uav_barrier{};
-                uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-                uav_barrier.UAV.pResource = td.buffer;
-                cl_tlas->ResourceBarrier(1, &uav_barrier);
-            }
-            return inputs.NumDescs;
-        };
-
-        uint32_t instance_offset = 0;
-        for (uint32_t ti = 0; ti < 4; ++ti) {
-            auto& td = rd.tlas_data[ti];
-            td.nth = ti;
-            td.instance_offset = instance_offset;
-            if (instance_offset < instance_count) {
-                instance_offset += build_tlas(td);
-            }
+        // add UAV barrier
+        {
+            D3D12_RESOURCE_BARRIER uav_barrier{};
+            uav_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+            uav_barrier.UAV.pResource = td.buffer;
+            cl_tlas->ResourceBarrier(1, &uav_barrier);
         }
     }
     rthsTimestampQuery(rd.timestamp, cl_tlas, "Building TLAS end");
@@ -1156,7 +1141,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         // 1 / 8
         dispatch_ray_scope(adaptive_res[2], RayGenType::Default, [&]() {
             cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[2].hgpu);
-            cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_data[0].srv.hgpu);
+            cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_data.srv.hgpu);
         });
 
         // 1 / 4
@@ -1181,7 +1166,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
         // default
         dispatch_ray_scope(rt_res, RayGenType::Default, [&]() {
             cl_rays->SetComputeRootDescriptorTable(0, rt_uav.hgpu);
-            cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_data[0].srv.hgpu);
+            cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_data.srv.hgpu);
         });
     }
 
