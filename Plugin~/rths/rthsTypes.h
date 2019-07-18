@@ -35,6 +35,12 @@ enum class RenderFlag : uint32_t
     ClampBlendShapeWights   = 0x00020000,
 };
 
+enum class OutputFormat : uint32_t
+{
+    BitMask  = 0,
+    Float = 1,
+};
+
 enum class LightType : uint32_t
 {
     Directional = 1,
@@ -114,11 +120,12 @@ struct LightData
 struct SceneData
 {
     uint32_t render_flags; // combination of RenderFlag
+    uint32_t output_format = (uint32_t)OutputFormat::Float;
     uint32_t layer_count;
     uint32_t light_count;
     float shadow_ray_offset;
     float self_shadow_threshold;
-    float pad2[3];
+    float pad2[2];
 
     CameraData camera;
     LightData lights[kMaxLights];

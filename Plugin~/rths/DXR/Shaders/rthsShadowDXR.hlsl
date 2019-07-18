@@ -8,6 +8,12 @@ enum LIGHT_TYPE
     LT_REVERSE_POINT = 4,
 };
 
+enum OUTPUT_FORMAT
+{
+    OF_BIT_MASK = 0,
+    OF_FLOAT = 1,
+};
+
 enum RENDER_FLAG
 {
     RF_CULL_BACK_FACES      = 0x00000001,
@@ -50,11 +56,12 @@ struct LightData
 struct SceneData
 {
     uint render_flags;
+    uint output_format;
     uint layer_count;
     uint light_count;
     float shadow_ray_offset;
     float self_shadow_threshold;
-    float3 pad;
+    float2 pad;
 
     CameraData camera;
     LightData lights[kMaxLights];
@@ -68,8 +75,7 @@ struct InstanceData
 
 
 // slot 0
-RWTexture2D<float> g_outputf : register(u0);
-RWTexture2D<uint> g_outputi : register(u1);
+RWTexture2D<float> g_output : register(u0);
 
 // slot 1
 RaytracingAccelerationStructure g_tlas0 : register(t0);
@@ -80,8 +86,7 @@ StructuredBuffer<InstanceData> g_instance_data : register(t4);
 ConstantBuffer<SceneData> g_scene_data : register(b0);
 
 // slot 2
-Texture2D<float> g_prev_resultf : register(t5);
-Texture2D<uint> g_prev_resulti : register(t6);
+Texture2D<float> g_prev_result : register(t5);
 
 
 float3 CameraPosition() { return g_scene_data.camera.position.xyz; }
@@ -94,6 +99,7 @@ float CameraFarPlane() { return g_scene_data.camera.far_plane; }
 uint CameraLayerMask() { return g_scene_data.camera.layer_mask_gpu; }
 
 uint  RenderFlags()         { return g_scene_data.render_flags; }
+uint  OutputFormat()        { return g_scene_data.output_format; }
 float ShadowRayOffset()     { return g_scene_data.shadow_ray_offset; }
 float SelfShadowThreshold() { return g_scene_data.self_shadow_threshold; }
 
@@ -197,33 +203,52 @@ CameraPayload ShootCameraRay(float2 offset = 0.0f)
     return payload;
 }
 
-float SampleDifferential(int2 idx, out float center, out float diff)
+float SampleDifferentialF(int2 idx, out float center, out float diff)
 {
     int2 dim;
-    g_prev_resultf.GetDimensions(dim.x, dim.y);
+    g_prev_result.GetDimensions(dim.x, dim.y);
 
-    center = g_prev_resultf[idx].x;
-    diff = 0.0f;
+    center = g_prev_result[idx].x;
+    diff = 0;
 
     // 4 samples for now. an option for more samples may be needed. it can make an unignorable difference (both quality and speed).
-    diff += abs(g_prev_resultf[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x - center);
-    diff += abs(g_prev_resultf[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x - center);
-    diff += abs(g_prev_resultf[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x - center);
-    diff += abs(g_prev_resultf[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x - center);
-    //diff += abs(g_prev_resultf[clamp(idx + int2(-1,-1), int2(0, 0), dim - 1)].x - center);
-    //diff += abs(g_prev_resultf[clamp(idx + int2( 1,-1), int2(0, 0), dim - 1)].x - center);
-    //diff += abs(g_prev_resultf[clamp(idx + int2( 1, 1), int2(0, 0), dim - 1)].x - center);
-    //diff += abs(g_prev_resultf[clamp(idx + int2(-1, 1), int2(0, 0), dim - 1)].x - center);
+    diff += abs(g_prev_result[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x - center);
+    diff += abs(g_prev_result[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x - center);
+    diff += abs(g_prev_result[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x - center);
+    diff += abs(g_prev_result[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x - center);
+    //diff += abs(g_prev_result[clamp(idx + int2(-1,-1), int2(0, 0), dim - 1)].x - center);
+    //diff += abs(g_prev_result[clamp(idx + int2( 1,-1), int2(0, 0), dim - 1)].x - center);
+    //diff += abs(g_prev_result[clamp(idx + int2( 1, 1), int2(0, 0), dim - 1)].x - center);
+    //diff += abs(g_prev_result[clamp(idx + int2(-1, 1), int2(0, 0), dim - 1)].x - center);
     return diff;
 }
 
+uint SampleDifferentialI(int2 idx, out uint center, out uint diff)
+{
+    int2 dim;
+    g_prev_result.GetDimensions(dim.x, dim.y);
+
+    center = asuint(g_prev_result[idx].x);
+    diff = 0;
+
+    // 4 samples for now. an option for more samples may be needed. it can make an unignorable difference (both quality and speed).
+    diff += abs(asuint(g_prev_result[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x) - center);
+    diff += abs(asuint(g_prev_result[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x) - center);
+    diff += abs(asuint(g_prev_result[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x) - center);
+    diff += abs(asuint(g_prev_result[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x) - center);
+    //diff += abs(asuint(g_prev_result[clamp(idx + int2(-1,-1), int2(0, 0), dim - 1)].x) - center);
+    //diff += abs(asuint(g_prev_result[clamp(idx + int2( 1,-1), int2(0, 0), dim - 1)].x) - center);
+    //diff += abs(asuint(g_prev_result[clamp(idx + int2( 1, 1), int2(0, 0), dim - 1)].x) - center);
+    //diff += abs(asuint(g_prev_result[clamp(idx + int2(-1, 1), int2(0, 0), dim - 1)].x) - center);
+    return diff;
+}
 
 [shader("raygeneration")]
 void RayGenDefault()
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
     CameraPayload payload = ShootCameraRay();
-    g_outputf[screen_idx] = payload.shadow;
+    g_output[screen_idx] = OutputFormat() == OF_BIT_MASK ? asfloat(payload.light_bits) : payload.shadow;
 }
 
 [shader("raygeneration")]
@@ -231,18 +256,18 @@ void RayGenAdaptiveSampling()
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
     uint2 cur_dim = DispatchRaysDimensions().xy;
-    uint2 pre_dim; g_prev_resultf.GetDimensions(pre_dim.x, pre_dim.y);
+    uint2 pre_dim; g_prev_result.GetDimensions(pre_dim.x, pre_dim.y);
     int2 pre_idx = (int2)((float2)screen_idx * ((float2)pre_dim / (float2)cur_dim));
 
-    float center, diff;
-    SampleDifferential(pre_idx, center, diff);
-
-    if (diff == 0) {
-        g_outputf[screen_idx] = center;
+    if (OutputFormat() == OF_BIT_MASK) {
+        uint center, diff;
+        SampleDifferentialI(pre_idx, center, diff);
+        g_output[screen_idx] = diff == 0 ? center : ShootCameraRay().light_bits;
     }
     else {
-        CameraPayload payload = ShootCameraRay();
-        g_outputf[screen_idx] = payload.shadow;
+        float center, diff;
+        SampleDifferentialF(pre_idx, center, diff);
+        g_output[screen_idx] = diff == 0 ? center : ShootCameraRay().shadow;
     }
 }
 
@@ -251,25 +276,30 @@ void RayGenAntialiasing()
 {
     uint2 idx = DispatchRaysIndex().xy;
 
-    float center, diff;
-    SampleDifferential(idx, center, diff);
-
-    if (diff == 0) {
-        g_outputf[idx] = center;
+    if (OutputFormat() == OF_BIT_MASK) {
+        // no antialiasing when output format is bitmask
+        g_output[idx] = g_prev_result[idx];
     }
     else {
-        float total = center;
+        float center, diff;
+        SampleDifferentialF(idx, center, diff);
 
-        // todo: make offset values shader parameter
-        const int N = 4;
-        const float d = 0.333f;
-        float2 offsets[N] = {
-            float2(d, d), float2(-d, d), float2(-d, -d), float2(d, -d)
-        };
-        for (int i = 0; i < N; ++i)
-            total += ShootCameraRay(offsets[i]).shadow;
+        if (diff == 0) {
+            g_output[idx] = center;
+        }
+        else {
+            // todo: make offset values shader parameter
+            const int N = 4;
+            const float d = 0.333f;
+            float2 offsets[N] = {
+                float2(d, d), float2(-d, d), float2(-d, -d), float2(d, -d)
+            };
 
-        g_outputf[idx] = total / (N + 1);
+            float total = asfloat(center);
+            for (int i = 0; i < N; ++i)
+                total += ShootCameraRay(offsets[i]).shadow;
+            g_output[idx] = total / (float)(N + 1);
+        }
     }
 }
 

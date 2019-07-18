@@ -487,22 +487,17 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
         rthsSetName(rd.desc_heap, rd.name + " Desc Heap");
 
         auto handle_allocator = DescriptorHeapAllocatorDXR(m_device, rd.desc_heap);
-        auto alloc2 = [&handle_allocator](DescriptorHandleDXR(&dh)[2]) {
-            dh[0] = handle_allocator.allocate();
-            dh[1] = handle_allocator.allocate();
-        };
-
-        alloc2(rd.render_target_uavs);
+        rd.render_target_uav = handle_allocator.allocate();
         for (int i = 0; i < kMaxTLASCount; ++i)
             rd.tlas_data[i].srv = handle_allocator.allocate();
         rd.instance_data_srv = handle_allocator.allocate();
         rd.scene_data_cbv = handle_allocator.allocate();
         for (int i = 0; i < kAdaptiveCascades; ++i)
-            alloc2(rd.adaptive_uavs[i]);
+            rd.adaptive_uavs[i] = handle_allocator.allocate();
         for (int i = 0; i < kAdaptiveCascades; ++i)
-            alloc2(rd.adaptive_srvs[i]);
-        alloc2(rd.back_buffer_uavs);
-        alloc2(rd.back_buffer_srvs);
+            rd.adaptive_srvs[i] = handle_allocator.allocate();
+        rd.back_buffer_uav = handle_allocator.allocate();
+        rd.back_buffer_srv = handle_allocator.allocate();
     }
 
     // initialize scene constant buffer
@@ -613,31 +608,23 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
     if (rd.render_target != data) {
         rd.render_target = data;
         if (data) {
-            auto create_uav = [this](auto& res, DescriptorHandleDXR (&dh)[2]) {
+            auto create_uav = [this](auto& res, DescriptorHandleDXR &dh) {
                 D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
                 uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-
                 uav_desc.Format = GetFloatFormat(res->GetDesc().Format);
-                m_device->CreateUnorderedAccessView(res, nullptr, &uav_desc, dh[0].hcpu);
-
-                uav_desc.Format = GetUIntFormat(res->GetDesc().Format);
-                m_device->CreateUnorderedAccessView(res, nullptr, &uav_desc, dh[1].hcpu);
+                m_device->CreateUnorderedAccessView(res, nullptr, &uav_desc, dh.hcpu);
             };
 
-            auto create_srv = [this](auto& res, DescriptorHandleDXR(&dh)[2]) {
+            auto create_srv = [this](auto& res, DescriptorHandleDXR &dh) {
                 D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
                 srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
                 srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
                 srv_desc.Texture2D.MipLevels = 1;
-
                 srv_desc.Format = GetFloatFormat(res->GetDesc().Format);
-                m_device->CreateShaderResourceView(res, &srv_desc, dh[0].hcpu);
-
-                srv_desc.Format = GetUIntFormat(res->GetDesc().Format);
-                m_device->CreateShaderResourceView(res, &srv_desc, dh[1].hcpu);
+                m_device->CreateShaderResourceView(res, &srv_desc, dh.hcpu);
             };
 
-            create_uav(data->texture->resource, rd.render_target_uavs);
+            create_uav(data->texture->resource, rd.render_target_uav);
             for (int i = 0; i < _countof(data->adaptive_res); ++i) {
                 auto& res = data->adaptive_res[i];
                 if (res) {
@@ -645,8 +632,8 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
                     create_srv(res, rd.adaptive_srvs[i]);
                 }
             }
-            create_uav(data->back_buffer, rd.back_buffer_uavs);
-            create_srv(data->back_buffer, rd.back_buffer_srvs);
+            create_uav(data->back_buffer, rd.back_buffer_uav);
+            create_srv(data->back_buffer, rd.back_buffer_srv);
         }
     }
 
@@ -1159,7 +1146,7 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     bool antialiasing = rd.hasFlag(RenderFlag::Antialiasing);
     auto& rtex = rd.render_target->texture;
     auto& rt_res = antialiasing ? rd.render_target->back_buffer : rtex->resource;
-    auto rt_uav = antialiasing ? rd.back_buffer_uavs[0] : rd.render_target_uavs[0];
+    auto rt_uav = antialiasing ? rd.back_buffer_uav : rd.render_target_uav;
 
     if (rd.hasFlag(RenderFlag::AdaptiveSampling) && rd.render_target->adaptive_res[0]) {
         // adaptive sampling
@@ -1168,26 +1155,26 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
 
         // 1 / 8
         dispatch_ray_scope(adaptive_res[2], RayGenType::Default, [&]() {
-            cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[2][0].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[2].hgpu);
             cl_rays->SetComputeRootDescriptorTable(1, rd.tlas_data[0].srv.hgpu);
         });
 
         // 1 / 4
         dispatch_ray_scope(adaptive_res[1], RayGenType::AdaptiveSampling, [&]() {
-            cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[1][0].hgpu);
-            cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[2][0].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[1].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[2].hgpu);
         });
 
         // 1 / 2
         dispatch_ray_scope(adaptive_res[0], RayGenType::AdaptiveSampling, [&]() {
-            cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[0][0].hgpu);
-            cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[1][0].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(0, rd.adaptive_uavs[0].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[1].hgpu);
         });
 
         // 1 / 1
         dispatch_ray_scope(rt_res, RayGenType::AdaptiveSampling, [&]() {
             cl_rays->SetComputeRootDescriptorTable(0, rt_uav.hgpu);
-            cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[0][0].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(2, rd.adaptive_srvs[0].hgpu);
         });
     }
     else {
@@ -1201,8 +1188,8 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     if (antialiasing) {
         // antialiasing
         dispatch_ray_scope(rtex->resource, RayGenType::Antialiasing, [&]() {
-            cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_uavs[0].hgpu);
-            cl_rays->SetComputeRootDescriptorTable(2, rd.back_buffer_srvs[0].hgpu);
+            cl_rays->SetComputeRootDescriptorTable(0, rd.render_target_uav.hgpu);
+            cl_rays->SetComputeRootDescriptorTable(2, rd.back_buffer_srv.hgpu);
         });
     }
     rthsTimestampQuery(rd.timestamp, cl_rays, "DispatchRays end");

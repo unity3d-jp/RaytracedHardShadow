@@ -295,11 +295,11 @@ public:
 
     ID3D12GraphicsCommandList4Ptr cl_deform;
     ID3D12DescriptorHeapPtr desc_heap;
-    DescriptorHandleDXR render_target_uavs[2];
+    DescriptorHandleDXR render_target_uav;
     DescriptorHandleDXR instance_data_srv;
     DescriptorHandleDXR scene_data_cbv;
-    DescriptorHandleDXR adaptive_uavs[kAdaptiveCascades][2], adaptive_srvs[kAdaptiveCascades][2];
-    DescriptorHandleDXR back_buffer_uavs[2], back_buffer_srvs[2];
+    DescriptorHandleDXR adaptive_uavs[kAdaptiveCascades], adaptive_srvs[kAdaptiveCascades];
+    DescriptorHandleDXR back_buffer_uav, back_buffer_srv;
 
     std::vector<MeshInstanceDataDXRPtr> instances, instances_prev;
     SceneData scene_data_prev{};
