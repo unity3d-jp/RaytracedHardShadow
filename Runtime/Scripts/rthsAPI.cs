@@ -426,25 +426,11 @@ namespace UTJ.RaytracedHardShadow
             if (rtex != null)
             {
                 this.name = rtex.name;
+
+                // if rtex is int / uint format, set output format as bit masks
 #if UNITY_2019_1_OR_NEWER
                 switch (rtex.graphicsFormat)
                 {
-                    case GraphicsFormat.R8_UInt:
-                    case GraphicsFormat.R8G8_UInt:
-                    case GraphicsFormat.R8G8B8_UInt:
-                    case GraphicsFormat.R8G8B8A8_UInt:
-                    case GraphicsFormat.R8_SInt:
-                    case GraphicsFormat.R8G8_SInt:
-                    case GraphicsFormat.R8G8B8_SInt:
-                    case GraphicsFormat.R8G8B8A8_SInt:
-                    case GraphicsFormat.R16_UInt:
-                    case GraphicsFormat.R16G16_UInt:
-                    case GraphicsFormat.R16G16B16_UInt:
-                    case GraphicsFormat.R16G16B16A16_UInt:
-                    case GraphicsFormat.R16_SInt:
-                    case GraphicsFormat.R16G16_SInt:
-                    case GraphicsFormat.R16G16B16_SInt:
-                    case GraphicsFormat.R16G16B16A16_SInt:
                     case GraphicsFormat.R32_UInt:
                     case GraphicsFormat.R32G32_UInt:
                     case GraphicsFormat.R32G32B32_UInt:
@@ -465,7 +451,6 @@ namespace UTJ.RaytracedHardShadow
                     case RenderTextureFormat.RInt:
                     case RenderTextureFormat.RGInt:
                     case RenderTextureFormat.ARGBInt:
-                    case RenderTextureFormat.RGBAUShort:
                         this.outputFormat = rthsOutputFormat.BitMask;
                         break;
                     default:

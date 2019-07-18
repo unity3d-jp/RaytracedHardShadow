@@ -1,4 +1,4 @@
-﻿Shader "UTJ/Raytraced Hard Shadow/Test LightAlpha"
+﻿Shader "UTJ/Raytraced Hard Shadow/Visualize Light Alpha"
 {
     Properties
     {

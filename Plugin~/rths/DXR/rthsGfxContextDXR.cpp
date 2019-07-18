@@ -646,7 +646,7 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
             data.resize(n);
             for (int i = 0; i < n; ++i)
                 data[i] = r * (float)i;
-            uploadTexture(rd, tex.resource, data.data(), tex.width, tex.height, tex.format);
+            uploadTexture(tex.resource, data.data(), tex.width, tex.height, tex.format);
         };
 
         auto& tex = *rd.render_target->texture;
@@ -1224,7 +1224,7 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
         if (rd.render_target) {
             auto do_readback = [this, &rd](auto& tex, auto&& data) {
                 data.resize(tex.width * tex.height, std::numeric_limits<float>::quiet_NaN());
-                readbackTexture(rd, data.data(), tex.resource, tex.width, tex.height, tex.format);
+                readbackTexture(data.data(), tex.resource, tex.width, tex.height, tex.format);
                 // break here to inspect data
             };
 
