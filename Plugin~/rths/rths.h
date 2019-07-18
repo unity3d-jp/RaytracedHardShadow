@@ -59,6 +59,12 @@ enum class GlobalFlag : uint32_t
     DeferredInitialization = 0x01,
 };
 
+enum class OutputFormat : uint32_t
+{
+    BitMask = 0,
+    Float = 1,
+};
+
 enum class RenderFlag : uint32_t
 {
     CullBackFaces           = 0x00000001,
@@ -166,6 +172,7 @@ rthsAPI bool rthsRenderTargetIsRelocated(rths::RenderTargetData *self);
 rthsAPI void rthsRenderTargetSetName(rths::RenderTargetData *self, const char *name);
 rthsAPI void rthsRenderTargetSetGPUTexture(rths::RenderTargetData *self, rths::GPUResourcePtr tex);
 rthsAPI void rthsRenderTargetSetup(rths::RenderTargetData *self, int width, int height, rths::RenderTargetFormat format);
+rthsAPI void rthsRenderTargetSetOutputFormat(rths::RenderTargetData *self, rths::OutputFormat fmt);
 
 // renderer interface
 rthsAPI rths::IRenderer* rthsRendererCreate();

@@ -8,6 +8,12 @@ enum LIGHT_TYPE
     LT_REVERSE_POINT = 4,
 };
 
+enum OUTPUT_FORMAT
+{
+    OF_BIT_MASK = 0,
+    OF_FLOAT = 1,
+};
+
 enum RENDER_FLAG
 {
     RF_CULL_BACK_FACES      = 0x00000001,
@@ -50,11 +56,12 @@ struct LightData
 struct SceneData
 {
     uint render_flags;
+    uint output_format;
     uint layer_count;
     uint light_count;
     float shadow_ray_offset;
     float self_shadow_threshold;
-    float3 pad;
+    float2 pad;
 
     CameraData camera;
     LightData lights[kMaxLights];
@@ -92,6 +99,7 @@ float CameraFarPlane() { return g_scene_data.camera.far_plane; }
 uint CameraLayerMask() { return g_scene_data.camera.layer_mask_gpu; }
 
 uint  RenderFlags()         { return g_scene_data.render_flags; }
+uint  OutputFormat()        { return g_scene_data.output_format; }
 float ShadowRayOffset()     { return g_scene_data.shadow_ray_offset; }
 float SelfShadowThreshold() { return g_scene_data.self_shadow_threshold; }
 
@@ -109,18 +117,31 @@ float angle_between(float3 a, float3 b) { return acos(clamp(dot(a, b), 0, 1)); }
 uint shift_mask(uint mask, uint shift) { return (mask >> shift) & 0xff; }
 
 
-struct RayPayload
+struct CameraPayload
 {
     float shadow;
+    uint light_bits;
     float t;
-    uint instance_id;     // instance id for first ray
+    uint instance_id; // instance id for first ray
 };
-void init(inout RayPayload a)
+struct LightPayload
+{
+    uint hit;
+    uint instance_id; // instance id for first ray
+};
+
+void init(inout CameraPayload a)
 {
     a.shadow = 0.0;
+    a.light_bits = 0;
     a.t = 1e+100;
 }
-void select_by_t(inout RayPayload a, in RayPayload b)
+void init(inout LightPayload a, in CameraPayload b)
+{
+    a.hit = ~0;
+    a.instance_id = b.instance_id;
+}
+void select(inout CameraPayload a, in CameraPayload b)
 {
     if (b.t < a.t)
         a = b;
@@ -146,9 +167,9 @@ RayDesc GetCameraRay(float2 offset = 0.0f)
     return ray;
 }
 
-RayPayload ShootCameraRay(float2 offset = 0.0f)
+CameraPayload ShootCameraRay(float2 offset = 0.0f)
 {
-    RayPayload payload;
+    CameraPayload payload;
     init(payload);
 
     RayDesc ray = GetCameraRay(offset);
@@ -162,33 +183,33 @@ RayPayload ShootCameraRay(float2 offset = 0.0f)
 
     uint layer_count = LayerCount();
     if (layer_count >= 8) {
-        RayPayload tmp;
+        CameraPayload tmp;
         init(tmp);
         TraceRay(g_tlas1, ray_flags, shift_mask(layer_mask, 8), 0, 0, 0, ray, tmp);
-        select_by_t(payload, tmp);
+        select(payload, tmp);
 
         if (layer_count >= 16) {
             init(tmp);
             TraceRay(g_tlas2, ray_flags, shift_mask(layer_mask, 16), 0, 0, 0, ray, tmp);
-            select_by_t(payload, tmp);
+            select(payload, tmp);
 
             if (layer_count >= 24) {
                 init(tmp);
                 TraceRay(g_tlas3, ray_flags, shift_mask(layer_mask, 24), 0, 0, 0, ray, tmp);
-                select_by_t(payload, tmp);
+                select(payload, tmp);
             }
         }
     }
     return payload;
 }
 
-float SampleDifferential(int2 idx, out float center, out float diff)
+float SampleDifferentialF(int2 idx, out float center, out float diff)
 {
     int2 dim;
     g_prev_result.GetDimensions(dim.x, dim.y);
 
     center = g_prev_result[idx].x;
-    diff = 0.0f;
+    diff = 0;
 
     // 4 samples for now. an option for more samples may be needed. it can make an unignorable difference (both quality and speed).
     diff += abs(g_prev_result[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x - center);
@@ -202,13 +223,32 @@ float SampleDifferential(int2 idx, out float center, out float diff)
     return diff;
 }
 
+uint SampleDifferentialI(int2 idx, out uint center, out uint diff)
+{
+    int2 dim;
+    g_prev_result.GetDimensions(dim.x, dim.y);
+
+    center = asuint(g_prev_result[idx].x);
+    diff = 0;
+
+    // 4 samples for now. an option for more samples may be needed. it can make an unignorable difference (both quality and speed).
+    diff += abs(asuint(g_prev_result[clamp(idx + int2(-1, 0), int2(0, 0), dim - 1)].x) - center);
+    diff += abs(asuint(g_prev_result[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x) - center);
+    diff += abs(asuint(g_prev_result[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x) - center);
+    diff += abs(asuint(g_prev_result[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x) - center);
+    //diff += abs(asuint(g_prev_result[clamp(idx + int2(-1,-1), int2(0, 0), dim - 1)].x) - center);
+    //diff += abs(asuint(g_prev_result[clamp(idx + int2( 1,-1), int2(0, 0), dim - 1)].x) - center);
+    //diff += abs(asuint(g_prev_result[clamp(idx + int2( 1, 1), int2(0, 0), dim - 1)].x) - center);
+    //diff += abs(asuint(g_prev_result[clamp(idx + int2(-1, 1), int2(0, 0), dim - 1)].x) - center);
+    return diff;
+}
 
 [shader("raygeneration")]
 void RayGenDefault()
 {
     uint2 screen_idx = DispatchRaysIndex().xy;
-    RayPayload payload = ShootCameraRay();
-    g_output[screen_idx] = payload.shadow;
+    CameraPayload payload = ShootCameraRay();
+    g_output[screen_idx] = OutputFormat() == OF_BIT_MASK ? asfloat(payload.light_bits) : payload.shadow;
 }
 
 [shader("raygeneration")]
@@ -219,15 +259,15 @@ void RayGenAdaptiveSampling()
     uint2 pre_dim; g_prev_result.GetDimensions(pre_dim.x, pre_dim.y);
     int2 pre_idx = (int2)((float2)screen_idx * ((float2)pre_dim / (float2)cur_dim));
 
-    float center, diff;
-    SampleDifferential(pre_idx, center, diff);
-
-    if (diff == 0) {
-        g_output[screen_idx] = center;
+    if (OutputFormat() == OF_BIT_MASK) {
+        uint center, diff;
+        SampleDifferentialI(pre_idx, center, diff);
+        g_output[screen_idx] = diff == 0 ? center : ShootCameraRay().light_bits;
     }
     else {
-        RayPayload payload = ShootCameraRay();
-        g_output[screen_idx] = payload.shadow;
+        float center, diff;
+        SampleDifferentialF(pre_idx, center, diff);
+        g_output[screen_idx] = diff == 0 ? center : ShootCameraRay().shadow;
     }
 }
 
@@ -236,37 +276,42 @@ void RayGenAntialiasing()
 {
     uint2 idx = DispatchRaysIndex().xy;
 
-    float center, diff;
-    SampleDifferential(idx, center, diff);
-
-    if (diff == 0) {
-        g_output[idx] = center;
+    if (OutputFormat() == OF_BIT_MASK) {
+        // no antialiasing when output format is bitmask
+        g_output[idx] = g_prev_result[idx];
     }
     else {
-        float total = center;
+        float center, diff;
+        SampleDifferentialF(idx, center, diff);
 
-        // todo: make offset values shader parameter
-        const int N = 4;
-        const float d = 0.333f;
-        float2 offsets[N] = {
-            float2(d, d), float2(-d, d), float2(-d, -d), float2(d, -d)
-        };
-        for (int i = 0; i < N; ++i)
-            total += ShootCameraRay(offsets[i]).shadow;
+        if (diff == 0) {
+            g_output[idx] = center;
+        }
+        else {
+            // todo: make offset values shader parameter
+            const int N = 4;
+            const float d = 0.333f;
+            float2 offsets[N] = {
+                float2(d, d), float2(-d, d), float2(-d, -d), float2(d, -d)
+            };
 
-        g_output[idx] = total / (N + 1);
+            float total = asfloat(center);
+            for (int i = 0; i < N; ++i)
+                total += ShootCameraRay(offsets[i]).shadow;
+            g_output[idx] = total / (float)(N + 1);
+        }
     }
 }
 
 
 [shader("miss")]
-void MissCamera(inout RayPayload payload : SV_RayPayload)
+void MissCamera(inout CameraPayload payload : SV_RayPayload)
 {
     // nothing todo here
 }
 
 [shader("anyhit")]
-void AnyHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
+void AnyHitCamera(inout CameraPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
     // ignore hit if the object is marked 'shadow only'
     uint instance_flags = InstanceFlags();
@@ -276,34 +321,36 @@ void AnyHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIn
     }
 }
 
-void ShootShadowRay(uint flags, uint mask, in RayDesc ray, inout RayPayload payload)
+bool ShootShadowRay(uint flags, uint mask, in RayDesc ray, inout CameraPayload payload)
 {
-    float shadow_old = payload.shadow;
-    TraceRay(g_tlas0, flags, shift_mask(mask, 0), 1, 0, 1, ray, payload);
+    LightPayload lp;
+    init(lp, payload);
+    TraceRay(g_tlas0, flags, shift_mask(mask, 0), 1, 0, 1, ray, lp);
+    bool hit = lp.hit;
 
     uint layer_count = LayerCount();
     if (layer_count >= 8) {
-        RayPayload tmp = payload;
-        tmp.shadow = shadow_old;
-        TraceRay(g_tlas1, flags, shift_mask(mask, 8), 1, 0, 1, ray, tmp);
-        payload.shadow = min(payload.shadow, tmp.shadow);
+        lp.hit = ~0;
+        TraceRay(g_tlas1, flags, shift_mask(mask, 8), 1, 0, 1, ray, lp);
+        hit = hit || lp.hit;
 
         if (layer_count >= 16) {
-            tmp.shadow = shadow_old;
-            TraceRay(g_tlas2, flags, shift_mask(mask, 16), 1, 0, 1, ray, tmp);
-            payload.shadow = min(payload.shadow, tmp.shadow);
+            lp.hit = ~0;
+            TraceRay(g_tlas2, flags, shift_mask(mask, 16), 1, 0, 1, ray, lp);
+            hit = hit || lp.hit;
 
             if (layer_count >= 24) {
-                tmp.shadow = shadow_old;
-                TraceRay(g_tlas3, flags, shift_mask(mask, 24), 1, 0, 1, ray, tmp);
-                payload.shadow = min(payload.shadow, tmp.shadow);
+                lp.hit = ~0;
+                TraceRay(g_tlas3, flags, shift_mask(mask, 24), 1, 0, 1, ray, lp);
+                hit = hit || lp.hit;
             }
         }
     }
+    return hit;
 }
 
 [shader("closesthit")]
-void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
+void ClosestHitCamera(inout CameraPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
     payload.t = RayTCurrent();
     payload.instance_id = InstanceID();
@@ -312,6 +359,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
 
     uint instance_flags = InstanceFlags();
     uint instance_layer_mask = InstanceLayerMask();
+    float ls = 1.0f / LightCount();
 
     uint render_flags = RenderFlags();
     uint ray_flags = 0;
@@ -334,6 +382,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
 
         uint mask = (instance_flags & IF_RECEIVE_SHADOWS) == 0 ? 0 :
             light.layer_mask_gpu & CameraLayerMask();
+        bool hit = false;
 
         if (light.light_type == LT_DIRECTIONAL) {
             // directional light
@@ -342,7 +391,7 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
             ray.Direction = -light.direction.xyz;
             ray.TMin = 0.0f;
             ray.TMax = CameraFarPlane();
-            ShootShadowRay(ray_flags, mask, ray, payload);
+            hit = ShootShadowRay(ray_flags, mask, ray, payload);
         }
         else if (light.light_type == LT_SPOT) {
             // spot light
@@ -355,8 +404,10 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                ShootShadowRay(ray_flags, mask, ray, payload);
+                hit = ShootShadowRay(ray_flags, mask, ray, payload);
             }
+            else
+                continue;
         }
         else if (light.light_type == LT_POINT) {
             // point light
@@ -370,8 +421,10 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = dir;
                 ray.TMin = 0.0f;
                 ray.TMax = distance;
-                ShootShadowRay(ray_flags, mask, ray, payload);
+                hit = ShootShadowRay(ray_flags, mask, ray, payload);
             }
+            else
+                continue;
         }
         else if (light.light_type == LT_REVERSE_POINT) {
             // reverse point light
@@ -385,21 +438,28 @@ void ClosestHitCamera(inout RayPayload payload : SV_RayPayload, in BuiltInTriang
                 ray.Direction = -dir;
                 ray.TMin = 0.0f;
                 ray.TMax = light.range - distance;
-                ShootShadowRay(ray_flags, mask, ray, payload);
+                hit = ShootShadowRay(ray_flags, mask, ray, payload);
             }
+            else
+                continue;
+        }
+
+        if (!hit) {
+            payload.light_bits |= 0x1 << li;
+            payload.shadow += ls;
         }
     }
 }
 
 
 [shader("miss")]
-void MissLight(inout RayPayload payload : SV_RayPayload)
+void MissLight(inout LightPayload payload : SV_RayPayload)
 {
-    payload.shadow += (1.0f / LightCount());
+    payload.hit = 0;
 }
 
 [shader("anyhit")]
-void AnyHitLight(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
+void AnyHitLight(inout LightPayload payload : SV_RayPayload, in BuiltInTriangleIntersectionAttributes attr : SV_IntersectionAttributes)
 {
     // ignore the object if it doesn't marked cast shadows.
     uint instance_flags = InstanceFlags();
@@ -421,6 +481,7 @@ void AnyHitLight(inout RayPayload payload : SV_RayPayload, in BuiltInTriangleInt
             IgnoreHit();
             return;
         }
-        AcceptHitAndEndSearch();
     }
+
+    AcceptHitAndEndSearch();
 }

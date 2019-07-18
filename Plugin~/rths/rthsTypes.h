@@ -21,6 +21,12 @@ enum class GlobalFlag : uint32_t
     DeferredInitialization  = 0x01,
 };
 
+enum class OutputFormat : uint32_t
+{
+    BitMask  = 0,
+    Float = 1,
+};
+
 enum class RenderFlag : uint32_t
 {
     CullBackFaces           = 0x00000001,
@@ -114,11 +120,12 @@ struct LightData
 struct SceneData
 {
     uint32_t render_flags; // combination of RenderFlag
+    uint32_t output_format = (uint32_t)OutputFormat::Float;
     uint32_t layer_count;
     uint32_t light_count;
     float shadow_ray_offset;
     float self_shadow_threshold;
-    float pad2[3];
+    float pad2[2];
 
     CameraData camera;
     LightData lights[kMaxLights];
@@ -279,6 +286,7 @@ public:
     int width = 0;
     int height = 0;
     RenderTargetFormat format = RenderTargetFormat::Unknown;
+    OutputFormat output_format = OutputFormat::Float;
 
     DeviceRenderTargetData *device_data = nullptr;
 

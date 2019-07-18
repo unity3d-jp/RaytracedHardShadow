@@ -244,14 +244,14 @@ bool GfxContextDXR::initialize()
     // root signature
     {
         D3D12_DESCRIPTOR_RANGE ranges0[] = {
-            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
         D3D12_DESCRIPTOR_RANGE ranges1[] = {
             { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, kMaxTLASCount + 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
             { D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
         D3D12_DESCRIPTOR_RANGE ranges2[] = {
-            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, kMaxTLASCount + 1, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
+            { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, kMaxTLASCount + 1, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND },
         };
 
         D3D12_ROOT_PARAMETER params[3]{};
@@ -492,10 +492,9 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
             rd.tlas_data[i].srv = handle_allocator.allocate();
         rd.instance_data_srv = handle_allocator.allocate();
         rd.scene_data_cbv = handle_allocator.allocate();
-
-        for (int i = 0; i < _countof(rd.adaptive_uavs); ++i)
+        for (int i = 0; i < kAdaptiveCascades; ++i)
             rd.adaptive_uavs[i] = handle_allocator.allocate();
-        for (int i = 0; i < _countof(rd.adaptive_srvs); ++i)
+        for (int i = 0; i < kAdaptiveCascades; ++i)
             rd.adaptive_srvs[i] = handle_allocator.allocate();
         rd.back_buffer_uav = handle_allocator.allocate();
         rd.back_buffer_srv = handle_allocator.allocate();
@@ -609,32 +608,32 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
     if (rd.render_target != data) {
         rd.render_target = data;
         if (data) {
-            auto create_uav = [this](auto& res, auto hcpu) {
+            auto create_uav = [this](auto& res, DescriptorHandleDXR &dh) {
                 D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
                 uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-                uav_desc.Format = GetTypedFormatDXR(res->GetDesc().Format); // typeless is not allowed for unordered access view
-                m_device->CreateUnorderedAccessView(res, nullptr, &uav_desc, hcpu);
+                uav_desc.Format = GetFloatFormat(res->GetDesc().Format);
+                m_device->CreateUnorderedAccessView(res, nullptr, &uav_desc, dh.hcpu);
             };
 
-            auto create_srv = [this](auto& res, auto hcpu) {
+            auto create_srv = [this](auto& res, DescriptorHandleDXR &dh) {
                 D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
                 srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
                 srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
                 srv_desc.Texture2D.MipLevels = 1;
-                srv_desc.Format = GetTypedFormatDXR(res->GetDesc().Format);
-                m_device->CreateShaderResourceView(res, &srv_desc, hcpu);
+                srv_desc.Format = GetFloatFormat(res->GetDesc().Format);
+                m_device->CreateShaderResourceView(res, &srv_desc, dh.hcpu);
             };
 
-            create_uav(data->texture->resource, rd.render_target_uav.hcpu);
+            create_uav(data->texture->resource, rd.render_target_uav);
             for (int i = 0; i < _countof(data->adaptive_res); ++i) {
                 auto& res = data->adaptive_res[i];
                 if (res) {
-                    create_uav(res, rd.adaptive_uavs[i].hcpu);
-                    create_srv(res, rd.adaptive_srvs[i].hcpu);
+                    create_uav(res, rd.adaptive_uavs[i]);
+                    create_srv(res, rd.adaptive_srvs[i]);
                 }
             }
-            create_uav(data->back_buffer, rd.back_buffer_uav.hcpu);
-            create_srv(data->back_buffer, rd.back_buffer_srv.hcpu);
+            create_uav(data->back_buffer, rd.back_buffer_uav);
+            create_srv(data->back_buffer, rd.back_buffer_srv);
         }
     }
 
@@ -647,11 +646,11 @@ void GfxContextDXR::setRenderTarget(RenderDataDXR& rd, RenderTargetData *rt)
             data.resize(n);
             for (int i = 0; i < n; ++i)
                 data[i] = r * (float)i;
-            uploadTexture(rd, tex.resource, data.data(), tex.width, tex.height, tex.format);
+            uploadTexture(tex.resource, data.data(), tex.width, tex.height, tex.format);
         };
 
         auto& tex = *rd.render_target->texture;
-        switch (GetTypedFormatDXR(tex.format)) {
+        switch (GetFloatFormat(tex.format)) {
         case DXGI_FORMAT_R8_UNORM: do_fill(tex, std::vector<unorm8>()); break;
         case DXGI_FORMAT_R16_FLOAT: do_fill(tex, std::vector<half>()); break;
         case DXGI_FORMAT_R32_FLOAT: do_fill(tex, std::vector<float>()); break;
@@ -1225,12 +1224,12 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
         if (rd.render_target) {
             auto do_readback = [this, &rd](auto& tex, auto&& data) {
                 data.resize(tex.width * tex.height, std::numeric_limits<float>::quiet_NaN());
-                readbackTexture(rd, data.data(), tex.resource, tex.width, tex.height, tex.format);
+                readbackTexture(data.data(), tex.resource, tex.width, tex.height, tex.format);
                 // break here to inspect data
             };
 
             auto& tex = *rd.render_target->texture;
-            switch (GetTypedFormatDXR(tex.format)) {
+            switch (GetFloatFormat(tex.format)) {
             case DXGI_FORMAT_R8_UNORM: do_readback(tex, std::vector<unorm8>()); break;
             case DXGI_FORMAT_R16_FLOAT: do_readback(tex, std::vector<half>()); break;
             case DXGI_FORMAT_R32_FLOAT: do_readback(tex, std::vector<float>()); break;
@@ -1511,7 +1510,7 @@ uint64_t GfxContextDXR::readbackTexture(void *dst_, ID3D12Resource *src, UINT wi
     dst_loc.pResource = readback_buf;
     dst_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     dst_loc.PlacedFootprint.Offset = 0;
-    dst_loc.PlacedFootprint.Footprint.Format = GetTypelessFormatDXR(format);
+    dst_loc.PlacedFootprint.Footprint.Format = GetTypelessFormat(format);
     dst_loc.PlacedFootprint.Footprint.Width = width;
     dst_loc.PlacedFootprint.Footprint.Height = height;
     dst_loc.PlacedFootprint.Footprint.Depth = 1;
@@ -1571,7 +1570,7 @@ uint64_t GfxContextDXR::uploadTexture(ID3D12Resource *dst, const void *src_, UIN
         src_loc.pResource = upload_buf;
         src_loc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         src_loc.PlacedFootprint.Offset = 0;
-        src_loc.PlacedFootprint.Footprint.Format = GetTypelessFormatDXR(format);
+        src_loc.PlacedFootprint.Footprint.Format = GetTypelessFormat(format);
         src_loc.PlacedFootprint.Footprint.Width = width;
         src_loc.PlacedFootprint.Footprint.Height = height;
         src_loc.PlacedFootprint.Footprint.Depth = 1;
