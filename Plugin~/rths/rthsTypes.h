@@ -21,6 +21,12 @@ enum class GlobalFlag : uint32_t
     DeferredInitialization  = 0x01,
 };
 
+enum class OutputFormat : uint32_t
+{
+    BitMask  = 0,
+    Float = 1,
+};
+
 enum class RenderFlag : uint32_t
 {
     CullBackFaces           = 0x00000001,
@@ -33,12 +39,6 @@ enum class RenderFlag : uint32_t
     Antialiasing            = 0x00000200,
     GPUSkinning             = 0x00010000,
     ClampBlendShapeWights   = 0x00020000,
-};
-
-enum class OutputFormat : uint32_t
-{
-    BitMask  = 0,
-    Float = 1,
 };
 
 enum class LightType : uint32_t
@@ -286,6 +286,7 @@ public:
     int width = 0;
     int height = 0;
     RenderTargetFormat format = RenderTargetFormat::Unknown;
+    OutputFormat output_format = OutputFormat::Float;
 
     DeviceRenderTargetData *device_data = nullptr;
 

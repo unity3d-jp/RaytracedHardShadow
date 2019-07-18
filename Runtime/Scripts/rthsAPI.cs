@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 #if UNITY_2019_1_OR_NEWER
 using Unity.Collections;
+using UnityEngine.Experimental.Rendering;
 #endif
 
 namespace UTJ.RaytracedHardShadow
@@ -107,7 +108,7 @@ namespace UTJ.RaytracedHardShadow
         CullBackShadow  = 0x80,
     };
 
-    public enum rthsRenderTargetFormat
+    public enum rthsRenderTargetFormat : uint
     {
         Unknown = 0,
         Ru8,
@@ -120,6 +121,12 @@ namespace UTJ.RaytracedHardShadow
         RGf32,
         RGBAf32,
     }
+
+    public enum rthsOutputFormat : uint
+    {
+        BitMask = 0,
+        Float = 1,
+    };
 
 
     public struct rthsGlobals
@@ -381,6 +388,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRenderTargetSetName(IntPtr self, string name);
         [DllImport("rths")] static extern void rthsRenderTargetSetGPUTexture(IntPtr self, IntPtr tex);
         [DllImport("rths")] static extern void rthsRenderTargetSetup(IntPtr self, int width, int height, rthsRenderTargetFormat format);
+        [DllImport("rths")] static extern void rthsRenderTargetSetOutputFormat(IntPtr self, rthsOutputFormat fmt);
         #endregion
 
         public static implicit operator bool(rthsRenderTarget v) { return v.self != IntPtr.Zero; }
@@ -394,6 +402,10 @@ namespace UTJ.RaytracedHardShadow
         public bool isRelocated
         {
             get { return rthsRenderTargetIsRelocated(self) != 0; }
+        }
+        public rthsOutputFormat outputFormat
+        {
+            set { rthsRenderTargetSetOutputFormat(self, value); }
         }
 
         public static rthsRenderTarget Create()
@@ -409,9 +421,60 @@ namespace UTJ.RaytracedHardShadow
             rthsRenderer.IssueFlushDeferredCommands();
         }
 
-        public void Setup(IntPtr GPUTexture)
+        public void Setup(RenderTexture rtex)
         {
-            rthsRenderTargetSetGPUTexture(self, GPUTexture);
+            if (rtex != null)
+            {
+                this.name = rtex.name;
+#if UNITY_2019_1_OR_NEWER
+                switch (rtex.graphicsFormat)
+                {
+                    case GraphicsFormat.R8_UInt:
+                    case GraphicsFormat.R8G8_UInt:
+                    case GraphicsFormat.R8G8B8_UInt:
+                    case GraphicsFormat.R8G8B8A8_UInt:
+                    case GraphicsFormat.R8_SInt:
+                    case GraphicsFormat.R8G8_SInt:
+                    case GraphicsFormat.R8G8B8_SInt:
+                    case GraphicsFormat.R8G8B8A8_SInt:
+                    case GraphicsFormat.R16_UInt:
+                    case GraphicsFormat.R16G16_UInt:
+                    case GraphicsFormat.R16G16B16_UInt:
+                    case GraphicsFormat.R16G16B16A16_UInt:
+                    case GraphicsFormat.R16_SInt:
+                    case GraphicsFormat.R16G16_SInt:
+                    case GraphicsFormat.R16G16B16_SInt:
+                    case GraphicsFormat.R16G16B16A16_SInt:
+                    case GraphicsFormat.R32_UInt:
+                    case GraphicsFormat.R32G32_UInt:
+                    case GraphicsFormat.R32G32B32_UInt:
+                    case GraphicsFormat.R32G32B32A32_UInt:
+                    case GraphicsFormat.R32_SInt:
+                    case GraphicsFormat.R32G32_SInt:
+                    case GraphicsFormat.R32G32B32_SInt:
+                    case GraphicsFormat.R32G32B32A32_SInt:
+                        this.outputFormat = rthsOutputFormat.BitMask;
+                        break;
+                    default:
+                        this.outputFormat = rthsOutputFormat.Float;
+                        break;
+                }
+#else
+                switch (rtex.format)
+                {
+                    case RenderTextureFormat.RInt:
+                    case RenderTextureFormat.RGInt:
+                    case RenderTextureFormat.ARGBInt:
+                    case RenderTextureFormat.RGBAUShort:
+                        this.outputFormat = rthsOutputFormat.BitMask;
+                        break;
+                    default:
+                        this.outputFormat = rthsOutputFormat.Float;
+                        break;
+                }
+#endif
+                rthsRenderTargetSetGPUTexture(self, rtex.GetNativeTexturePtr());
+            }
         }
 
         public void Setup(int width, int height, rthsRenderTargetFormat format)
@@ -583,5 +646,5 @@ namespace UTJ.RaytracedHardShadow
         }
     }
 
-#pragma warning restore CS0660, CS0661 
+#pragma warning restore CS0660, CS0661
 }

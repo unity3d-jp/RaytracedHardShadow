@@ -91,6 +91,10 @@ void RendererBase::beginScene()
 
 void RendererBase::endScene()
 {
+    if (m_render_target)
+        m_scene_data.output_format = (uint32_t)m_render_target->output_format;
+
+    // stable sort to compare later
     std::stable_sort(m_meshes.begin(), m_meshes.end(),
         [](auto& a, auto& b) { return a->layer < b->layer; });
     for (auto& o : m_meshes)

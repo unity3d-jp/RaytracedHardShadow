@@ -205,8 +205,7 @@ namespace UTJ.RaytracedHardShadow
                 if (!rtData)
                 {
                     rtData = rthsRenderTarget.Create();
-                    rtData.name = rtex.name;
-                    rtData.Setup(rtex.GetNativeTexturePtr());
+                    rtData.Setup(rtex);
                 }
             }
 

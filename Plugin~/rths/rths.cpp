@@ -247,6 +247,12 @@ rthsAPI void rthsRenderTargetSetup(RenderTargetData *self, int width, int height
     self->height = height;
     self->format = format;
 }
+rthsAPI void rthsRenderTargetSetOutputFormat(RenderTargetData *self, OutputFormat fmt)
+{
+    if (!self)
+        return;
+    self->output_format = fmt;
+}
 
 
 rthsAPI IRenderer* rthsRendererCreate()
