@@ -257,7 +257,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_useCameraCullingMask = true;
         [SerializeField] bool m_useLightShadowSettings = true;
         [SerializeField] bool m_useLightCullingMask = true;
-        [SerializeField] bool m_setLightIndexToAlpha = true;
+        [SerializeField] bool m_setLightIndexToAlpha = false;
         [SerializeField] bool m_useObjectShadowSettings = true;
 
         [SerializeField] ObjectScope m_lightScope;

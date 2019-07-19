@@ -22,12 +22,15 @@ vs_out vert(ia_out v)
 
 float4 frag(vs_out i) : SV_Target
 {
-    UNITY_LIGHT_ATTENUATION(attenuation, 0, i.wpos.xyz);
-    uint light_index = (uint)_LightColor0.a / 1000;
     float4 c = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    float l = dot(_LightColor0.rgb, 1.0f) / 3.0f * attenuation;
-    if (light_index % 3 == 0) c.r += l;
-    if (light_index % 3 == 1) c.g += l;
-    if (light_index % 3 == 2) c.b += l;
+    if (_LightColor0.a >= 1000.0f) {
+        uint light_index = (uint)_LightColor0.a / 1000 - 1;
+
+        UNITY_LIGHT_ATTENUATION(attenuation, 0, i.wpos.xyz);
+        float l = dot(_LightColor0.rgb, 1.0f) / 3.0f * attenuation;
+        if (light_index % 3 == 0) c.r += l;
+        if (light_index % 3 == 1) c.g += l;
+        if (light_index % 3 == 2) c.b += l;
+    }
     return c;
 }
