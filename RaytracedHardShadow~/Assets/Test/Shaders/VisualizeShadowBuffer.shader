@@ -1,9 +1,8 @@
-﻿Shader "UTJ/Raytraced Hard Shadow/Visualize Bitmask"
+﻿Shader "UTJ/Raytraced Hard Shadow/Visualize Shadow Buffer"
 {
     Properties
     {
         _MainTex("Texture", 2D) = "white" {}
-        _Intensity("Intensity", Float) = 0.25
     }
     SubShader
     {
@@ -28,9 +27,8 @@
                 float2 uv : TEXCOORD0;
             };
 
-            Texture2D<uint4> _MainTex;
+            Texture2D<float> _MainTex;
             float4 _MainTex_TexelSize;
-            float _Intensity;
 
             vs_out vert(ia_out v)
             {
@@ -43,13 +41,8 @@
             float4 frag(vs_out i) : SV_Target
             {
                 float2 uv = (1.0f.xx - i.uv) * _MainTex_TexelSize.zw;
-                uint v = _MainTex[uv].x;
 
-                float r = 0.0f;
-                for (int i = 0; i < 32; ++i) {
-                    if ((v & (1 << i)) != 0)
-                        r += _Intensity;
-                }
+                float r = _MainTex[uv].x;
                 return float4(r, r, r, 1.0f);
             }
             ENDCG
