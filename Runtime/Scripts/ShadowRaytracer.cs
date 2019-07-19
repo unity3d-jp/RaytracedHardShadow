@@ -23,6 +23,12 @@ namespace UTJ.RaytracedHardShadow
             Objects,
         }
 
+        public enum OutputType
+        {
+            Image,
+            BitMask,
+        }
+
         public enum ImageFormat
         {
             PNG,
@@ -236,6 +242,7 @@ namespace UTJ.RaytracedHardShadow
         public static readonly int kMaxLayers = 7;
 
         [SerializeField] bool m_generateRenderTexture = true;
+        [SerializeField] OutputType m_outputType = OutputType.Image;
         [SerializeField] RenderTexture m_outputTexture;
         [SerializeField] bool m_assignGlobalTexture = true;
         [SerializeField] string m_globalTextureName = "_RaytracedHardShadow";
@@ -300,6 +307,11 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_generateRenderTexture; }
             set { m_generateRenderTexture = value; }
+        }
+        public OutputType outputType
+        {
+            get { return m_outputType; }
+            set { m_outputType = value; }
         }
         public RenderTexture outputTexture
         {
@@ -915,9 +927,12 @@ namespace UTJ.RaytracedHardShadow
             if (m_generateRenderTexture)
             {
                 var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
-                if (m_outputTexture != null && (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y))
+                var format = m_outputType == OutputType.Image ? RenderTextureFormat.RHalf : RenderTextureFormat.RInt;
+
+                if (m_outputTexture != null &&
+                    (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y || m_outputTexture.format != format))
                 {
-                    // resolution was changed. release existing RenderTexture
+                    // resolution/format has changed. release existing RenderTexture
 #if UNITY_EDITOR
                     if (!AssetDatabase.Contains(m_outputTexture))
 #endif
@@ -928,7 +943,7 @@ namespace UTJ.RaytracedHardShadow
                 }
                 if (m_outputTexture == null)
                 {
-                    m_outputTexture = new RenderTexture(resolution.x, resolution.y, 0, RenderTextureFormat.RHalf);
+                    m_outputTexture = new RenderTexture(resolution.x, resolution.y, 0, format);
                     m_outputTexture.name = "RaytracedHardShadow";
                     m_outputTexture.enableRandomWrite = true; // enable unordered access
                     m_outputTexture.Create();

@@ -129,7 +129,10 @@ namespace UTJ.RaytracedHardShadowEditor
             {
                 EditorGUI.indentLevel++;
                 if (t.generateRenderTexture)
+                {
+                    EditorGUILayout.PropertyField(so.FindProperty("m_outputType"));
                     EditorGUI.BeginDisabledGroup(true);
+                }
                 EditorGUILayout.PropertyField(so.FindProperty("m_outputTexture"));
                 if (t.generateRenderTexture)
                     EditorGUI.EndDisabledGroup();
@@ -145,8 +148,8 @@ namespace UTJ.RaytracedHardShadowEditor
             }
             EditorGUILayout.Space();
 
-            // shadow
-            EditorGUILayout.LabelField("Shadow", EditorStyles.boldLabel);
+            // shadows
+            EditorGUILayout.LabelField("Shadows", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(so.FindProperty("m_useCameraCullingMask"));
             EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFaces"));
             if (t.cullBackFaces)
