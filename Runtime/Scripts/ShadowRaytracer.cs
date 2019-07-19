@@ -722,15 +722,18 @@ namespace UTJ.RaytracedHardShadow
         {
             // C# 7.0 supports function in function but we stick to the old way for compatibility
 
-            int lightIndex = 0;
+            int lightIndex = 1;
             Action<Light> processLight = (l) => {
                 if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None))
                 {
                     bodyL.Invoke(l);
                     if (m_setLightIndexToAlpha)
                     {
+                        // set light index to alpha in light color.
+                        // 1000 * (light index + 1) is index param that is passed to shader.
+                        // (first one is 1000, next one is 2000 ...)
                         var col = l.color;
-                        col.a = (col.a % 100.0f) + (100.0f * lightIndex / l.intensity);
+                        col.a = 1000.0f * lightIndex / l.intensity;
                         l.color = col;
                     }
                     ++lightIndex;
