@@ -257,6 +257,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_useCameraCullingMask = true;
         [SerializeField] bool m_useLightShadowSettings = true;
         [SerializeField] bool m_useLightCullingMask = true;
+        [SerializeField] bool m_setLightIndexToAlpha = true;
         [SerializeField] bool m_useObjectShadowSettings = true;
 
         [SerializeField] ObjectScope m_lightScope;
@@ -374,6 +375,11 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_useLightCullingMask; }
             set { m_useLightCullingMask = value; }
+        }
+        public bool setLightIndexToAlpha
+        {
+            get { return m_setLightIndexToAlpha; }
+            set { m_setLightIndexToAlpha = value; }
         }
         public bool useObjectShadowSettings
         {
@@ -716,6 +722,21 @@ namespace UTJ.RaytracedHardShadow
         {
             // C# 7.0 supports function in function but we stick to the old way for compatibility
 
+            int lightIndex = 0;
+            Action<Light> processLight = (l) => {
+                if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None))
+                {
+                    bodyL.Invoke(l);
+                    if (m_setLightIndexToAlpha)
+                    {
+                        var col = l.color;
+                        col.a = (col.a % 100.0f) + (100.0f * lightIndex / l.intensity);
+                        l.color = col;
+                    }
+                    ++lightIndex;
+                }
+            };
+
             Action<GameObject[]> processGOs = (gos) =>
             {
                 foreach (var go in gos)
@@ -724,8 +745,7 @@ namespace UTJ.RaytracedHardShadow
                         continue;
 
                     foreach (var l in go.GetComponentsInChildren<Light>())
-                        if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None))
-                            bodyL.Invoke(l);
+                        processLight(l);
                     foreach (var scl in go.GetComponentsInChildren<ShadowCasterLight>())
                         if (scl.enabled)
                             bodySCL.Invoke(scl);
@@ -755,8 +775,7 @@ namespace UTJ.RaytracedHardShadow
             Action processEntireScene = () =>
             {
                 foreach (var l in FindObjectsOfType<Light>())
-                    if (l.enabled)
-                        bodyL.Invoke(l);
+                    processLight(l);
                 foreach (var scl in FindObjectsOfType<ShadowCasterLight>())
                     if (scl.enabled)
                         bodySCL.Invoke(scl);
