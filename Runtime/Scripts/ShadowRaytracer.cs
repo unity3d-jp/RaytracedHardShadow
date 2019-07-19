@@ -101,26 +101,34 @@ namespace UTJ.RaytracedHardShadow
             public rthsMeshData meshData;
             public int useCount;
 
-            static rthsInstanceFlag ToFlags(bool receiveShadows, ShadowCastingMode mode)
+            static rthsInstanceFlag ToFlags(bool receiveShadows, ShadowCastingMode mode, bool useShadowSettings)
             {
                 rthsInstanceFlag ret = 0;
-                if (receiveShadows)
-                    ret |= rthsInstanceFlag.ReceiveShadows;
-                switch (mode)
+                if (!useShadowSettings)
                 {
-                    case ShadowCastingMode.Off:
-                        break;
-                    case ShadowCastingMode.On:
-                        ret |= rthsInstanceFlag.CastShadows;
-                        ret |= rthsInstanceFlag.CullBackShadow;
-                        break;
-                    case ShadowCastingMode.TwoSided:
-                        ret |= rthsInstanceFlag.CastShadows;
-                        break;
-                    case ShadowCastingMode.ShadowsOnly:
-                        ret |= rthsInstanceFlag.ShadowsOnly;
-                        ret |= rthsInstanceFlag.CastShadows;
-                        break;
+                    ret |= rthsInstanceFlag.ReceiveShadows;
+                    ret |= rthsInstanceFlag.CastShadows;
+                }
+                else
+                {
+                    if (receiveShadows)
+                        ret |= rthsInstanceFlag.ReceiveShadows;
+                    switch (mode)
+                    {
+                        case ShadowCastingMode.Off:
+                            break;
+                        case ShadowCastingMode.On:
+                            ret |= rthsInstanceFlag.CastShadows;
+                            ret |= rthsInstanceFlag.CullBackShadow;
+                            break;
+                        case ShadowCastingMode.TwoSided:
+                            ret |= rthsInstanceFlag.CastShadows;
+                            break;
+                        case ShadowCastingMode.ShadowsOnly:
+                            ret |= rthsInstanceFlag.ShadowsOnly;
+                            ret |= rthsInstanceFlag.CastShadows;
+                            break;
+                    }
                 }
                 return ret;
             }
@@ -140,15 +148,15 @@ namespace UTJ.RaytracedHardShadow
                 instData.layer = go.layer;
             }
 
-            public void Update(rthsMeshData md, MeshRenderer mr)
+            public void Update(rthsMeshData md, MeshRenderer mr, bool useShadowSettings)
             {
-                rthsInstanceFlag flags = ToFlags(mr.receiveShadows, mr.shadowCastingMode);
+                rthsInstanceFlag flags = ToFlags(mr.receiveShadows, mr.shadowCastingMode, useShadowSettings);
                 Update(md, flags, mr.localToWorldMatrix, mr.gameObject);
             }
 
-            public void Update(rthsMeshData md, SkinnedMeshRenderer smr, bool useDeformData)
+            public void Update(rthsMeshData md, SkinnedMeshRenderer smr, bool useShadowSettings, bool useDeformData)
             {
-                rthsInstanceFlag flags = ToFlags(smr.receiveShadows, smr.shadowCastingMode);
+                rthsInstanceFlag flags = ToFlags(smr.receiveShadows, smr.shadowCastingMode, useShadowSettings);
 
                 if (useDeformData)
                 {
@@ -240,7 +248,9 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] float m_shadowRayOffset = 0.0001f;
 
         [SerializeField] bool m_useCameraCullingMask = true;
+        [SerializeField] bool m_useLightShadowSettings = true;
         [SerializeField] bool m_useLightCullingMask = true;
+        [SerializeField] bool m_useObjectShadowSettings = true;
 
         [SerializeField] ObjectScope m_lightScope;
 #if UNITY_EDITOR
@@ -343,10 +353,20 @@ namespace UTJ.RaytracedHardShadow
             get { return m_useCameraCullingMask; }
             set { m_useCameraCullingMask = value; }
         }
+        public bool useLightShadowSettings
+        {
+            get { return m_useLightShadowSettings; }
+            set { m_useLightShadowSettings = value; }
+        }
         public bool useLightCullingMask
         {
             get { return m_useLightCullingMask; }
             set { m_useLightCullingMask = value; }
+        }
+        public bool useObjectShadowSettings
+        {
+            get { return m_useObjectShadowSettings; }
+            set { m_useObjectShadowSettings = value; }
         }
 
         public ObjectScope lightScope
@@ -618,11 +638,11 @@ namespace UTJ.RaytracedHardShadow
             return rec;
         }
 
-        static rthsMeshInstanceData GetMeshInstanceData(MeshRenderer mr)
+        rthsMeshInstanceData GetMeshInstanceData(MeshRenderer mr)
         {
             var rec = GetInstanceRecord(mr);
             var mf = mr.GetComponent<MeshFilter>();
-            rec.Update(GetMeshData(mf.sharedMesh), mr);
+            rec.Update(GetMeshData(mf.sharedMesh), mr, m_useObjectShadowSettings);
             return rec.instData;
         }
 
@@ -635,11 +655,11 @@ namespace UTJ.RaytracedHardShadow
             bool requireBake = cloth != null || (!m_GPUSkinning && (smr.rootBone != null || smr.sharedMesh.blendShapeCount != 0));
             if (requireBake)
             {
-                rec.Update(GetBakedMeshData(smr), smr, false);
+                rec.Update(GetBakedMeshData(smr), smr, m_useObjectShadowSettings, false);
             }
             else
             {
-                rec.Update(GetMeshData(smr.sharedMesh), smr, true);
+                rec.Update(GetMeshData(smr.sharedMesh), smr, m_useObjectShadowSettings, true);
             }
             return rec.instData;
         }
@@ -692,7 +712,7 @@ namespace UTJ.RaytracedHardShadow
                         continue;
 
                     foreach (var l in go.GetComponentsInChildren<Light>())
-                        if (l.enabled)
+                        if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None))
                             bodyL.Invoke(l);
                     foreach (var scl in go.GetComponentsInChildren<ShadowCasterLight>())
                         if (scl.enabled)

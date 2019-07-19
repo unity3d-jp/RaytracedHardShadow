@@ -147,6 +147,7 @@ namespace UTJ.RaytracedHardShadowEditor
 
             // shadow
             EditorGUILayout.LabelField("Shadow", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(so.FindProperty("m_useCameraCullingMask"));
             EditorGUILayout.PropertyField(so.FindProperty("m_cullBackFaces"));
             if (t.cullBackFaces)
             {
@@ -166,12 +167,12 @@ namespace UTJ.RaytracedHardShadowEditor
             {
                 EditorGUILayout.PropertyField(so.FindProperty("m_shadowRayOffset"));
             }
-            EditorGUILayout.PropertyField(so.FindProperty("m_useCameraCullingMask"));
-            EditorGUILayout.PropertyField(so.FindProperty("m_useLightCullingMask"));
             EditorGUILayout.Space();
 
             // lights
             EditorGUILayout.LabelField("Lights", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(so.FindProperty("m_useLightShadowSettings"));
+            EditorGUILayout.PropertyField(so.FindProperty("m_useLightCullingMask"));
             {
                 var spLightScope = so.FindProperty("m_lightScope");
                 EditorGUILayout.PropertyField(spLightScope);
@@ -189,6 +190,7 @@ namespace UTJ.RaytracedHardShadowEditor
 
             // geometry
             EditorGUILayout.LabelField("Geometry", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(so.FindProperty("m_useObjectShadowSettings"));
             EditorGUILayout.PropertyField(so.FindProperty("m_geometryScope"));
             switch (t.geometryScope)
             {

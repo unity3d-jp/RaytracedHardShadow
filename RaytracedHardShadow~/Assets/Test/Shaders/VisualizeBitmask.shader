@@ -11,6 +11,7 @@
         Pass
         {
             CGPROGRAM
+            #pragma only_renderers d3d11
             #pragma vertex vert
             #pragma fragment frag
             #include "UnityCG.cginc"
@@ -26,7 +27,7 @@
                 float2 uv : TEXCOORD0;
             };
 
-            UNITY_DECLARE_TEX2D_NOSAMPLER_UINT(_MainTex);
+            Texture2D<uint4> _MainTex;
             float4 _MainTex_TexelSize;
 
             vs_out vert(ia_out v)

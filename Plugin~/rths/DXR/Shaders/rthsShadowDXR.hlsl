@@ -195,10 +195,6 @@ float SampleDifferentialF(int2 idx, out float center, out float diff)
     diff += abs(g_prev_result[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x - center);
     diff += abs(g_prev_result[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x - center);
     diff += abs(g_prev_result[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x - center);
-    //diff += abs(g_prev_result[clamp(idx + int2(-1,-1), int2(0, 0), dim - 1)].x - center);
-    //diff += abs(g_prev_result[clamp(idx + int2( 1,-1), int2(0, 0), dim - 1)].x - center);
-    //diff += abs(g_prev_result[clamp(idx + int2( 1, 1), int2(0, 0), dim - 1)].x - center);
-    //diff += abs(g_prev_result[clamp(idx + int2(-1, 1), int2(0, 0), dim - 1)].x - center);
     return diff;
 }
 
@@ -215,10 +211,6 @@ uint SampleDifferentialI(int2 idx, out uint center, out uint diff)
     diff += abs(asuint(g_prev_result[clamp(idx + int2( 1, 0), int2(0, 0), dim - 1)].x) - center);
     diff += abs(asuint(g_prev_result[clamp(idx + int2( 0,-1), int2(0, 0), dim - 1)].x) - center);
     diff += abs(asuint(g_prev_result[clamp(idx + int2( 0, 1), int2(0, 0), dim - 1)].x) - center);
-    //diff += abs(asuint(g_prev_result[clamp(idx + int2(-1,-1), int2(0, 0), dim - 1)].x) - center);
-    //diff += abs(asuint(g_prev_result[clamp(idx + int2( 1,-1), int2(0, 0), dim - 1)].x) - center);
-    //diff += abs(asuint(g_prev_result[clamp(idx + int2( 1, 1), int2(0, 0), dim - 1)].x) - center);
-    //diff += abs(asuint(g_prev_result[clamp(idx + int2(-1, 1), int2(0, 0), dim - 1)].x) - center);
     return diff;
 }
 
@@ -301,6 +293,9 @@ void AnyHitCamera(inout CameraPayload payload : SV_RayPayload, in BuiltInTriangl
 
 bool ShootShadowRay(uint flags, in RayDesc ray, inout CameraPayload payload, uint light_mask)
 {
+    if (light_mask == 0)
+        return false;
+
     LightPayload lp;
     init(lp, payload);
     lp.light_mask = light_mask;
