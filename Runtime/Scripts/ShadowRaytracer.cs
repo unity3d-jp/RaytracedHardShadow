@@ -906,7 +906,7 @@ namespace UTJ.RaytracedHardShadow
             return m_renderer;
         }
 
-        void FinalizeRenderer()
+        void ReleaseRenderer()
         {
             if (m_initialized && m_renderer.valid)
             {
@@ -926,12 +926,15 @@ namespace UTJ.RaytracedHardShadow
 
             m_initialized = false;
             if (m_dbgVerboseLog)
-                Debug.Log(String.Format("Finalize Renderer ({0}f)", Time.frameCount));
+                Debug.Log(String.Format("Release Renderer ({0}f)", Time.frameCount));
         }
+
+
+        bool m_issueFinish = false, m_issueFrameEnd = false;
 
         bool Render()
         {
-            if (!m_initialized || !m_renderer)
+            if (!m_initialized || !m_renderer.valid)
                 return false;
 
             bool firstInstance = s_renderCount == 0;
@@ -939,9 +942,7 @@ namespace UTJ.RaytracedHardShadow
             if (s_renderCount == s_instanceCount)
                 s_renderCount = 0;
 
-#if UNITY_EDITOR
-            FeedErrorLog();
-#endif
+            m_issueFrameEnd = lastInstance;
 
             var cam = GetComponent<Camera>();
 
@@ -1025,14 +1026,26 @@ namespace UTJ.RaytracedHardShadow
             if (firstInstance)
                 m_renderer.IssueMarkFrameBegin();
             if (succeeded)
+            {
                 m_renderer.IssueRender();
+                m_issueFinish = true;
+            }
             if (m_assignGlobalTexture)
                 Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
-            if (lastInstance)
-                m_renderer.IssueMarkFrameEnd();
 
             return succeeded;
         }
+
+        void Finish()
+        {
+            if (m_issueFinish)
+                m_renderer.IssueFinish();
+            if (m_issueFrameEnd)
+                m_renderer.IssueMarkFrameEnd();
+
+            m_issueFinish = m_issueFrameEnd = false;
+        }
+
 
         static Material s_matBlit;
 
@@ -1169,16 +1182,6 @@ namespace UTJ.RaytracedHardShadow
         {
             UpdateScenePaths();
         }
-
-        void OnGUI()
-        {
-            if ((!EditorApplication.isPlaying || EditorApplication.isPaused) &&
-                Event.current.type == EventType.Repaint &&
-                InitializeRenderer(true))
-            {
-                Render();
-            }
-        }
 #endif
 
         void OnEnable()
@@ -1188,27 +1191,13 @@ namespace UTJ.RaytracedHardShadow
 
         void OnDisable()
         {
-            FinalizeRenderer();
+            ReleaseRenderer();
         }
 
         void Update()
         {
 #if UNITY_EDITOR && UNITY_2018_3_OR_NEWER
             m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
-#endif
-#if UNITY_EDITOR
-            // handle script recompile
-            if (EditorApplication.isCompiling && !m_isCompiling)
-            {
-                // on compile begin
-                m_isCompiling = true;
-                FinalizeRenderer();
-            }
-            else if (!EditorApplication.isCompiling && m_isCompiling)
-            {
-                // on compile end
-                m_isCompiling = false;
-            }
 #endif
             InitializeRenderer();
             if (!m_initialized || !m_renderer)
@@ -1221,6 +1210,23 @@ namespace UTJ.RaytracedHardShadow
                 ClearBakedMeshRecords();
                 EraseUnusedMeshRecords();
             }
+
+#if UNITY_EDITOR
+            FeedErrorLog();
+
+            // handle script recompile
+            if (EditorApplication.isCompiling && !m_isCompiling)
+            {
+                // on compile begin
+                m_isCompiling = true;
+                ReleaseRenderer();
+            }
+            else if (!EditorApplication.isCompiling && m_isCompiling)
+            {
+                // on compile end
+                m_isCompiling = false;
+            }
+#endif
         }
 
         void LateUpdate()
@@ -1231,10 +1237,12 @@ namespace UTJ.RaytracedHardShadow
 
         void OnPreRender()
         {
-            // note: on Editor, Update() and OnPreRender() is not 1 on 1.
-            //       multiple OnPreRender() can happen because of rapaint event.
-
             Render();
+        }
+
+        void OnPostRender()
+        {
+            Finish();
         }
         #endregion
     }

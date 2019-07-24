@@ -105,6 +105,7 @@ void RendererDXR::render()
         ctx->setRenderTarget(m_render_data, m_render_target);
         ctx->setMeshes(m_render_data, m_meshes);
         ctx->flush(m_render_data);
+        m_mutex.unlock();
     }
 }
 
@@ -117,12 +118,10 @@ void RendererDXR::finish()
     if (!ctx->finish(m_render_data))
         m_render_data.clear();
     m_is_rendering = false;
-    m_mutex.unlock();
 }
 
 void RendererDXR::frameEnd()
 {
-    finish();
 }
 
 bool RendererDXR::readbackRenderTarget(void *dst)

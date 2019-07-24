@@ -497,6 +497,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern IntPtr rthsGetMarkFrameBegin();
         [DllImport("rths")] static extern IntPtr rthsGetMarkFrameEnd();
         [DllImport("rths")] static extern IntPtr rthsGetRender();
+        [DllImport("rths")] static extern IntPtr rthsGetFinish();
         #endregion
 
         public static implicit operator bool(rthsRenderer v) { return v.self != IntPtr.Zero; }
@@ -628,10 +629,6 @@ namespace UTJ.RaytracedHardShadow
             GL.IssuePluginEvent(rthsGetFlushDeferredCommands(), 0);
         }
 
-        public void IssueRenderAll()
-        {
-            GL.IssuePluginEvent(rthsGetRenderAll(), 0);
-        }
 
         public void IssueMarkFrameBegin()
         {
@@ -645,6 +642,10 @@ namespace UTJ.RaytracedHardShadow
         {
             GL.IssuePluginEvent(rthsGetRender(), this.id);
         }
+        public void IssueFinish()
+        {
+            GL.IssuePluginEvent(rthsGetFinish(), this.id);
+        }
 
         public void AddMarkFrameBegin(CommandBuffer cb)
         {
@@ -657,6 +658,10 @@ namespace UTJ.RaytracedHardShadow
         public void AddRender(CommandBuffer cb)
         {
             cb.IssuePluginEvent(rthsGetRender(), this.id);
+        }
+        public void AddFinish(CommandBuffer cb)
+        {
+            cb.IssuePluginEvent(rthsGetFinish(), this.id);
         }
     }
 

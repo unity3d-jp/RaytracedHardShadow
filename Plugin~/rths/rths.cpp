@@ -495,55 +495,44 @@ UnityPluginLoad(IUnityInterfaces* unityInterfaces)
 #endif // _WIN32
 }
 
+
+#define DefExport(Name, Impl)\
+    extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API Name() { return Impl; }
+
 static void UNITY_INTERFACE_API _FlushDeferredCommands(int)
 {
     rths::FlushDeferredCommands();
 }
-extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
-rthsGetFlushDeferredCommands()
-{
-    return _FlushDeferredCommands;
-}
+DefExport(rthsGetFlushDeferredCommands, _FlushDeferredCommands);
 
 static void UNITY_INTERFACE_API _MarkFrameBegin(int)
 {
     rths::MarkFrameBegin();
 }
-extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
-rthsGetMarkFrameBegin()
-{
-    return _MarkFrameBegin;
-}
+DefExport(rthsGetMarkFrameBegin, _MarkFrameBegin);
 
 static void UNITY_INTERFACE_API _MarkFrameEnd(int)
 {
     rths::MarkFrameEnd();
 }
-extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
-rthsGetMarkFrameEnd()
-{
-    return _MarkFrameEnd;
-}
+DefExport(rthsGetMarkFrameEnd, _MarkFrameEnd);
 
 static void UNITY_INTERFACE_API _Render(int rid)
 {
-    if (auto renderer = rths::FindRendererByID(rid)) {
+    if (auto renderer = rths::FindRendererByID(rid))
         renderer->render();
-        renderer->finish(); // workaround for hangup. todo: this should be removed
-    }
 }
-extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
-rthsGetRender()
+DefExport(rthsGetRender, _Render);
+
+static void UNITY_INTERFACE_API _Finish(int rid)
 {
-    return _Render;
+    if (auto renderer = rths::FindRendererByID(rid))
+        renderer->finish();
 }
+DefExport(rthsGetFinish, _Finish);
 
 static void UNITY_INTERFACE_API _RenderAll(int)
 {
     rths::RenderAll();
 }
-extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
-rthsGetRenderAll()
-{
-    return _RenderAll;
-}
+DefExport(rthsGetRenderAll, _RenderAll);

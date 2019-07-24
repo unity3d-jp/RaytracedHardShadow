@@ -523,6 +523,7 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
     rthsTimestampSetEnable(rd.timestamp, GetGlobals().hasDebugFlag(DebugFlag::Timestamp));
 
     std::swap(rd.instances, rd.instances_prev);
+    rd.instances.clear();
 
     // reset fence values
     rd.fv_translate = rd.fv_deform = rd.fv_blas = rd.fv_tlas = rd.fv_rays = 0;
