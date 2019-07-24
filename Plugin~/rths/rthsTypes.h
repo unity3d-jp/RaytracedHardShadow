@@ -10,10 +10,9 @@ const int rthsMaxLayers = 32;
 
 enum class DebugFlag : uint32_t
 {
-    Timestamp           = 0x01,
-    NoLayerCompaction   = 0x02,
-    ForceUpdateAS       = 0x04,
-    PowerStableState    = 0x08,
+    Timestamp       = 0x01,
+    ForceUpdateAS   = 0x02,
+    PowerStableState= 0x04,
 };
 
 enum class GlobalFlag : uint32_t
@@ -98,16 +97,15 @@ struct CameraData
     };
     float near_plane{};
     float far_plane{};
-    uint32_t layer_mask_cpu{};
-    uint32_t layer_mask_gpu{};
+    uint32_t layer_mask{};
+    uint32_t pad1;
 };
 
 struct LightData
 {
     LightType light_type{};
-    uint32_t layer_mask_cpu{};
-    uint32_t layer_mask_gpu{};
-    uint32_t pad[1];
+    uint32_t layer_mask{};
+    uint32_t pad[2];
 
     float3 position{};
     float range{};
@@ -121,11 +119,10 @@ struct SceneData
 {
     uint32_t render_flags; // combination of RenderFlag
     uint32_t output_format = (uint32_t)OutputFormat::Float;
-    uint32_t layer_count;
     uint32_t light_count;
     float shadow_ray_offset;
     float self_shadow_threshold;
-    float pad2[2];
+    float pad2[3];
 
     CameraData camera;
     LightData lights[kMaxLights];

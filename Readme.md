@@ -28,7 +28,7 @@ Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は 
 既存の RenderTexture を出力先としたい場合、このオプションを無効化して "Output Texture" を手動で設定します。
 
 **RenderTexture が 32bit の Int もしくは Uint のフォーマットである場合、bitmask として出力します**。"Generate Render Texture" が有効な場合、"Output Type" を "Bit Mask" にすると bitmask になります。  
-bitmask の場合、n 番目の bit が n 番目のライトに対応するようになります。例えば、あるピクセルが 0 番目のライトと 2 番目のライトの光を受ける場合、5 (1<<0 | 1<<2) が出力されます。シェーダで複数のライトの影に対応する場合、この bitmask の値を用いてライト毎の影の有無を判別します。  
+bitmask の場合、n 番目の bit が n 番目のライトに対応するようになります。例えば、あるピクセルが 0 番目のライトと 2 番目のライトの光を受ける場合、1<<0 | 1<<2 で 5 が出力されます。シェーダで複数のライトの影に対応する場合、この bitmask の値を用いてライト毎の影の有無を判別します。  
 ["Set Light Index To Alpha"](#set-light-index-to-alpha) も参照ください。
 
 ##### Assign Global Texture
@@ -59,11 +59,11 @@ bitmask の場合、n 番目の bit が n 番目のライトに対応するよ�
 "Soft Shadows" と "Hard Shadows" は区別しません。どちらの場合も同じ処理で影テクスチャを生成します。
 
 ##### Use Light Culling bitmask
-有効な場合、Light に設定されている Culling Mask をそのまま影生成時にも適用します。
+有効な場合、Light に設定されている Culling Mask をそのまま影生成時にも適用します。  
 無効な場合その Light の Culling Mask は無視しますが、"Use Camera Culling Mask" が有効な場合 Camera 側の Culling Mask の影響は受けます。
 
 ##### Set Light Index To Alpha
-有効な場合、Light のインデックスを alpha に設定します。
+有効な場合、Light のインデックスを alpha に設定します。  
 影バッファを bitmask として出力した場合、この値を用いてライトと影の bit の関連付けを行います。
 最初のライトが 1000、以降 2000, 3000... と続きます。(デフォルトの alpha が 1 であるため、無関係なライトと混ざらないようにするために 1000 を初期値としています)  
 Legacy Forward の場合、シェーダ側では_LightColor0.aでこの値を取れます。  

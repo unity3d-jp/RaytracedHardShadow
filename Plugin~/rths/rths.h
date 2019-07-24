@@ -48,10 +48,9 @@ struct float4x4
 
 enum class DebugFlag : uint32_t
 {
-    Timestamp           = 0x01,
-    NoLayerCompaction   = 0x02,
-    ForceUpdateAS       = 0x04,
-    PowerStableState    = 0x08,
+    Timestamp       = 0x01,
+    ForceUpdateAS   = 0x02,
+    PowerStableState= 0x04,
 };
 
 enum class GlobalFlag : uint32_t

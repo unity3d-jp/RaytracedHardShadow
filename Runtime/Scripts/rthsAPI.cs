@@ -68,10 +68,9 @@ namespace UTJ.RaytracedHardShadow
     [Flags]
     public enum rthsDebugFlag : uint
     {
-        Timestamp           = 0x01,
-        NoLayerCompaction   = 0x02,
-        ForceUpdateAS       = 0x04,
-        PowerStableState    = 0x08,
+        Timestamp       = 0x01,
+        ForceUpdateAS   = 0x02,
+        PowerStableState= 0x04,
     }
 
     [Flags]

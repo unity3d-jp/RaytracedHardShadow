@@ -220,14 +220,12 @@ namespace UTJ.RaytracedHardShadowEditor
             {
                 var debugFlags = rthsGlobals.debugFlags;
                 bool timestamp          = (debugFlags & rthsDebugFlag.Timestamp) != 0;
-                bool noLayerCompaction  = (debugFlags & rthsDebugFlag.NoLayerCompaction) != 0;
                 bool forceUpdateAS      = (debugFlags & rthsDebugFlag.ForceUpdateAS) != 0;
                 bool powerStableState   = (debugFlags & rthsDebugFlag.PowerStableState) != 0;
 
                 EditorGUI.indentLevel++;
                 EditorGUI.BeginChangeCheck();
                 timestamp           = EditorGUILayout.Toggle("Timestamp", timestamp);
-                noLayerCompaction   = EditorGUILayout.Toggle("No Layer Compaction", noLayerCompaction);
                 forceUpdateAS       = EditorGUILayout.Toggle("Force Update AS", forceUpdateAS);
                 powerStableState    = EditorGUILayout.Toggle("Power Stable State", powerStableState);
                 if (EditorGUI.EndChangeCheck())
@@ -235,8 +233,6 @@ namespace UTJ.RaytracedHardShadowEditor
                     rthsDebugFlag v = 0;
                     if (timestamp)
                         v |= rthsDebugFlag.Timestamp;
-                    if (noLayerCompaction)
-                        v |= rthsDebugFlag.NoLayerCompaction;
                     if (forceUpdateAS)
                         v |= rthsDebugFlag.ForceUpdateAS;
                     if (powerStableState)

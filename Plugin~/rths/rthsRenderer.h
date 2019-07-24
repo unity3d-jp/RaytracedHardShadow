@@ -88,8 +88,6 @@ protected:
     mutable std::atomic_bool m_is_rendering{ false };
 
     std::vector<MeshInstanceDataPtr> m_meshes;
-    std::array<uint32_t, rthsMaxLayers> m_layer_mesh_count;
-    std::array<uint32_t, rthsMaxLayers> m_layer_lut;
 };
 
 IRenderer* CreateRendererDXR();
