@@ -476,6 +476,7 @@ namespace UTJ.RaytracedHardShadow
         [DllImport("rths")] static extern void rthsRendererRelease(IntPtr self);
         [DllImport("rths")] static extern byte rthsRendererIsInitialized(IntPtr self);
         [DllImport("rths")] static extern byte rthsRendererIsValid(IntPtr self);
+        [DllImport("rths")] static extern int rthsRendererGetID(IntPtr self);
         [DllImport("rths")] static extern void rthsRendererSetName(IntPtr self, string name);
 
         [DllImport("rths")] static extern void rthsRendererBeginScene(IntPtr self);
@@ -494,6 +495,9 @@ namespace UTJ.RaytracedHardShadow
 
         [DllImport("rths")] static extern IntPtr rthsGetFlushDeferredCommands();
         [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
+        [DllImport("rths")] static extern IntPtr rthsGetMarkFrameBegin();
+        [DllImport("rths")] static extern IntPtr rthsGetMarkFrameEnd();
+        [DllImport("rths")] static extern IntPtr rthsGetRender();
         #endregion
 
         public static implicit operator bool(rthsRenderer v) { return v.self != IntPtr.Zero; }
@@ -516,6 +520,10 @@ namespace UTJ.RaytracedHardShadow
         public bool valid
         {
             get { return rthsRendererIsValid(self) != 0; }
+        }
+        public int id
+        {
+            get { return rthsRendererGetID(self); }
         }
 
         public static rthsRenderer Create()
@@ -621,13 +629,22 @@ namespace UTJ.RaytracedHardShadow
             GL.IssuePluginEvent(rthsGetFlushDeferredCommands(), 0);
         }
 
-        public static void IssueRender()
+        public void IssueRenderAll()
         {
             GL.IssuePluginEvent(rthsGetRenderAll(), 0);
         }
-        public static void IssueRender(CommandBuffer cb)
+
+        public void AddMarkFrameBegin(CommandBuffer cb)
         {
-            cb.IssuePluginEvent(rthsGetRenderAll(), 0);
+            cb.IssuePluginEvent(rthsGetMarkFrameBegin(), 0);
+        }
+        public void AddMarkFrameEnd(CommandBuffer cb)
+        {
+            cb.IssuePluginEvent(rthsGetMarkFrameEnd(), 0);
+        }
+        public void AddRender(CommandBuffer cb)
+        {
+            cb.IssuePluginEvent(rthsGetRender(), this.id);
         }
     }
 

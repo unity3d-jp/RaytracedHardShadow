@@ -191,9 +191,7 @@ uint64_t D3D11ResourceTranslator::syncTexture(TextureDataDXR& src, uint64_t fenc
 {
     if (src.temporary_d3d11) {
         m_host_context->Wait(m_fence, fence_value);
-        fence_value = copyResource((ID3D11Texture2D*)src.host_ptr, src.temporary_d3d11, false);
-        m_host_context->Signal(m_fence, fence_value);
-        return fence_value;
+        return copyResource((ID3D11Texture2D*)src.host_ptr, src.temporary_d3d11, false);
     }
     return 0;
 }
@@ -247,8 +245,7 @@ uint64_t D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resour
 {
     m_host_context->CopyResource(dst, src);
 
-    auto fence_value = GfxContextDXR::getInstance()->incrementFenceValue();
-    m_host_context->Signal(m_fence, fence_value);
+    auto fence_value = insertSignal();
     if (immediate) {
         // wait for completion of CopyResource()
         m_fence->SetEventOnCompletion(fence_value, m_fence_event);

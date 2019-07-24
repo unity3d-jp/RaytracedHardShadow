@@ -527,8 +527,10 @@ rthsGetMarkFrameEnd()
 
 static void UNITY_INTERFACE_API _Render(int rid)
 {
-    if (auto renderer = rths::FindRendererByID(rid))
+    if (auto renderer = rths::FindRendererByID(rid)) {
         renderer->render();
+        renderer->finish(); // workaround for hangup. todo: this should be removed
+    }
 }
 extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
 rthsGetRender()

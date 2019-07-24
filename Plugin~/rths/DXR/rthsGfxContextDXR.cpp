@@ -522,6 +522,8 @@ void GfxContextDXR::prepare(RenderDataDXR& rd)
     rthsTimestampReset(rd.timestamp);
     rthsTimestampSetEnable(rd.timestamp, GetGlobals().hasDebugFlag(DebugFlag::Timestamp));
 
+    std::swap(rd.instances, rd.instances_prev);
+
     // reset fence values
     rd.fv_translate = rd.fv_deform = rd.fv_blas = rd.fv_tlas = rd.fv_rays = 0;
 
@@ -1185,12 +1187,8 @@ void GfxContextDXR::flush(RenderDataDXR& rd)
     if (rd.fv_rays && rd.render_target && m_resource_translator) {
         // copy render target to Unity side
         auto fv = m_resource_translator->syncTexture(*rtex, rd.fv_rays);
-        if (fv) {
-            m_cmd_queue_direct->Wait(m_fence, fv);
-            fv = incrementFenceValue();
-            m_cmd_queue_direct->Signal(m_fence, fv);
+        if (fv)
             rd.fv_rays = fv;
-        }
     }
     m_fv_last_rays = rd.fv_rays;
 }
@@ -1204,6 +1202,8 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
         m_fence->SetEventOnCompletion(rd.fv_rays, rd.fence_event);
         ::WaitForSingleObject(rd.fence_event, kTimeoutMS);
         rd.fv_rays = 0;
+
+        rthsTimestampUpdateLog(rd.timestamp, m_cmd_queue_direct);
 
 #ifdef rthsEnableRenderTargetValidation
         if (rd.render_target) {
@@ -1223,15 +1223,7 @@ bool GfxContextDXR::finish(RenderDataDXR& rd)
 #endif // rthsEnableRenderTargetValidation
     }
 
-    if (!checkError()) {
-        return false;
-    }
-    else {
-        std::swap(rd.instances, rd.instances_prev);
-        rthsTimestampUpdateLog(rd.timestamp, m_cmd_queue_direct);
-
-        return true;
-    }
+    return checkError();
 }
 
 void GfxContextDXR::frameEnd()

@@ -291,6 +291,7 @@ namespace UTJ.RaytracedHardShadow
 #endif
 
         rthsRenderer m_renderer;
+        CommandBuffer m_cbRender, m_cbFinish;
         bool m_initialized = false;
         List<ExportRequest> m_exportRequests;
 
@@ -894,7 +895,6 @@ namespace UTJ.RaytracedHardShadow
                 if (m_renderer.valid)
                 {
                     ++s_instanceCount;
-
                     if (s_meshDataCache == null)
                     {
                         s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
@@ -902,6 +902,15 @@ namespace UTJ.RaytracedHardShadow
                         s_meshInstDataCache = new Dictionary<Component, MeshInstanceRecord>();
                         s_renderTargetCache = new Dictionary<RenderTexture, RenderTargetRecord>();
                     }
+
+                    m_cbRender = new CommandBuffer();
+                    m_cbRender.name = "ShadowRaytracer";
+                    GetComponent<Camera>().AddCommandBuffer(CameraEvent.BeforeForwardOpaque, m_cbRender);
+                    GetComponent<Camera>().AddCommandBuffer(CameraEvent.BeforeLighting, m_cbRender);
+
+                    m_cbFinish = new CommandBuffer();
+                    m_cbFinish.name = "ShadowRaytracer";
+                    GetComponent<Camera>().AddCommandBuffer(CameraEvent.AfterEverything, m_cbFinish);
                 }
                 else
                 {
@@ -920,15 +929,28 @@ namespace UTJ.RaytracedHardShadow
                 --s_instanceCount;
                 if (s_instanceCount == 0)
                 {
+                    // last instance releases cache records
                     s_dbgVerboseLog = m_dbgVerboseLog;
                     ClearAllCacheRecords();
                 }
             }
+
             if (m_renderer)
             {
-                //Debug.Log("Release: " + m_renderer.self);
                 m_renderer.Release();
             }
+            if (m_cbRender != null)
+            {
+                GetComponent<Camera>().RemoveCommandBuffer(CameraEvent.BeforeForwardOpaque, m_cbRender);
+                GetComponent<Camera>().RemoveCommandBuffer(CameraEvent.BeforeLighting, m_cbRender);
+                m_cbRender.Release();
+                m_cbRender = null;
+
+                GetComponent<Camera>().RemoveCommandBuffer(CameraEvent.AfterEverything, m_cbFinish);
+                m_cbFinish.Release();
+                m_cbFinish = null;
+            }
+
             m_initialized = false;
             if (m_dbgVerboseLog)
                 Debug.Log(String.Format("Finalize Renderer ({0}f)", Time.frameCount));
@@ -938,14 +960,19 @@ namespace UTJ.RaytracedHardShadow
         {
             if (!m_initialized || !m_renderer)
                 return false;
+
+            bool firstInstance = s_renderCount == 0;
+            bool lastInstance = ++s_renderCount == s_instanceCount;
+            if (s_renderCount == s_instanceCount)
+                s_renderCount = 0;
+
 #if UNITY_EDITOR
             FeedErrorLog();
 #endif
 
             var cam = GetComponent<Camera>();
-            if (cam == null)
-                return false;
 
+            // setup RenderTexture
             if (m_generateRenderTexture)
             {
                 var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
@@ -973,15 +1000,10 @@ namespace UTJ.RaytracedHardShadow
                         Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
                 }
             }
-            else if (m_outputTexture != null)
-            {
-                if (m_assignGlobalTexture)
-                    Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
-            }
 
-            if (m_outputTexture == null)
-                return false;
-
+            // setup renderer
+            bool succeeded = true;
+            if (m_outputTexture != null)
             {
                 rthsRenderFlag flags = 0;
                 if (m_cullBackFaces)
@@ -1023,10 +1045,25 @@ namespace UTJ.RaytracedHardShadow
                 catch (Exception e)
                 {
                     Debug.LogError(e);
+                    succeeded = false;
                 }
                 m_renderer.EndScene();
             }
-            return true;
+
+            // setup CommandBuffers
+            m_cbRender.Clear();
+            if (firstInstance)
+                m_renderer.AddMarkFrameBegin(m_cbRender);
+            if (succeeded)
+                m_renderer.AddRender(m_cbRender);
+            if (m_assignGlobalTexture)
+                m_cbRender.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+
+            m_cbFinish.Clear();
+            if (lastInstance)
+                m_renderer.AddMarkFrameEnd(m_cbFinish);
+
+            return succeeded;
         }
 
         static Material s_matBlit;
@@ -1167,13 +1204,11 @@ namespace UTJ.RaytracedHardShadow
 
         void OnGUI()
         {
-            if (!EditorApplication.isPlaying || EditorApplication.isPaused)
+            if ((!EditorApplication.isPlaying || EditorApplication.isPaused) &&
+                Event.current.type == EventType.Repaint &&
+                InitializeRenderer(true))
             {
-                if (Event.current.type == EventType.Repaint)
-                {
-                    if (InitializeRenderer(true) && Render())
-                        rthsRenderer.IssueRender();
-                }
+                Render();
             }
         }
 #endif
@@ -1228,20 +1263,10 @@ namespace UTJ.RaytracedHardShadow
 
         void OnPreRender()
         {
-            if (!m_initialized || !m_renderer)
-                return;
-
             // note: on Editor, Update() and OnPreRender() is not 1 on 1.
             //       multiple OnPreRender() can happen because of rapaint event.
 
             Render();
-            if (++s_renderCount == s_instanceCount)
-            {
-                // last instance issues render event.
-                // all renderers do actual rendering tasks in render thread.
-                rthsRenderer.IssueRender();
-                s_renderCount = 0;
-            }
         }
         #endregion
     }
