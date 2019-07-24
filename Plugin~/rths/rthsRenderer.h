@@ -24,6 +24,7 @@ public:
     virtual void release() = 0;
     virtual bool initialized() const = 0;
     virtual bool valid() const = 0;
+    virtual int getID() const = 0;
 
     virtual void beginScene() = 0;
     virtual void endScene() = 0;
@@ -60,6 +61,7 @@ public:
     RendererBase();
     ~RendererBase() override;
     void release() override;
+    int getID() const override;
 
     void beginScene() override;
     void endScene() override;
@@ -77,6 +79,7 @@ public:
     void addMesh(MeshInstanceDataPtr mesh) override;
 
 protected:
+    int m_id = 0;
     SceneData m_scene_data;
     RenderTargetDataPtr m_render_target;
     std::mutex m_mutex;
@@ -90,6 +93,7 @@ protected:
 };
 
 IRenderer* CreateRendererDXR();
+IRenderer* FindRendererByID(int id);
 
 void MarkFrameBegin();
 void MarkFrameEnd();

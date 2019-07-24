@@ -122,6 +122,7 @@ void RendererDXR::finish()
 
 void RendererDXR::frameEnd()
 {
+    finish();
 }
 
 bool RendererDXR::readbackRenderTarget(void *dst)

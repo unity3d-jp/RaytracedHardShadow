@@ -54,9 +54,23 @@ ISceneCallback::~ISceneCallback()
 }
 
 
+static int g_renderer_id_seed = 0;
+
+IRenderer* FindRendererByID(int id)
+{
+    // linear search. but I believe this is acceptable as renderers won't be so many at the same time.
+    for (auto r : g_renderers)
+        if (r->getID() == id)
+            return r;
+    return nullptr;
+}
+
+
 RendererBase::RendererBase()
     : ref_count(this)
 {
+    m_id = ++g_renderer_id_seed;
+
     SceneCallbacksLock([this]() {
         g_renderers.push_back(this);
     });
@@ -72,6 +86,11 @@ RendererBase::~RendererBase()
 void RendererBase::release()
 {
     ExternalRelease(this);
+}
+
+int RendererBase::getID() const
+{
+    return m_id;
 }
 
 void RendererBase::beginScene()

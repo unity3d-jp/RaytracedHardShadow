@@ -281,6 +281,13 @@ rthsAPI bool rthsRendererIsValid(IRenderer *self)
     return self->valid();
 }
 
+rthsAPI int rthsRendererGetID(IRenderer *self)
+{
+    if (!self)
+        return 0; // 0 is invalid id
+    return self->getID();
+}
+
 rthsAPI bool rthsRendererIsRendering(IRenderer *self)
 {
     if (!self)
@@ -498,11 +505,41 @@ rthsGetFlushDeferredCommands()
     return _FlushDeferredCommands;
 }
 
+static void UNITY_INTERFACE_API _MarkFrameBegin(int)
+{
+    rths::MarkFrameBegin();
+}
+extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
+rthsGetMarkFrameBegin()
+{
+    return _MarkFrameBegin;
+}
+
+static void UNITY_INTERFACE_API _MarkFrameEnd(int)
+{
+    rths::MarkFrameEnd();
+}
+extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
+rthsGetMarkFrameEnd()
+{
+    return _MarkFrameEnd;
+}
+
+static void UNITY_INTERFACE_API _Render(int rid)
+{
+    if (auto renderer = rths::FindRendererByID(rid))
+        renderer->render();
+}
+extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
+rthsGetRender()
+{
+    return _Render;
+}
+
 static void UNITY_INTERFACE_API _RenderAll(int)
 {
     rths::RenderAll();
 }
-
 extern "C" UnityRenderingEvent UNITY_INTERFACE_EXPORT UNITY_INTERFACE_API
 rthsGetRenderAll()
 {
