@@ -93,7 +93,6 @@ namespace UTJ.RaytracedHardShadow
         Antialiasing            = 0x00000200,
         GPUSkinning             = 0x00010000,
         ClampBlendShapeWights   = 0x00020000,
-        ParallelCommandList     = 0x00040000,
     }
 
     [Flags]
@@ -632,6 +631,19 @@ namespace UTJ.RaytracedHardShadow
         public void IssueRenderAll()
         {
             GL.IssuePluginEvent(rthsGetRenderAll(), 0);
+        }
+
+        public void IssueMarkFrameBegin()
+        {
+            GL.IssuePluginEvent(rthsGetMarkFrameBegin(), 0);
+        }
+        public void IssueMarkFrameEnd()
+        {
+            GL.IssuePluginEvent(rthsGetMarkFrameEnd(), 0);
+        }
+        public void IssueRender()
+        {
+            GL.IssuePluginEvent(rthsGetRender(), this.id);
         }
 
         public void AddMarkFrameBegin(CommandBuffer cb)

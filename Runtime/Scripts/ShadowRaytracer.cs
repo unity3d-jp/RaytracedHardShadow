@@ -277,7 +277,6 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_GPUSkinning = true;
         [SerializeField] bool m_adaptiveSampling = false;
         [SerializeField] bool m_antialiasing = false;
-        [SerializeField] bool m_parallelCommandList = false;
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
         [SerializeField] bool m_clampBlendshapeWeights = true;
 
@@ -291,7 +290,6 @@ namespace UTJ.RaytracedHardShadow
 #endif
 
         rthsRenderer m_renderer;
-        CommandBuffer m_cbRender, m_cbFinish;
         bool m_initialized = false;
         List<ExportRequest> m_exportRequests;
 
@@ -450,11 +448,6 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_antialiasing; }
             set { m_antialiasing = value; }
-        }
-        public bool parallelCommandList
-        {
-            get { return m_parallelCommandList; }
-            set { m_parallelCommandList = value; }
         }
 
         public string timestampLog
@@ -902,15 +895,6 @@ namespace UTJ.RaytracedHardShadow
                         s_meshInstDataCache = new Dictionary<Component, MeshInstanceRecord>();
                         s_renderTargetCache = new Dictionary<RenderTexture, RenderTargetRecord>();
                     }
-
-                    m_cbRender = new CommandBuffer();
-                    m_cbRender.name = "ShadowRaytracer";
-                    GetComponent<Camera>().AddCommandBuffer(CameraEvent.BeforeForwardOpaque, m_cbRender);
-                    GetComponent<Camera>().AddCommandBuffer(CameraEvent.BeforeLighting, m_cbRender);
-
-                    m_cbFinish = new CommandBuffer();
-                    m_cbFinish.name = "ShadowRaytracer";
-                    GetComponent<Camera>().AddCommandBuffer(CameraEvent.AfterEverything, m_cbFinish);
                 }
                 else
                 {
@@ -938,17 +922,6 @@ namespace UTJ.RaytracedHardShadow
             if (m_renderer)
             {
                 m_renderer.Release();
-            }
-            if (m_cbRender != null)
-            {
-                GetComponent<Camera>().RemoveCommandBuffer(CameraEvent.BeforeForwardOpaque, m_cbRender);
-                GetComponent<Camera>().RemoveCommandBuffer(CameraEvent.BeforeLighting, m_cbRender);
-                m_cbRender.Release();
-                m_cbRender = null;
-
-                GetComponent<Camera>().RemoveCommandBuffer(CameraEvent.AfterEverything, m_cbFinish);
-                m_cbFinish.Release();
-                m_cbFinish = null;
             }
 
             m_initialized = false;
@@ -1020,8 +993,6 @@ namespace UTJ.RaytracedHardShadow
                     flags |= rthsRenderFlag.AdaptiveSampling;
                 if (m_antialiasing)
                     flags |= rthsRenderFlag.Antialiasing;
-                if (m_parallelCommandList)
-                    flags |= rthsRenderFlag.ParallelCommandList;
                 if (m_clampBlendshapeWeights)
                     flags |= rthsRenderFlag.ClampBlendShapeWights;
 
@@ -1050,18 +1021,15 @@ namespace UTJ.RaytracedHardShadow
                 m_renderer.EndScene();
             }
 
-            // setup CommandBuffers
-            m_cbRender.Clear();
+            // issue GPU commands
             if (firstInstance)
-                m_renderer.AddMarkFrameBegin(m_cbRender);
+                m_renderer.IssueMarkFrameBegin();
             if (succeeded)
-                m_renderer.AddRender(m_cbRender);
+                m_renderer.IssueRender();
             if (m_assignGlobalTexture)
-                m_cbRender.SetGlobalTexture(m_globalTextureName, m_outputTexture);
-
-            m_cbFinish.Clear();
+                Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
             if (lastInstance)
-                m_renderer.AddMarkFrameEnd(m_cbFinish);
+                m_renderer.IssueMarkFrameEnd();
 
             return succeeded;
         }

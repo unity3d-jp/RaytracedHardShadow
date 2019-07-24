@@ -212,7 +212,6 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
             EditorGUILayout.PropertyField(so.FindProperty("m_adaptiveSampling"));
             EditorGUILayout.PropertyField(so.FindProperty("m_antialiasing"));
-            //EditorGUILayout.PropertyField(so.FindProperty("m_parallelCommandList"));
 
             // debug
             var foldDebug = so.FindProperty("m_foldDebug");
