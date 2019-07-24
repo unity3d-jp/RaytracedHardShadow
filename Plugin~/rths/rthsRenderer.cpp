@@ -54,9 +54,23 @@ ISceneCallback::~ISceneCallback()
 }
 
 
+static int g_renderer_id_seed = 0;
+
+IRenderer* FindRendererByID(int id)
+{
+    // linear search. but I believe this is acceptable as renderers won't be so many at the same time.
+    for (auto r : g_renderers)
+        if (r->getID() == id)
+            return r;
+    return nullptr;
+}
+
+
 RendererBase::RendererBase()
     : ref_count(this)
 {
+    m_id = ++g_renderer_id_seed;
+
     SceneCallbacksLock([this]() {
         g_renderers.push_back(this);
     });
@@ -74,6 +88,11 @@ void RendererBase::release()
     ExternalRelease(this);
 }
 
+int RendererBase::getID() const
+{
+    return m_id;
+}
+
 void RendererBase::beginScene()
 {
     m_mutex.lock();
@@ -83,10 +102,6 @@ void RendererBase::beginScene()
     m_scene_data.light_count = 0;
 
     m_meshes.clear();
-    for (uint32_t i = 0; i < rthsMaxLayers; ++i) {
-        m_layer_mesh_count[i] = 0;
-        m_layer_lut[i] = 0;
-    }
 }
 
 void RendererBase::endScene()
@@ -94,45 +109,9 @@ void RendererBase::endScene()
     if (m_render_target)
         m_scene_data.output_format = (uint32_t)m_render_target->output_format;
 
-    // stable sort to compare later
-    std::stable_sort(m_meshes.begin(), m_meshes.end(),
-        [](auto& a, auto& b) { return a->layer < b->layer; });
-    for (auto& o : m_meshes)
-        m_layer_mesh_count[o->layer]++;
-
-    // setup CPU layer -> GPU layer look up table
-    int active_layer_count = 0;
-    if (GetGlobals().hasDebugFlag(DebugFlag::NoLayerCompaction)) {
-        for (int li = 0; li < rthsMaxLayers; ++li) {
-            m_layer_lut[li] = active_layer_count;
-            ++active_layer_count;
-        }
-}
-    else {
-        for (int li = 0; li < rthsMaxLayers; ++li) {
-            m_layer_lut[li] = active_layer_count;
-            if (m_layer_mesh_count[li])
-                ++active_layer_count;
-        }
-    }
-    m_scene_data.layer_count = active_layer_count;
-
-    // setup GPU layer mask.
+    // setup object layer mask
     for (auto& inst : m_meshes)
-        inst->layer_mask = 0x1 << m_layer_lut[inst->layer];
-    auto to_gpu_layer_mask = [this](uint32_t cpu_layer_mask) {
-        uint32_t ret = 0;
-        for (int li = 0; li < rthsMaxLayers; ++li) {
-            if ((cpu_layer_mask & (1 << li)) != 0)
-                ret |= 1 << m_layer_lut[li];
-        }
-        return ret;
-    };
-    m_scene_data.camera.layer_mask_gpu = to_gpu_layer_mask(m_scene_data.camera.layer_mask_cpu);
-    m_scene_data.eachLight([&](LightData& ld) {
-        ld.layer_mask_gpu = to_gpu_layer_mask(ld.layer_mask_cpu);
-    });
-
+        inst->layer_mask = 0x1 << inst->layer;
 
     m_is_updating = false;
     m_ready_to_render = true;
@@ -174,7 +153,7 @@ void RendererBase::setCamera(const float3& pos, const float4x4& view, const floa
         m_scene_data.camera.near_plane = tmp_near;
         m_scene_data.camera.far_plane = tmp_far;
     }
-    m_scene_data.camera.layer_mask_cpu = lmask;
+    m_scene_data.camera.layer_mask = lmask;
 }
 
 void RendererBase::addDirectionalLight(const float3& dir, uint32_t lmask)
@@ -186,7 +165,7 @@ void RendererBase::addDirectionalLight(const float3& dir, uint32_t lmask)
     auto& dst = m_scene_data.lights[m_scene_data.light_count++];
     dst.light_type = LightType::Directional;
     dst.direction = dir;
-    dst.layer_mask_cpu = lmask;
+    dst.layer_mask = lmask;
 }
 
 void RendererBase::addSpotLight(const float3& pos, const float3& dir, float range, float spot_angle, uint32_t lmask)
@@ -201,7 +180,7 @@ void RendererBase::addSpotLight(const float3& pos, const float3& dir, float rang
     dst.range = range;
     dst.direction = dir;
     dst.spot_angle = spot_angle * DegToRad;
-    dst.layer_mask_cpu = lmask;
+    dst.layer_mask = lmask;
 }
 
 void RendererBase::addPointLight(const float3& pos, float range, uint32_t lmask)
@@ -214,7 +193,7 @@ void RendererBase::addPointLight(const float3& pos, float range, uint32_t lmask)
     dst.light_type = LightType::Point;
     dst.position = pos;
     dst.range = range;
-    dst.layer_mask_cpu = lmask;
+    dst.layer_mask = lmask;
 }
 
 void RendererBase::addReversePointLight(const float3& pos, float range, uint32_t lmask)
@@ -227,7 +206,7 @@ void RendererBase::addReversePointLight(const float3& pos, float range, uint32_t
     dst.light_type = LightType::ReversePoint;
     dst.position = pos;
     dst.range = range;
-    dst.layer_mask_cpu = lmask;
+    dst.layer_mask = lmask;
 }
 
 void RendererBase::addMesh(MeshInstanceDataPtr mesh)

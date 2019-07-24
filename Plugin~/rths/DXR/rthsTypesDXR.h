@@ -199,7 +199,7 @@ public:
 
     std::vector<std::tuple<uint64_t, std::string*>> getSamples();
     void updateLog(ID3D12CommandQueuePtr cq);
-    const std::string& getLog() const;
+    std::string getLog(); // returns copy. it is intended
 
 private:
     ID3D12QueryHeapPtr m_query_heap;
@@ -209,6 +209,7 @@ private:
     int m_sample_index=0;
     std::vector<std::string> m_messages;
     std::string m_log;
+    std::mutex m_mutex;
 };
 using TimestampDXRPtr = std::shared_ptr<TimestampDXR>;
 

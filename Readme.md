@@ -18,16 +18,26 @@ Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は 
 
 - Camera を選択し、"Add Component" -> "UTJ/Raytraced Hard Shadow/Shadow Raytacer" を選択。このコンポーネントが影生成を担当します。
 
-<img align="right" src="https://user-images.githubusercontent.com/1488611/60966118-7b224500-a352-11e9-8160-4c846ff38443.png" width=400>
+<img align="right" src="https://user-images.githubusercontent.com/1488611/61529039-4b162880-aa5b-11e9-9a64-57429f21b8ce.png" width=400>
 
 ### Shadow Raytracer
 
-###### Generate Render Texture
+#### Output
+##### Generate Render Texture
 これが有効な場合、出力先の影テクスチャを画面の解像度に合わせて自動的に作成/更新します。
 既存の RenderTexture を出力先としたい場合、このオプションを無効化して "Output Texture" を手動で設定します。
 
+**RenderTexture が 32bit の Int もしくは Uint のフォーマットである場合、bitmask として出力します**。"Generate Render Texture" が有効な場合、"Output Type" を "Bit Mask" にすると bitmask になります。  
+bitmask の場合、n 番目の bit が n 番目のライトに対応するようになります。例えば、あるピクセルが 0 番目のライトと 2 番目のライトの光を受ける場合、1<<0 | 1<<2 で 5 が出力されます。シェーダで複数のライトの影に対応する場合、この bitmask の値を用いてライト毎の影の有無を判別します。  
+["Set Light Index To Alpha"](#set-light-index-to-alpha) も参照ください。
+
 ##### Assign Global Texture
 これが有効な場合、影テクスチャをグローバルなシェーダパラメータとして設定します。パラメータ名は "Global Texture Name" に設定した名前になります。
+
+#### Shadows
+##### Use Camera Culling Mask
+有効な場合、Camera に設定されている Culling Mask をそのまま影生成時にも適用します。
+無効な場合 Camera の Culling Mask は無視しますが、"Use Light Culling Mask" が有効な場合は Light 側の Culling Mask の影響は受けます。
 
 ##### Cull Back Faces
 有効な場合、裏面カリングを行います。
@@ -43,13 +53,36 @@ Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は 
 デフォルト設定はこれらの要件を満たすものになっています。
 ![Self Shadow Options](https://user-images.githubusercontent.com/1488611/61041749-d402e380-a40d-11e9-8698-ef0eedea7770.png)
 
-##### Lights
-"Light Scope" が "Entire Scene" の場合、シーン上の全ライトを用います。"Scene" の場合指定のシーン内に存在するライトを用います。"Objects" の場合指定オブジェクトのみ用います。  
+#### Lights
+##### Use Light Shadow Settings
+有効な場合、Light の "Shadow Type" が "No Shadows" のものは無視します。  
+"Soft Shadows" と "Hard Shadows" は区別しません。どちらの場合も同じ処理で影テクスチャを生成します。
+
+##### Use Light Culling bitmask
+有効な場合、Light に設定されている Culling Mask をそのまま影生成時にも適用します。  
+無効な場合その Light の Culling Mask は無視しますが、"Use Camera Culling Mask" が有効な場合 Camera 側の Culling Mask の影響は受けます。
+
+##### Set Light Index To Alpha
+有効な場合、Light のインデックスを alpha に設定します。  
+影バッファを bitmask として出力した場合、この値を用いてライトと影の bit の関連付けを行います。
+最初のライトが 1000、以降 2000, 3000... と続きます。(デフォルトの alpha が 1 であるため、無関係なライトと混ざらないようにするために 1000 を初期値としています)  
+Legacy Forward の場合、シェーダ側では_LightColor0.aでこの値を取れます。  
+["Generate Render Texture"](#generate-render-texture) も参照ください。また、**デフォルトでは無効** である点にご注意ください。
+
+##### Light Scope
+"Entire Scene" の場合、シーン上の全ライトを用います。"Scene" の場合指定のシーン内に存在するライトを用います。"Objects" の場合指定オブジェクトのみ用います。  
 エリアライトは非サポートであり、無視されます。
 
-##### Geometry
+#### Geometry
+##### Use Object Shadow Settings
+有効な場合、MeshRenderer / SkinnedMeshRenderer の "Cast Shadows" と "Receive Shadows" を影設定に適用します。  
+"Cast Shadows" が Off であれば影をキャストせず、Shadows Only であればカメラには映らず影だけキャストする、といった具合です。
+無効な場合、常に影のキャストとレシーブ両方を有効にします。
+
+##### Geometry Scope
 影のキャスト、レシーブを行うオブジェクトを指定します。こちらも Lights 同様、全シーン、シーン単位、オブジェクト単位での指定が可能です。オブジェクト指定の場合、指定オブジェクトの子オブジェクトも含められます。
 
+#### Misc
 ##### GPU Skinning
 スキニングおよびブレンドシェイプを GPU で行い、高速化を図るオプションです。  
 本プラグインは Unity 側とは独立して Mesh データを持っており、このオプションが有効だとスキニングも独立して行うようになります。

@@ -301,6 +301,8 @@ void TimestampDXR::updateLog(ID3D12CommandQueuePtr cq)
     if (!valid() || !m_enabled || !cq)
         return;
 
+    std::unique_lock<std::mutex> lock(m_mutex);
+
     m_log.clear();
     char name[256];
     char buf[256];
@@ -349,8 +351,9 @@ void TimestampDXR::updateLog(ID3D12CommandQueuePtr cq)
     }
 }
 
-const std::string& TimestampDXR::getLog() const
+std::string TimestampDXR::getLog()
 {
+    std::unique_lock<std::mutex> lock(m_mutex);
     return m_log;
 }
 

@@ -277,7 +277,6 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] bool m_GPUSkinning = true;
         [SerializeField] bool m_adaptiveSampling = false;
         [SerializeField] bool m_antialiasing = false;
-        [SerializeField] bool m_parallelCommandList = false;
         // PlayerSettings is not available at runtime. so keep PlayerSettings.legacyClampBlendShapeWeights in this field
         [SerializeField] bool m_clampBlendshapeWeights = true;
 
@@ -449,11 +448,6 @@ namespace UTJ.RaytracedHardShadow
         {
             get { return m_antialiasing; }
             set { m_antialiasing = value; }
-        }
-        public bool parallelCommandList
-        {
-            get { return m_parallelCommandList; }
-            set { m_parallelCommandList = value; }
         }
 
         public string timestampLog
@@ -894,7 +888,6 @@ namespace UTJ.RaytracedHardShadow
                 if (m_renderer.valid)
                 {
                     ++s_instanceCount;
-
                     if (s_meshDataCache == null)
                     {
                         s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
@@ -913,39 +906,47 @@ namespace UTJ.RaytracedHardShadow
             return m_renderer;
         }
 
-        void FinalizeRenderer()
+        void ReleaseRenderer()
         {
             if (m_initialized && m_renderer.valid)
             {
                 --s_instanceCount;
                 if (s_instanceCount == 0)
                 {
+                    // last instance releases cache records
                     s_dbgVerboseLog = m_dbgVerboseLog;
                     ClearAllCacheRecords();
                 }
             }
+
             if (m_renderer)
             {
-                //Debug.Log("Release: " + m_renderer.self);
                 m_renderer.Release();
             }
+
             m_initialized = false;
             if (m_dbgVerboseLog)
-                Debug.Log(String.Format("Finalize Renderer ({0}f)", Time.frameCount));
+                Debug.Log(String.Format("Release Renderer ({0}f)", Time.frameCount));
         }
+
+
+        bool m_issueFinish = false, m_issueFrameEnd = false;
 
         bool Render()
         {
-            if (!m_initialized || !m_renderer)
+            if (!m_initialized || !m_renderer.valid)
                 return false;
-#if UNITY_EDITOR
-            FeedErrorLog();
-#endif
+
+            bool firstInstance = s_renderCount == 0;
+            bool lastInstance = ++s_renderCount == s_instanceCount;
+            if (s_renderCount == s_instanceCount)
+                s_renderCount = 0;
+
+            m_issueFrameEnd = lastInstance;
 
             var cam = GetComponent<Camera>();
-            if (cam == null)
-                return false;
 
+            // setup RenderTexture
             if (m_generateRenderTexture)
             {
                 var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
@@ -973,15 +974,10 @@ namespace UTJ.RaytracedHardShadow
                         Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
                 }
             }
-            else if (m_outputTexture != null)
-            {
-                if (m_assignGlobalTexture)
-                    Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
-            }
 
-            if (m_outputTexture == null)
-                return false;
-
+            // setup renderer
+            bool succeeded = true;
+            if (m_outputTexture != null)
             {
                 rthsRenderFlag flags = 0;
                 if (m_cullBackFaces)
@@ -998,8 +994,6 @@ namespace UTJ.RaytracedHardShadow
                     flags |= rthsRenderFlag.AdaptiveSampling;
                 if (m_antialiasing)
                     flags |= rthsRenderFlag.Antialiasing;
-                if (m_parallelCommandList)
-                    flags |= rthsRenderFlag.ParallelCommandList;
                 if (m_clampBlendshapeWeights)
                     flags |= rthsRenderFlag.ClampBlendShapeWights;
 
@@ -1023,11 +1017,35 @@ namespace UTJ.RaytracedHardShadow
                 catch (Exception e)
                 {
                     Debug.LogError(e);
+                    succeeded = false;
                 }
                 m_renderer.EndScene();
             }
-            return true;
+
+            // issue GPU commands
+            if (firstInstance)
+                m_renderer.IssueMarkFrameBegin();
+            if (succeeded)
+            {
+                m_renderer.IssueRender();
+                m_issueFinish = true;
+            }
+            if (m_assignGlobalTexture)
+                Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+
+            return succeeded;
         }
+
+        void Finish()
+        {
+            if (m_issueFinish)
+                m_renderer.IssueFinish();
+            if (m_issueFrameEnd)
+                m_renderer.IssueMarkFrameEnd();
+
+            m_issueFinish = m_issueFrameEnd = false;
+        }
+
 
         static Material s_matBlit;
 
@@ -1164,18 +1182,6 @@ namespace UTJ.RaytracedHardShadow
         {
             UpdateScenePaths();
         }
-
-        void OnGUI()
-        {
-            if (!EditorApplication.isPlaying || EditorApplication.isPaused)
-            {
-                if (Event.current.type == EventType.Repaint)
-                {
-                    if (InitializeRenderer(true) && Render())
-                        rthsRenderer.IssueRender();
-                }
-            }
-        }
 #endif
 
         void OnEnable()
@@ -1185,27 +1191,13 @@ namespace UTJ.RaytracedHardShadow
 
         void OnDisable()
         {
-            FinalizeRenderer();
+            ReleaseRenderer();
         }
 
         void Update()
         {
 #if UNITY_EDITOR && UNITY_2018_3_OR_NEWER
             m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
-#endif
-#if UNITY_EDITOR
-            // handle script recompile
-            if (EditorApplication.isCompiling && !m_isCompiling)
-            {
-                // on compile begin
-                m_isCompiling = true;
-                FinalizeRenderer();
-            }
-            else if (!EditorApplication.isCompiling && m_isCompiling)
-            {
-                // on compile end
-                m_isCompiling = false;
-            }
 #endif
             InitializeRenderer();
             if (!m_initialized || !m_renderer)
@@ -1218,6 +1210,23 @@ namespace UTJ.RaytracedHardShadow
                 ClearBakedMeshRecords();
                 EraseUnusedMeshRecords();
             }
+
+#if UNITY_EDITOR
+            FeedErrorLog();
+
+            // handle script recompile
+            if (EditorApplication.isCompiling && !m_isCompiling)
+            {
+                // on compile begin
+                m_isCompiling = true;
+                ReleaseRenderer();
+            }
+            else if (!EditorApplication.isCompiling && m_isCompiling)
+            {
+                // on compile end
+                m_isCompiling = false;
+            }
+#endif
         }
 
         void LateUpdate()
@@ -1228,20 +1237,12 @@ namespace UTJ.RaytracedHardShadow
 
         void OnPreRender()
         {
-            if (!m_initialized || !m_renderer)
-                return;
-
-            // note: on Editor, Update() and OnPreRender() is not 1 on 1.
-            //       multiple OnPreRender() can happen because of rapaint event.
-
             Render();
-            if (++s_renderCount == s_instanceCount)
-            {
-                // last instance issues render event.
-                // all renderers do actual rendering tasks in render thread.
-                rthsRenderer.IssueRender();
-                s_renderCount = 0;
-            }
+        }
+
+        void OnPostRender()
+        {
+            Finish();
         }
         #endregion
     }

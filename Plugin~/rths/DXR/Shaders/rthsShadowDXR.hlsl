@@ -36,16 +36,15 @@ struct CameraData
     float4 position;
     float near_plane;
     float far_plane;
-    uint layer_mask_cpu;
-    uint layer_mask_gpu;
+    uint layer_mask;
+    uint1 pad1;
 };
 
 struct LightData
 {
     uint light_type;
-    uint layer_mask_cpu;
-    uint layer_mask_gpu;
-    uint1 pad1;
+    uint layer_mask;
+    uint2 pad1;
 
     float3 position;
     float range;
@@ -57,11 +56,10 @@ struct SceneData
 {
     uint render_flags;
     uint output_format;
-    uint layer_count;
     uint light_count;
     float shadow_ray_offset;
     float self_shadow_threshold;
-    float2 pad;
+    float3 pad;
 
     CameraData camera;
     LightData lights[kMaxLights];
@@ -93,14 +91,13 @@ float3 CameraForward()  { return -g_scene_data.camera.view[2].xyz; }
 float CameraFocalLength()   { return abs(g_scene_data.camera.proj[1][1]); }
 float CameraNearPlane()     { return g_scene_data.camera.near_plane; }
 float CameraFarPlane() { return g_scene_data.camera.far_plane; }
-uint CameraLayerMask() { return g_scene_data.camera.layer_mask_gpu; }
+uint CameraLayerMask() { return g_scene_data.camera.layer_mask; }
 
 uint  RenderFlags()         { return g_scene_data.render_flags; }
 uint  OutputFormat()        { return g_scene_data.output_format; }
 float ShadowRayOffset()     { return g_scene_data.shadow_ray_offset; }
 float SelfShadowThreshold() { return g_scene_data.self_shadow_threshold; }
 
-uint LayerCount() { return g_scene_data.layer_count; }
 int LightCount() { return g_scene_data.light_count; }
 LightData GetLight(int i) { return g_scene_data.lights[i]; }
 
@@ -331,10 +328,10 @@ void ClosestHitCamera(inout CameraPayload payload : SV_RayPayload, in BuiltInTri
     int li;
     for (li = 0; li < LightCount(); ++li) {
         LightData light = GetLight(li);
-        if ((instance_layer_mask & light.layer_mask_gpu) == 0)
+        if ((instance_layer_mask & light.layer_mask) == 0)
             continue;
 
-        uint mask = (instance_flags & IF_RECEIVE_SHADOWS) == 0 ? 0 : (light.layer_mask_gpu & CameraLayerMask());
+        uint mask = (instance_flags & IF_RECEIVE_SHADOWS) == 0 ? 0 : (light.layer_mask & CameraLayerMask());
         uint ray_flags = ray_flags_common;
         if (mask != ~0)
             ray_flags |= RAY_FLAG_FORCE_NON_OPAQUE; // use anyhit
