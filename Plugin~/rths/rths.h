@@ -179,6 +179,7 @@ rthsAPI rths::IRenderer* rthsRendererCreate();
 rthsAPI void rthsRendererRelease(rths::IRenderer *self);
 rthsAPI bool rthsRendererIsInitialized(rths::IRenderer *self);
 rthsAPI bool rthsRendererIsValid(rths::IRenderer *self);
+rthsAPI int  rthsRendererGetID(rths::IRenderer *self);
 rthsAPI bool rthsRendererIsRendering(rths::IRenderer *self);
 rthsAPI void rthsRendererSetName(rths::IRenderer *self, const char *name);
 rthsAPI void rthsRendererSetRenderTarget(rths::IRenderer *self, rths::RenderTargetData *render_target);
