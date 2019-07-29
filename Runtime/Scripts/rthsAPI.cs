@@ -425,7 +425,7 @@ namespace UTJ.RaytracedHardShadow
             {
                 this.name = rtex.name;
 
-                // if rtex is int / uint format, set output format as bit masks
+                // if rtex is 32 bit int / uint format, set output format as bit masks
 #if UNITY_2019_1_OR_NEWER
                 switch (rtex.graphicsFormat)
                 {

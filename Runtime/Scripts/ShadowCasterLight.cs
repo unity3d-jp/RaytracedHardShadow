@@ -13,6 +13,8 @@ namespace UTJ.RaytracedHardShadow
         ReversePoint,
     }
 
+    // this component doesn't light objects. only casts shadows. intended mainly for experiments.
+    // (ReversePooint light is supported only by this component)
     [ExecuteInEditMode]
     public class ShadowCasterLight : MonoBehaviour
     {

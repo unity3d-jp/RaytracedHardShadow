@@ -712,22 +712,22 @@ namespace UTJ.RaytracedHardShadow
             return false;
         }
 
-        public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
+        public void EnumerateLights(Action<Light, int> bodyL, Action<ShadowCasterLight> bodySCL = null)
         {
             // C# 7.0 supports function in function but we stick to the old way for compatibility
 
-            int lightIndex = 1;
+            int lightIndex = 0;
             Action<Light> processLight = (l) => {
                 if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None))
                 {
-                    bodyL.Invoke(l);
+                    bodyL.Invoke(l, lightIndex);
                     if (m_setLightIndexToAlpha)
                     {
                         // set light index to alpha in light color.
                         // 1000 * (light index + 1) is index param that is passed to shader.
                         // (first one is 1000, next one is 2000 ...)
                         var col = l.color;
-                        col.a = 1000.0f * lightIndex / l.intensity;
+                        col.a = 1000.0f * (lightIndex + 1) / l.intensity;
                         l.color = col;
                     }
                     ++lightIndex;
@@ -743,9 +743,13 @@ namespace UTJ.RaytracedHardShadow
 
                     foreach (var l in go.GetComponentsInChildren<Light>())
                         processLight(l);
-                    foreach (var scl in go.GetComponentsInChildren<ShadowCasterLight>())
-                        if (scl.enabled)
-                            bodySCL.Invoke(scl);
+
+                    if (bodySCL != null)
+                    {
+                        foreach (var scl in go.GetComponentsInChildren<ShadowCasterLight>())
+                            if (scl.enabled)
+                                bodySCL.Invoke(scl);
+                    }
                 }
             };
 
@@ -756,16 +760,9 @@ namespace UTJ.RaytracedHardShadow
                     if (scenePath == null || scenePath.Length == 0)
                         continue;
 
-                    int numScenes = SceneManager.sceneCount;
-                    for (int si = 0; si < numScenes; ++si)
-                    {
-                        var scene = SceneManager.GetSceneAt(si);
-                        if (scene.isLoaded && scene.path == scenePath)
-                        {
-                            processGOs(scene.GetRootGameObjects());
-                            break;
-                        }
-                    }
+                    var scene = SceneManager.GetSceneByPath(scenePath);
+                    if (scene.isLoaded)
+                        processGOs(scene.GetRootGameObjects());
                 }
             };
 
@@ -773,9 +770,13 @@ namespace UTJ.RaytracedHardShadow
             {
                 foreach (var l in FindObjectsOfType<Light>())
                     processLight(l);
-                foreach (var scl in FindObjectsOfType<ShadowCasterLight>())
-                    if (scl.enabled)
-                        bodySCL.Invoke(scl);
+
+                if (bodySCL != null)
+                {
+                    foreach (var scl in FindObjectsOfType<ShadowCasterLight>())
+                        if (scl.enabled)
+                            bodySCL.Invoke(scl);
+                }
             };
 
             switch (m_lightScope)
@@ -813,16 +814,9 @@ namespace UTJ.RaytracedHardShadow
                     if (scenePath == null || scenePath.Length == 0)
                         continue;
 
-                    int numScenes = SceneManager.sceneCount;
-                    for (int si = 0; si < numScenes; ++si)
-                    {
-                        var scene = SceneManager.GetSceneAt(si);
-                        if (scene.isLoaded && scene.path == scenePath)
-                        {
-                            processGOs(scene.GetRootGameObjects());
-                            break;
-                        }
-                    }
+                    var scene = SceneManager.GetSceneByPath(scenePath);
+                    if (scene.isLoaded)
+                        processGOs(scene.GetRootGameObjects());
                 }
             };
 
@@ -890,6 +884,7 @@ namespace UTJ.RaytracedHardShadow
                     ++s_instanceCount;
                     if (s_meshDataCache == null)
                     {
+                        // first instance initialize cache records
                         s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
                         s_bakedMeshDataCache = new Dictionary<Component, MeshRecord>();
                         s_meshInstDataCache = new Dictionary<Component, MeshInstanceRecord>();
@@ -1006,7 +1001,7 @@ namespace UTJ.RaytracedHardShadow
                     m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
                     m_renderer.SetCamera(cam, m_useCameraCullingMask);
                     EnumerateLights(
-                        l => { m_renderer.AddLight(l, m_useLightCullingMask); },
+                        (l, idx) => { m_renderer.AddLight(l, m_useLightCullingMask); },
                         scl => { m_renderer.AddLight(scl); }
                     );
                     EnumerateMeshRenderers(
