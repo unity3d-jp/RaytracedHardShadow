@@ -6,7 +6,7 @@
 レイトレーシングにより、ピクセル単位の正確なハードシャドウを生成するプラグインです。[UnityChanToonShader](https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project) などと併用することを想定した、アニメ用影システムとなります。
 
 実行には DirectX Raytracing (DXR) が動作する環境が必要です。
-具体的には、**Windows 10 の 1803 (April 2018 Update) 以降、GeForce 1070 以上の GPU が必須** になります。  
+具体的には、**Windows 10 の 1809 (October 2018 Update) 以降、GeForce 1070 以上の GPU が必須** になります。  
  2019/07 現在、NVIDIA の GPU (GeForce および Quadro) しか DXR をサポートしていません。また、GeForce 1060 には DXR をサポートしているモデルとしていないモデルが混在しており、同 GPU でも動く可能性はあります。([DXR Supported GPUs 2019/03](https://www.nvidia.com/content/dam/en-zz/Solutions/geforce/news/geforce-rtx-gtx-dxr/geforce-rtx-gtx-dxr-supported-gpus-march-2019.png) によれば、GTX 1060 **6GB** はサポートしているようです)
  
 Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は D3D11 (デフォルト)、もしくは D3D12 である必要があります。
