@@ -6,8 +6,8 @@
 レイトレーシングにより、ピクセル単位の正確なハードシャドウを生成するプラグインです。[UnityChanToonShader](https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project) などと併用することを想定した、アニメ用影システムとなります。
 
 実行には DirectX Raytracing (DXR) が動作する環境が必要です。
-具体的には、**Windows 10 の 1803 (April 2018 Update) 以降、GeForce 1070 以上の GPU が必須** になります。  
- 2019/07 現在、NVIDIA の GPU (GeForce および Quadro) しか DXR をサポートしていません。また、GeForce 1060 には DXR をサポートしているモデルとしていないモデルが混在しており、同 GPU でも動く可能性はあります。
+具体的には、**Windows 10 の 1809 (October 2018 Update) 以降、GeForce 1070 以上の GPU が必須** になります。  
+ 2019/07 現在、NVIDIA の GPU (GeForce および Quadro) しか DXR をサポートしていません。また、GeForce 1060 には DXR をサポートしているモデルとしていないモデルが混在しており、同 GPU でも動く可能性はあります。([DXR Supported GPUs 2019/03](https://www.nvidia.com/content/dam/en-zz/Solutions/geforce/news/geforce-rtx-gtx-dxr/geforce-rtx-gtx-dxr-supported-gpus-march-2019.png) によれば、GTX 1060 **6GB** はサポートしているようです)
  
 Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は D3D11 (デフォルト)、もしくは D3D12 である必要があります。
 
@@ -28,7 +28,7 @@ Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は 
 既存の RenderTexture を出力先としたい場合、このオプションを無効化して "Output Texture" を手動で設定します。
 
 **RenderTexture が 32bit の Int もしくは Uint のフォーマットである場合、bitmask として出力します**。"Generate Render Texture" が有効な場合、"Output Type" を "Bit Mask" にすると bitmask になります。  
-bitmask の場合、n 番目の bit が n 番目のライトに対応するようになります。例えば、あるピクセルが 0 番目のライトと 2 番目のライトの光を受ける場合、1<<0 | 1<<2 で 5 が出力されます。シェーダで複数のライトの影に対応する場合、この bitmask の値を用いてライト毎の影の有無を判別します。  
+bitmask の場合、n 番目の bit が n 番目のライトに対応するようになります。例えば、あるピクセルが 0 番目と 2 番目のライトの光を受ける場合、(1 << 0) | (1 << 2) で 5 が出力されます。シェーダで複数のライトの影に対応する場合、この bitmask の値を用いてライト毎の影を判別します。  
 ["Set Light Index To Alpha"](#set-light-index-to-alpha) も参照ください。
 
 ##### Assign Global Texture
