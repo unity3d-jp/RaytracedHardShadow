@@ -22,7 +22,7 @@ pack:
     - npm install upm-ci-utils@stable -g --registry https://api.bintray.com/npm/unity/unity-npm
     - upm-ci package pack
   artifacts:
-    packages:
+    raytraced_hard_shadow_package:
       paths:
         - "upm-ci~/**/*"
 
@@ -42,7 +42,7 @@ test_{{ platform.name }}_{{ editor.version }}:
       only:
       - "/.*/"
   artifacts:
-    logs:
+    raytraced_hard_shadow_package_test_results:
       paths:
         - "upm-ci~/test-results/**/*"
   dependencies:
@@ -64,7 +64,7 @@ publish:
       only:
         - /^(r|R)(c|C)-\d+\.\d+\.\d+(-preview(\.\d+)?)?$/
   artifacts:
-    artifacts:
+    raytraced_hard_shadow_artifacts:
       paths:
         - "upm-ci~/packages/*.tgz"
   dependencies:
