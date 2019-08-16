@@ -8,5 +8,19 @@
     "repository": {
         "type": "git",
         "url": "https://github.com/unity3d-jp/RaytracedHardShadow.git"
-    }
+    },
+    
+    "samples": [
+
+        {
+         "displayName": "Primitive Objects",
+         "description": "A sample scene with primitive objects, which uses DirectX Raytracing (DXR) Hard Shadow",
+         "path": "Samples~/PrimitiveObjects"
+        }
+    ],
+    "author": "Seiya Ishibashi <seiya@unity3d.com> (https://github.com/i-saint)",
+    "contributors": [
+      "Seiya Ishibashi <seiya@unity3d.com> (https://github.com/i-saint)",
+      "Sindharta Tanuwijaya <sindharta.tanuwijaya@unity3d.com> (https://github.com/sindharta)"
+    ]        
 }
