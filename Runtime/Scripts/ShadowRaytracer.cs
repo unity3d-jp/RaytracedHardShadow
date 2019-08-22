@@ -290,6 +290,7 @@ namespace UTJ.RaytracedHardShadow
 #endif
 
         rthsRenderer m_renderer;
+        Camera m_camera = null;
         bool m_initialized = false;
         List<ExportRequest> m_exportRequests;
 
@@ -927,12 +928,20 @@ namespace UTJ.RaytracedHardShadow
             m_initialized = false;
             if (m_dbgVerboseLog)
                 Debug.Log(String.Format("Release Renderer ({0}f)", Time.frameCount));
+
+            if (m_outputTexture != null) {
+                RenderTexture prevRT = RenderTexture.active;
+                RenderTexture.active = m_outputTexture;
+                GL.Clear(true, true, Color.black);
+                RenderTexture.active = prevRT;
+            }
+
         }
 
 
         bool m_issueFinish = false, m_issueFrameEnd = false;
 
-        bool Render()
+        internal bool Render(Camera cam)
         {
             if (!m_initialized || !m_renderer.valid)
                 return false;
@@ -943,8 +952,6 @@ namespace UTJ.RaytracedHardShadow
                 s_renderCount = 0;
 
             m_issueFrameEnd = lastInstance;
-
-            var cam = GetComponent<Camera>();
 
             // setup RenderTexture
             if (m_generateRenderTexture)
@@ -1036,7 +1043,7 @@ namespace UTJ.RaytracedHardShadow
             return succeeded;
         }
 
-        void Finish()
+        internal void Finish()
         {
             if (m_issueFinish)
                 m_renderer.IssueFinish();
@@ -1186,6 +1193,7 @@ namespace UTJ.RaytracedHardShadow
 
         void OnEnable()
         {
+            m_camera = GetComponent<Camera>();
             InitializeRenderer(true);
         }
 
@@ -1237,7 +1245,7 @@ namespace UTJ.RaytracedHardShadow
 
         void OnPreRender()
         {
-            Render();
+            Render(m_camera);
         }
 
         void OnPostRender()
