@@ -855,6 +855,9 @@ namespace UTJ.RaytracedHardShadow
             // initializing renderer can interfere GI baking. so wait until it is completed.
             if (Lightmapping.isRunning)
                 return false;
+            
+            if (EditorApplication.isCompiling)
+                return false;
 #endif
 
             if (!m_renderer)
