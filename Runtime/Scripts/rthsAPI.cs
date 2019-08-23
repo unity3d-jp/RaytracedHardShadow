@@ -12,6 +12,29 @@ namespace UTJ.RaytracedHardShadow
 // Object.Equals(object o) & Object.GetHashCode()
 #pragma warning disable CS0660, CS0661
 
+    public static class Lib
+    {
+        #region internal
+        public const string name =
+#if UNITY_IOS
+            "__internal";
+#else
+            "rths";
+#endif
+        [DllImport(Lib.name)] static extern IntPtr rthsGetVersion();
+        [DllImport(Lib.name)] static extern IntPtr rthsGetReleaseDate();
+        #endregion
+
+        public static string version
+        {
+            get { return Misc.CString(rthsGetVersion()); }
+        }
+        public static string releaseDate
+        {
+            get { return Misc.CString(rthsGetReleaseDate()); }
+        }
+    }
+
     public static class Misc
     {
         public static string CString(IntPtr ptr)
@@ -130,24 +153,14 @@ namespace UTJ.RaytracedHardShadow
     public struct rthsGlobals
     {
         #region internal
-        [DllImport("rths")] static extern IntPtr rthsGetVersion();
-        [DllImport("rths")] static extern IntPtr rthsGetReleaseDate();
-        [DllImport("rths")] static extern IntPtr rthsGetErrorLog();
-        [DllImport("rths")] static extern void rthsClearErrorLog();
-        [DllImport("rths")] static extern rthsDebugFlag rthsGlobalsGetDebugFlags();
-        [DllImport("rths")] static extern void rthsGlobalsSetDebugFlags(rthsDebugFlag v);
-        [DllImport("rths")] static extern rthsGlobalFlag rthsGlobalsGetFlags();
-        [DllImport("rths")] static extern void rthsGlobalsSetFlags(rthsGlobalFlag v);
+        [DllImport(Lib.name)] static extern IntPtr rthsGetErrorLog();
+        [DllImport(Lib.name)] static extern void rthsClearErrorLog();
+        [DllImport(Lib.name)] static extern rthsDebugFlag rthsGlobalsGetDebugFlags();
+        [DllImport(Lib.name)] static extern void rthsGlobalsSetDebugFlags(rthsDebugFlag v);
+        [DllImport(Lib.name)] static extern rthsGlobalFlag rthsGlobalsGetFlags();
+        [DllImport(Lib.name)] static extern void rthsGlobalsSetFlags(rthsGlobalFlag v);
         #endregion
 
-        public static string version
-        {
-            get { return Misc.CString(rthsGetVersion()); }
-        }
-        public static string releaseDate
-        {
-            get { return Misc.CString(rthsGetReleaseDate()); }
-        }
         public static string errorLog
         {
             get { return Misc.CString(rthsGetErrorLog()); }
@@ -170,18 +183,18 @@ namespace UTJ.RaytracedHardShadow
     {
         #region internal
         public IntPtr self;
-        [DllImport("rths")] static extern IntPtr rthsMeshCreate();
-        [DllImport("rths")] static extern void rthsMeshRelease(IntPtr self);
-        [DllImport("rths")] static extern byte rthsMeshIsRelocated(IntPtr self);
-        [DllImport("rths")] static extern void rthsMeshSetName(IntPtr self, string name);
-        [DllImport("rths")] static extern void rthsMeshSetCPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
-        [DllImport("rths")] static extern void rthsMeshSetGPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
-        [DllImport("rths")] static extern void rthsMeshSetSkinBindposes(IntPtr self, Matrix4x4[] bindposes, int num_bindposes);
-        [DllImport("rths")] static extern void rthsMeshSetSkinWeights(IntPtr self, IntPtr c, int nc, IntPtr w, int nw);
-        [DllImport("rths")] static extern void rthsMeshSetSkinWeights4(IntPtr self, BoneWeight[] w4, int nw4);
-        [DllImport("rths")] static extern void rthsMeshSetBlendshapeCount(IntPtr self, int num_bs);
-        [DllImport("rths")] static extern void rthsMeshAddBlendshapeFrame(IntPtr self, int bs_index, Vector3[] delta, float weight);
-        [DllImport("rths")] static extern void rthsMeshMarkDyncmic(IntPtr self, byte v);
+        [DllImport(Lib.name)] static extern IntPtr rthsMeshCreate();
+        [DllImport(Lib.name)] static extern void rthsMeshRelease(IntPtr self);
+        [DllImport(Lib.name)] static extern byte rthsMeshIsRelocated(IntPtr self);
+        [DllImport(Lib.name)] static extern void rthsMeshSetName(IntPtr self, string name);
+        [DllImport(Lib.name)] static extern void rthsMeshSetCPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
+        [DllImport(Lib.name)] static extern void rthsMeshSetGPUBuffers(IntPtr self, IntPtr vb, IntPtr ib, int vertexStride, int vertexCount, int vertexOffset, int indexStride, int indexCount, int indexOffset);
+        [DllImport(Lib.name)] static extern void rthsMeshSetSkinBindposes(IntPtr self, Matrix4x4[] bindposes, int num_bindposes);
+        [DllImport(Lib.name)] static extern void rthsMeshSetSkinWeights(IntPtr self, IntPtr c, int nc, IntPtr w, int nw);
+        [DllImport(Lib.name)] static extern void rthsMeshSetSkinWeights4(IntPtr self, BoneWeight[] w4, int nw4);
+        [DllImport(Lib.name)] static extern void rthsMeshSetBlendshapeCount(IntPtr self, int num_bs);
+        [DllImport(Lib.name)] static extern void rthsMeshAddBlendshapeFrame(IntPtr self, int bs_index, Vector3[] delta, float weight);
+        [DllImport(Lib.name)] static extern void rthsMeshMarkDyncmic(IntPtr self, byte v);
         #endregion
 
         public static implicit operator bool(rthsMeshData v) { return v.self != IntPtr.Zero; }
@@ -275,14 +288,14 @@ namespace UTJ.RaytracedHardShadow
     {
         #region internal
         public IntPtr self;
-        [DllImport("rths")] static extern IntPtr rthsMeshInstanceCreate(rthsMeshData mesh);
-        [DllImport("rths")] static extern void rthsMeshInstanceRelease(IntPtr self);
-        [DllImport("rths")] static extern void rthsMeshInstanceSetName(IntPtr self, string name);
-        [DllImport("rths")] static extern void rthsMeshInstanceSetFlags(IntPtr self, rthsInstanceFlag flags);
-        [DllImport("rths")] static extern void rthsMeshInstanceSetLayer(IntPtr self, int layer);
-        [DllImport("rths")] static extern void rthsMeshInstanceSetTransform(IntPtr self, Matrix4x4 transform);
-        [DllImport("rths")] static extern void rthsMeshInstanceSetBones(IntPtr self, Matrix4x4[] bones, int num_bones);
-        [DllImport("rths")] static extern void rthsMeshInstanceSetBlendshapeWeights(IntPtr self, float[] bsw, int num_bsw);
+        [DllImport(Lib.name)] static extern IntPtr rthsMeshInstanceCreate(rthsMeshData mesh);
+        [DllImport(Lib.name)] static extern void rthsMeshInstanceRelease(IntPtr self);
+        [DllImport(Lib.name)] static extern void rthsMeshInstanceSetName(IntPtr self, string name);
+        [DllImport(Lib.name)] static extern void rthsMeshInstanceSetFlags(IntPtr self, rthsInstanceFlag flags);
+        [DllImport(Lib.name)] static extern void rthsMeshInstanceSetLayer(IntPtr self, int layer);
+        [DllImport(Lib.name)] static extern void rthsMeshInstanceSetTransform(IntPtr self, Matrix4x4 transform);
+        [DllImport(Lib.name)] static extern void rthsMeshInstanceSetBones(IntPtr self, Matrix4x4[] bones, int num_bones);
+        [DllImport(Lib.name)] static extern void rthsMeshInstanceSetBlendshapeWeights(IntPtr self, float[] bsw, int num_bsw);
         #endregion
 
         public static implicit operator bool(rthsMeshInstanceData v) { return v.self != IntPtr.Zero; }
@@ -380,13 +393,13 @@ namespace UTJ.RaytracedHardShadow
     {
         #region internal
         public IntPtr self;
-        [DllImport("rths")] static extern IntPtr rthsRenderTargetCreate();
-        [DllImport("rths")] static extern void rthsRenderTargetRelease(IntPtr self);
-        [DllImport("rths")] static extern byte rthsRenderTargetIsRelocated(IntPtr self);
-        [DllImport("rths")] static extern void rthsRenderTargetSetName(IntPtr self, string name);
-        [DllImport("rths")] static extern void rthsRenderTargetSetGPUTexture(IntPtr self, IntPtr tex);
-        [DllImport("rths")] static extern void rthsRenderTargetSetup(IntPtr self, int width, int height, rthsRenderTargetFormat format);
-        [DllImport("rths")] static extern void rthsRenderTargetSetOutputFormat(IntPtr self, rthsOutputFormat fmt);
+        [DllImport(Lib.name)] static extern IntPtr rthsRenderTargetCreate();
+        [DllImport(Lib.name)] static extern void rthsRenderTargetRelease(IntPtr self);
+        [DllImport(Lib.name)] static extern byte rthsRenderTargetIsRelocated(IntPtr self);
+        [DllImport(Lib.name)] static extern void rthsRenderTargetSetName(IntPtr self, string name);
+        [DllImport(Lib.name)] static extern void rthsRenderTargetSetGPUTexture(IntPtr self, IntPtr tex);
+        [DllImport(Lib.name)] static extern void rthsRenderTargetSetup(IntPtr self, int width, int height, rthsRenderTargetFormat format);
+        [DllImport(Lib.name)] static extern void rthsRenderTargetSetOutputFormat(IntPtr self, rthsOutputFormat fmt);
         #endregion
 
         public static implicit operator bool(rthsRenderTarget v) { return v.self != IntPtr.Zero; }
@@ -470,33 +483,33 @@ namespace UTJ.RaytracedHardShadow
     {
         #region internal
         public IntPtr self;
-        [DllImport("rths")] static extern IntPtr rthsRendererCreate();
-        [DllImport("rths")] static extern void rthsRendererRelease(IntPtr self);
-        [DllImport("rths")] static extern byte rthsRendererIsInitialized(IntPtr self);
-        [DllImport("rths")] static extern byte rthsRendererIsValid(IntPtr self);
-        [DllImport("rths")] static extern int rthsRendererGetID(IntPtr self);
-        [DllImport("rths")] static extern void rthsRendererSetName(IntPtr self, string name);
+        [DllImport(Lib.name)] static extern IntPtr rthsRendererCreate();
+        [DllImport(Lib.name)] static extern void rthsRendererRelease(IntPtr self);
+        [DllImport(Lib.name)] static extern byte rthsRendererIsInitialized(IntPtr self);
+        [DllImport(Lib.name)] static extern byte rthsRendererIsValid(IntPtr self);
+        [DllImport(Lib.name)] static extern int rthsRendererGetID(IntPtr self);
+        [DllImport(Lib.name)] static extern void rthsRendererSetName(IntPtr self, string name);
 
-        [DllImport("rths")] static extern void rthsRendererBeginScene(IntPtr self);
-        [DllImport("rths")] static extern void rthsRendererEndScene(IntPtr self);
-        [DllImport("rths")] static extern void rthsRendererSetRenderFlags(IntPtr self, rthsRenderFlag flags);
-        [DllImport("rths")] static extern void rthsRendererSetShadowRayOffset(IntPtr self, float v);
-        [DllImport("rths")] static extern void rthsRendererSetSelfShadowThreshold(IntPtr self, float v);
-        [DllImport("rths")] static extern void rthsRendererSetRenderTarget(IntPtr self, rthsRenderTarget rt);
-        [DllImport("rths")] static extern void rthsRendererSetCamera(IntPtr self, Vector3 pos, Matrix4x4 view, Matrix4x4 proj, uint mask);
-        [DllImport("rths")] static extern void rthsRendererAddDirectionalLight(IntPtr self, Vector3 dir, uint mask);
-        [DllImport("rths")] static extern void rthsRendererAddSpotLight(IntPtr self, Vector3 pos, Vector3 dir, float range, float spotAngle, uint mask);
-        [DllImport("rths")] static extern void rthsRendererAddPointLight(IntPtr self, Vector3 pos, float range, uint mask);
-        [DllImport("rths")] static extern void rthsRendererAddReversePointLight(IntPtr self, Vector3 pos, float range, uint mask);
-        [DllImport("rths")] static extern void rthsRendererAddMesh(IntPtr self, rthsMeshInstanceData mesh);
-        [DllImport("rths")] static extern IntPtr rthsRendererGetTimestampLog(IntPtr self);
+        [DllImport(Lib.name)] static extern void rthsRendererBeginScene(IntPtr self);
+        [DllImport(Lib.name)] static extern void rthsRendererEndScene(IntPtr self);
+        [DllImport(Lib.name)] static extern void rthsRendererSetRenderFlags(IntPtr self, rthsRenderFlag flags);
+        [DllImport(Lib.name)] static extern void rthsRendererSetShadowRayOffset(IntPtr self, float v);
+        [DllImport(Lib.name)] static extern void rthsRendererSetSelfShadowThreshold(IntPtr self, float v);
+        [DllImport(Lib.name)] static extern void rthsRendererSetRenderTarget(IntPtr self, rthsRenderTarget rt);
+        [DllImport(Lib.name)] static extern void rthsRendererSetCamera(IntPtr self, Vector3 pos, Matrix4x4 view, Matrix4x4 proj, uint mask);
+        [DllImport(Lib.name)] static extern void rthsRendererAddDirectionalLight(IntPtr self, Vector3 dir, uint mask);
+        [DllImport(Lib.name)] static extern void rthsRendererAddSpotLight(IntPtr self, Vector3 pos, Vector3 dir, float range, float spotAngle, uint mask);
+        [DllImport(Lib.name)] static extern void rthsRendererAddPointLight(IntPtr self, Vector3 pos, float range, uint mask);
+        [DllImport(Lib.name)] static extern void rthsRendererAddReversePointLight(IntPtr self, Vector3 pos, float range, uint mask);
+        [DllImport(Lib.name)] static extern void rthsRendererAddMesh(IntPtr self, rthsMeshInstanceData mesh);
+        [DllImport(Lib.name)] static extern IntPtr rthsRendererGetTimestampLog(IntPtr self);
 
-        [DllImport("rths")] static extern IntPtr rthsGetFlushDeferredCommands();
-        [DllImport("rths")] static extern IntPtr rthsGetRenderAll();
-        [DllImport("rths")] static extern IntPtr rthsGetMarkFrameBegin();
-        [DllImport("rths")] static extern IntPtr rthsGetMarkFrameEnd();
-        [DllImport("rths")] static extern IntPtr rthsGetRender();
-        [DllImport("rths")] static extern IntPtr rthsGetFinish();
+        [DllImport(Lib.name)] static extern IntPtr rthsGetFlushDeferredCommands();
+        [DllImport(Lib.name)] static extern IntPtr rthsGetRenderAll();
+        [DllImport(Lib.name)] static extern IntPtr rthsGetMarkFrameBegin();
+        [DllImport(Lib.name)] static extern IntPtr rthsGetMarkFrameEnd();
+        [DllImport(Lib.name)] static extern IntPtr rthsGetRender();
+        [DllImport(Lib.name)] static extern IntPtr rthsGetFinish();
         #endregion
 
         public static implicit operator bool(rthsRenderer v) { return v.self != IntPtr.Zero; }

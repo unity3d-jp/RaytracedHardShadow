@@ -254,7 +254,7 @@ namespace UTJ.RaytracedHardShadowEditor
                 ExportToImageWindow.Open(t);
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField(System.String.Format("Plugin version: {0} ({1})", rthsGlobals.version, rthsGlobals.releaseDate));
+            EditorGUILayout.LabelField(System.String.Format("Plugin version: {0} ({1})", Lib.version, Lib.releaseDate));
         }
     }
 }
