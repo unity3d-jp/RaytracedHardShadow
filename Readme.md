@@ -14,7 +14,7 @@ Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は 
 ## 使い方
 - [releases](https://github.com/unity3d-jp/RaytracedHardShadow/releases) からパッケージをダウンロードし、Unity のプロジェクトにインポート。
   - Unity 2018.3 以降の場合、この github リポジトリを直接インポートすることもできます。プロジェクト内にある Packages/manifest.json をテキストエディタで開き、"dependencies" に以下の行を加えます。
-  > "com.utj.raytracedhardshadow": "https://github.com/unity3d-jp/RaytracedHardShadow.git",
+  > "com.unity.raytracedhardshadow": "https://github.com/unity3d-jp/RaytracedHardShadow.git",
 
 - Camera を選択し、"Add Component" -> "UTJ/Raytraced Hard Shadow/Shadow Raytacer" を選択。このコンポーネントが影生成を担当します。
 
