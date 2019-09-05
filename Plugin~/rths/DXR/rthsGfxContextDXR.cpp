@@ -670,12 +670,12 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         return;
     }
 
-    int translated_gpu_buffer_count = 0;
-    auto translate_gpu_buffer = [this, &translated_gpu_buffer_count](GPUResourcePtr buffer) {
+    int updated_buffer_count = 0;
+    auto translate_gpu_buffer = [this, &updated_buffer_count](GPUResourcePtr buffer) {
         auto& data = m_buffer_records[buffer];
         if (!data) {
             data = m_resource_translator->translateBuffer(buffer);
-            ++translated_gpu_buffer_count;
+            ++updated_buffer_count;
         }
         return data;
     };
@@ -707,8 +707,11 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         }
 
         if (!mesh_dxr->vertex_buffer) {
-            if (mesh->gpu_vertex_buffer && m_resource_translator)
+            if (mesh->gpu_vertex_buffer && m_resource_translator) {
                 mesh_dxr->vertex_buffer = translate_gpu_buffer(mesh->gpu_vertex_buffer);
+                if (mesh_dxr->vertex_buffer->is_dynamic)
+                    mesh->is_dynamic = true;
+            }
             else if (mesh->cpu_vertex_buffer)
                 mesh_dxr->vertex_buffer = upload_cpu_buffer(mesh->cpu_vertex_buffer, mesh->vertex_count * mesh->vertex_stride);
 
@@ -731,6 +734,12 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
             }
 #endif // rthsEnableBufferValidation
         }
+        else {
+            if (mesh_dxr->vertex_buffer->is_dynamic) {
+                m_resource_translator->updateBuffer(*mesh_dxr->vertex_buffer);
+            }
+        }
+
         if (!mesh_dxr->index_buffer) {
             if (mesh->gpu_index_buffer)
                 mesh_dxr->index_buffer = translate_gpu_buffer(mesh->gpu_index_buffer);
@@ -772,7 +781,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         }
         rd.instances.push_back(inst_dxr);
     }
-    if (translated_gpu_buffer_count > 0) {
+    if (updated_buffer_count > 0) {
         // fence for complete buffer copy
         rd.fv_translate = m_resource_translator->insertSignal();
     }
@@ -865,8 +874,10 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
             }
         }
         else {
-            if (!mesh_dxr.blas) {
+            if (!mesh_dxr.blas || mesh.is_dynamic) {
                 // BLAS for non-deformable meshes
+
+                bool perform_update = mesh_dxr.blas != nullptr;
 
                 D3D12_RAYTRACING_GEOMETRY_DESC geom_desc{};
                 geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -883,15 +894,20 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
 
                 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
                 inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-                if (mesh.is_dynamic)
-                    inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+                if (mesh.is_dynamic) {
+                    inputs.Flags =
+                        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE |
+                        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+                    if (perform_update)
+                        inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+                }
                 else
                     inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
                 inputs.NumDescs = 1;
                 inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
                 inputs.pGeometryDescs = &geom_desc;
 
-                {
+                if (!mesh_dxr.blas) {
                     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
                     m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
 
@@ -903,6 +919,8 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
 
                 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
                 as_desc.Inputs = inputs;
+                if (perform_update)
+                    as_desc.SourceAccelerationStructureData = mesh_dxr.blas->GetGPUVirtualAddress();
                 as_desc.DestAccelerationStructureData = mesh_dxr.blas->GetGPUVirtualAddress();
                 as_desc.ScratchAccelerationStructureData = mesh_dxr.blas_scratch->GetGPUVirtualAddress();
 

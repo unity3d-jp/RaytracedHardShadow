@@ -24,6 +24,7 @@ public:
     TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) override;
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
     BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
+    bool updateBuffer(BufferDataDXR& buf) override;
 
     bool isValidTexture(TextureDataDXR& data) override;
     bool isValidBuffer(BufferDataDXR& data) override;
@@ -52,6 +53,7 @@ public:
     TextureDataDXRPtr createTemporaryTexture(GPUResourcePtr ptr) override;
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
     BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
+    bool updateBuffer(BufferDataDXR& buf) override;
 
     bool isValidTexture(TextureDataDXR& data) override;
     bool isValidBuffer(BufferDataDXR& data) override;
@@ -207,6 +209,8 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
 
     D3D11_BUFFER_DESC src_desc{};
     buf_host->GetDesc(&src_desc);
+    if (src_desc.Usage == D3D11_USAGE_DYNAMIC)
+        ret->is_dynamic = true;
 
     // create temporary buffer that can be shared with DXR side
     D3D11_BUFFER_DESC tmp_desc = src_desc;
@@ -229,6 +233,15 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
         }
     }
     return ret;
+}
+
+bool D3D11ResourceTranslator::updateBuffer(BufferDataDXR& buf)
+{
+    if (!buf.temporary_d3d11 || !buf.host_d3d11)
+        return false;
+
+    m_host_context->CopyResource(buf.temporary_d3d11, buf.host_d3d11);
+    return true;
 }
 
 bool D3D11ResourceTranslator::isValidTexture(TextureDataDXR& data)
@@ -330,6 +343,12 @@ BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     ret->size = (int)src_desc.Width;
     ret->initial_ref = GetRefCount(ret->host_d3d12);
     return ret;
+}
+
+bool D3D12ResourceTranslator::updateBuffer(BufferDataDXR& buf)
+{
+    // nothing to do
+    return true;
 }
 
 bool D3D12ResourceTranslator::isValidTexture(TextureDataDXR& data)

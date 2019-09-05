@@ -113,6 +113,7 @@ public:
     ID3D11BufferPtr   temporary_d3d11, host_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;
+    bool is_dynamic = false;
     ULONG initial_ref = 0;
 
     BufferDataDXR();
