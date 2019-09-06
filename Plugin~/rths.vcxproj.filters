@@ -51,6 +51,9 @@
     <ClCompile Include="rths\Foundation\rthsLog.cpp">
       <Filter>rths\Foundation</Filter>
     </ClCompile>
+    <ClCompile Include="rths\DXR\rthsHook.cpp">
+      <Filter>rths\DXR</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="rths\pch.h">
@@ -97,6 +100,9 @@
     </ClInclude>
     <ClInclude Include="rths\rthsSettings.h">
       <Filter>rths</Filter>
+    </ClInclude>
+    <ClInclude Include="rths\DXR\rthsHook.h">
+      <Filter>rths\DXR</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

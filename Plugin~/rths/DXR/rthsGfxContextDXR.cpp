@@ -1309,6 +1309,14 @@ void GfxContextDXR::onRenderTargetDelete(RenderTargetData *rt)
     m_rendertarget_records.erase(rt);
 }
 
+void GfxContextDXR::onBufferUpdate(void *buffer)
+{
+}
+
+void GfxContextDXR::onBufferRelease(void *buffer)
+{
+}
+
 
 bool GfxContextDXR::valid() const
 {

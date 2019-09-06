@@ -2,6 +2,7 @@
 #ifdef _WIN32
 #include "rthsResourceTranslatorDXR.h"
 #include "rthsGfxContextDXR.h"
+#include "rthsHook.h"
 
 namespace rths {
 
@@ -107,6 +108,11 @@ D3D11ResourceTranslator::D3D11ResourceTranslator(ID3D11Device *device)
     ID3D11DeviceContextPtr device_context;
     m_host_device->GetImmediateContext(&device_context);
     device_context->QueryInterface(IID_PPV_ARGS(&m_host_context));
+    if (InstallHook(device_context.GetInterfacePtr())) {
+        SetOnBufferUpdate([](void *buffer) {
+            GfxContextDXR::getInstance()->onBufferUpdate(buffer);
+        });
+    }
 
     m_host_device->CreateFence(0, D3D11_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
 }
@@ -203,6 +209,12 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     auto ret = std::make_shared<BufferDataDXR>();
 
     auto buf_host = (ID3D11Buffer*)ptr;
+    if (InstallHook(buf_host)) {
+        SetOnBufferRelease([](void *buffer) {
+            GfxContextDXR::getInstance()->onBufferRelease(buffer);
+        });
+    }
+
     ret->host_ptr = ptr;
     ret->host_d3d11 = buf_host;
     ret->initial_ref = GetRefCount(ret->host_d3d11);

@@ -4,6 +4,7 @@
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="Test.cpp" />
     <ClCompile Include="MeshGenerator.cpp" />
+    <ClCompile Include="TestRTHS.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />

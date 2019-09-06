@@ -35,6 +35,9 @@ public:
     void onMeshInstanceDelete(MeshInstanceData *inst) override;
     void onRenderTargetDelete(RenderTargetData *rt) override;
 
+    void onBufferUpdate(void *buffer);
+    void onBufferRelease(void *buffer);
+
 
     bool valid() const;
     bool checkError();
