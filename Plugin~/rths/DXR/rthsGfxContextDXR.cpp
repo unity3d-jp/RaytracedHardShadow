@@ -4,7 +4,7 @@
 #include "Foundation/rthsMisc.h"
 #include "rthsGfxContextDXR.h"
 #include "rthsResourceTranslatorDXR.h"
-#include "rthsHook.h"
+#include "rthsHookDXR.h"
 
 // shader binaries
 #include "rthsShadowDXR.hlsl.h"

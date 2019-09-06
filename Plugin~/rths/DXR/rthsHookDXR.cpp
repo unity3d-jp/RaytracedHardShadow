@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "rthsHook.h"
+#include "rthsHookDXR.h"
 
 namespace rths {
 

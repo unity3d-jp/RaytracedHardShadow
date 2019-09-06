@@ -2,7 +2,7 @@
 #ifdef _WIN32
 #include "rthsResourceTranslatorDXR.h"
 #include "rthsGfxContextDXR.h"
-#include "rthsHook.h"
+#include "rthsHookDXR.h"
 
 namespace rths {
 
