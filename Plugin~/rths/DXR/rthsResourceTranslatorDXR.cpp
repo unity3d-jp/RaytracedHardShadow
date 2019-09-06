@@ -27,9 +27,6 @@ public:
     BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
     bool updateBuffer(BufferDataDXR& buf) override;
 
-    bool isValidTexture(TextureDataDXR& data) override;
-    bool isValidBuffer(BufferDataDXR& data) override;
-
     uint64_t copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool immediate);
 
 private:
@@ -55,9 +52,6 @@ public:
     uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value) override;
     BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) override;
     bool updateBuffer(BufferDataDXR& buf) override;
-
-    bool isValidTexture(TextureDataDXR& data) override;
-    bool isValidBuffer(BufferDataDXR& data) override;
 
 private:
     ID3D12DevicePtr m_host_device;
@@ -108,11 +102,7 @@ D3D11ResourceTranslator::D3D11ResourceTranslator(ID3D11Device *device)
     ID3D11DeviceContextPtr device_context;
     m_host_device->GetImmediateContext(&device_context);
     device_context->QueryInterface(IID_PPV_ARGS(&m_host_context));
-    if (InstallHook(device_context.GetInterfacePtr())) {
-        SetOnBufferUpdate([](void *buffer) {
-            GfxContextDXR::getInstance()->onBufferUpdate(buffer);
-        });
-    }
+    InstallHook(device_context.GetInterfacePtr());
 
     m_host_device->CreateFence(0, D3D11_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_fence));
 }
@@ -146,8 +136,6 @@ TextureDataDXRPtr D3D11ResourceTranslator::createTemporaryTexture(GPUResourcePtr
 
     auto tex_host = (ID3D11Texture2D*)ptr;
     ret->host_ptr = ptr;
-    ret->host_d3d11 = tex_host;
-    ret->initial_ref = GetRefCount(ret->host_d3d11);
 
     D3D11_TEXTURE2D_DESC src_desc{};
     tex_host->GetDesc(&src_desc);
@@ -209,15 +197,8 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     auto ret = std::make_shared<BufferDataDXR>();
 
     auto buf_host = (ID3D11Buffer*)ptr;
-    if (InstallHook(buf_host)) {
-        SetOnBufferRelease([](void *buffer) {
-            GfxContextDXR::getInstance()->onBufferRelease(buffer);
-        });
-    }
-
+    InstallHook(buf_host);
     ret->host_ptr = ptr;
-    ret->host_d3d11 = buf_host;
-    ret->initial_ref = GetRefCount(ret->host_d3d11);
 
     D3D11_BUFFER_DESC src_desc{};
     buf_host->GetDesc(&src_desc);
@@ -249,21 +230,11 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
 
 bool D3D11ResourceTranslator::updateBuffer(BufferDataDXR& buf)
 {
-    if (!buf.temporary_d3d11 || !buf.host_d3d11)
+    if (!buf.temporary_d3d11 || !buf.host_ptr)
         return false;
 
-    m_host_context->CopyResource(buf.temporary_d3d11, buf.host_d3d11);
+    m_host_context->CopyResource(buf.temporary_d3d11, (ID3D11Buffer*)buf.host_ptr);
     return true;
-}
-
-bool D3D11ResourceTranslator::isValidTexture(TextureDataDXR& data)
-{
-    return GetRefCount(data.host_d3d11) >= data.initial_ref;
-}
-
-bool D3D11ResourceTranslator::isValidBuffer(BufferDataDXR& data)
-{
-    return GetRefCount(data.host_d3d11) >= data.initial_ref;
 }
 
 uint64_t D3D11ResourceTranslator::copyResource(ID3D11Resource *dst, ID3D11Resource *src, bool immediate)
@@ -309,8 +280,6 @@ TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(GPUResourcePtr
 
     auto tex_host = (ID3D12Resource*)ptr;
     ret->host_ptr = ptr;
-    ret->host_d3d12 = tex_host;
-    ret->initial_ref = GetRefCount(ret->host_d3d12);
 
     D3D12_RESOURCE_DESC src_desc = tex_host->GetDesc();
     ret->width = (int)src_desc.Width;
@@ -346,6 +315,7 @@ BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     auto ret = std::make_shared<BufferDataDXR>();
 
     auto buf_host = (ID3D12Resource*)ptr;
+    InstallHook(buf_host);
     ret->host_ptr = ptr;
     ret->host_d3d12 = buf_host;
 
@@ -353,7 +323,6 @@ BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     // on d3d12, buffer can be directly shared with DXR side
     ret->resource = buf_host;
     ret->size = (int)src_desc.Width;
-    ret->initial_ref = GetRefCount(ret->host_d3d12);
     return ret;
 }
 
@@ -361,16 +330,6 @@ bool D3D12ResourceTranslator::updateBuffer(BufferDataDXR& buf)
 {
     // nothing to do
     return true;
-}
-
-bool D3D12ResourceTranslator::isValidTexture(TextureDataDXR& data)
-{
-    return GetRefCount(data.host_d3d12) >= data.initial_ref;
-}
-
-bool D3D12ResourceTranslator::isValidBuffer(BufferDataDXR& data)
-{
-    return GetRefCount(data.host_d3d12) >= data.initial_ref;
 }
 
 

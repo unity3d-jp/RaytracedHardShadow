@@ -92,11 +92,11 @@ public:
     int height = 0;
 
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-    ID3D12ResourcePtr  resource, host_d3d12;
-    ID3D11Texture2DPtr temporary_d3d11, host_d3d11;
+    ID3D12ResourcePtr  resource;
+    ID3D11Texture2DPtr temporary_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;
-    ULONG initial_ref = 0;
+    bool is_released = false;
 
     TextureDataDXR();
     ~TextureDataDXR();
@@ -110,11 +110,12 @@ public:
     int size = 0;
 
     ID3D12ResourcePtr resource, host_d3d12;
-    ID3D11BufferPtr   temporary_d3d11, host_d3d11;
+    ID3D11BufferPtr   temporary_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;
     bool is_dynamic = false;
-    ULONG initial_ref = 0;
+    bool is_released = false;
+    bool is_updated = false;
 
     BufferDataDXR();
     ~BufferDataDXR();

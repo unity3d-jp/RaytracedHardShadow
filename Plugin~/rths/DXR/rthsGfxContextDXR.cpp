@@ -4,6 +4,7 @@
 #include "Foundation/rthsMisc.h"
 #include "rthsGfxContextDXR.h"
 #include "rthsResourceTranslatorDXR.h"
+#include "rthsHook.h"
 
 // shader binaries
 #include "rthsShadowDXR.hlsl.h"
@@ -119,6 +120,7 @@ GfxContextDXR::GfxContextDXR()
 
 GfxContextDXR::~GfxContextDXR()
 {
+    ClearResourceCallbacks();
 }
 
 bool GfxContextDXR::initialize()
@@ -210,6 +212,17 @@ bool GfxContextDXR::initialize()
         SetErrorLog("Initialization failed. DXR is not supported on this system.");
         return false;
     }
+
+    // set hooks callbacks
+    SetOnTextureRelease([](void *texture) {
+        GfxContextDXR::getInstance()->onTextureRelease(texture);
+    });
+    SetOnBufferRelease([](void *buffer) {
+        GfxContextDXR::getInstance()->onBufferRelease(buffer);
+    });
+    SetOnBufferUpdate([](void *buffer) {
+        GfxContextDXR::getInstance()->onBufferUpdate(buffer);
+    });
 
     // resource translator (null if there is no host device)
     m_resource_translator = CreateResourceTranslator();
@@ -707,11 +720,8 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         }
 
         if (!mesh_dxr->vertex_buffer) {
-            if (mesh->gpu_vertex_buffer && m_resource_translator) {
+            if (mesh->gpu_vertex_buffer && m_resource_translator)
                 mesh_dxr->vertex_buffer = translate_gpu_buffer(mesh->gpu_vertex_buffer);
-                if (mesh_dxr->vertex_buffer->is_dynamic)
-                    mesh->is_dynamic = true;
-            }
             else if (mesh->cpu_vertex_buffer)
                 mesh_dxr->vertex_buffer = upload_cpu_buffer(mesh->cpu_vertex_buffer, mesh->vertex_count * mesh->vertex_stride);
 
@@ -735,7 +745,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
 #endif // rthsEnableBufferValidation
         }
         else {
-            if (mesh_dxr->vertex_buffer->is_dynamic) {
+            if (mesh_dxr->vertex_buffer->is_updated) {
                 m_resource_translator->updateBuffer(*mesh_dxr->vertex_buffer);
             }
         }
@@ -874,7 +884,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
             }
         }
         else {
-            if (!mesh_dxr.blas || mesh.is_dynamic) {
+            if (!mesh_dxr.blas || mesh_dxr.vertex_buffer->is_updated) {
                 // BLAS for non-deformable meshes
 
                 bool perform_update = mesh_dxr.blas != nullptr;
@@ -894,7 +904,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
 
                 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
                 inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-                if (mesh.is_dynamic) {
+                if (mesh_dxr.vertex_buffer->is_dynamic) {
                     inputs.Flags =
                         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE |
                         D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
@@ -935,7 +945,8 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         }
         if (inst_dxr.is_updated)
             needs_build_tlas = true;
-        inst.clearUpdateFlags(); // prevent other renderers to build BLAS again
+        inst.clearUpdateFlags();                    // 
+        mesh_dxr.vertex_buffer->is_updated = false; // prevent other renderers to build BLAS again
     }
 
     rthsTimestampQuery(rd.timestamp, cl_blas, "Building BLAS end");
@@ -1309,12 +1320,25 @@ void GfxContextDXR::onRenderTargetDelete(RenderTargetData *rt)
     m_rendertarget_records.erase(rt);
 }
 
+void GfxContextDXR::onTextureRelease(void *texture)
+{
+    auto it = m_texture_records.find(texture);
+    if (it != m_texture_records.end())
+        it->second->is_released = true;
+}
+
 void GfxContextDXR::onBufferUpdate(void *buffer)
 {
+    auto it = m_buffer_records.find(buffer);
+    if (it != m_buffer_records.end())
+        it->second->is_updated = true;
 }
 
 void GfxContextDXR::onBufferRelease(void *buffer)
 {
+    auto it = m_buffer_records.find(buffer);
+    if (it != m_buffer_records.end())
+        it->second->is_released = true;
 }
 
 

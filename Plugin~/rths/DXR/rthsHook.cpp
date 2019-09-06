@@ -19,6 +19,13 @@ void SetOnTextureRelease(const OnTextureReleaseT& v)
 {
     g_on_texture_release = v;
 }
+void ClearResourceCallbacks()
+{
+    g_on_buffer_update = {};
+    g_on_buffer_release = {};
+    g_on_texture_release = {};
+}
+
 
 
 template<class T>

@@ -16,8 +16,6 @@ public:
     virtual uint64_t syncTexture(TextureDataDXR& tex, uint64_t fence_value_to_wait) = 0;
     virtual BufferDataDXRPtr translateBuffer(GPUResourcePtr ptr) = 0;
     virtual bool updateBuffer(BufferDataDXR& buf) = 0;
-    virtual bool isValidTexture(TextureDataDXR& data) = 0;
-    virtual bool isValidBuffer(BufferDataDXR& data) = 0;
 };
 using IResourceTranslatorPtr = std::shared_ptr<IResourceTranslator>;
 
