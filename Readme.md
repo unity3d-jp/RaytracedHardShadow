@@ -109,8 +109,5 @@ Legacy Forward の場合、シェーダ側では_LightColor0.aでこの値を取
   - 頂点シェーダで特殊な変形を行っている場合や、Geometry Shader や Tessellation でポリゴンの増減を行っている場合などが該当します。
   - これらは対応が難しく、将来的にも対応する見込みは薄いです。
 
-## 開発者向け
-プラグインのビルド手順: [Building.md](Documentation~/Building.md)
-
 ## ライセンス
-[MIT](LICENSE.txt)
+[Unity Companion License](LICENSE.md) 
