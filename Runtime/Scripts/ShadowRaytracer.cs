@@ -939,7 +939,12 @@ namespace UTJ.RaytracedHardShadow
 
         bool m_issueFinish = false, m_issueFrameEnd = false;
 
-        internal bool Render(Camera cam)
+        internal bool Render()
+        {
+            return Render(m_camera, ref m_outputTexture, m_generateRenderTexture);
+        }
+
+        internal bool Render(Camera cam, ref RenderTexture outputTexture, bool generateRenderTexture)
         {
             if (!m_initialized || !m_renderer.valid)
                 return false;
@@ -952,37 +957,40 @@ namespace UTJ.RaytracedHardShadow
             m_issueFrameEnd = lastInstance;
 
             // setup RenderTexture
-            if (m_generateRenderTexture)
+            if (generateRenderTexture)
             {
                 var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
                 var format = m_outputType == OutputType.Image ? RenderTextureFormat.RHalf : RenderTextureFormat.RInt;
 
-                if (m_outputTexture != null &&
-                    (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y || m_outputTexture.format != format))
+                if (outputTexture != null &&
+                    (outputTexture.width != resolution.x || outputTexture.height != resolution.y || outputTexture.format != format))
                 {
                     // resolution/format has changed. release existing RenderTexture
 #if UNITY_EDITOR
-                    if (!AssetDatabase.Contains(m_outputTexture))
+                    if (!AssetDatabase.Contains(outputTexture))
 #endif
                     {
-                        DestroyImmediate(m_outputTexture);
+                        DestroyImmediate(outputTexture);
                     }
-                    m_outputTexture = null;
+                    outputTexture = null;
                 }
-                if (m_outputTexture == null)
+                if (outputTexture == null)
                 {
-                    m_outputTexture = new RenderTexture(resolution.x, resolution.y, 0, format);
-                    m_outputTexture.name = "RaytracedHardShadow";
-                    m_outputTexture.enableRandomWrite = true; // enable unordered access
-                    m_outputTexture.Create();
-                    if (m_assignGlobalTexture)
-                        Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+                    outputTexture = new RenderTexture(resolution.x, resolution.y, 0, format);
+                    outputTexture.name = "RaytracedHardShadow";
+                    outputTexture.enableRandomWrite = true; // enable unordered access
+                    outputTexture.Create();
                 }
+            }
+            else if (outputTexture == null && m_outputTexture != null)
+            {
+                // scene view camera etc. create new RT based on m_outputTexture
+                outputTexture = new RenderTexture(m_outputTexture.width, m_outputTexture.height, 0, m_outputTexture.format);
             }
 
             // setup renderer
             bool succeeded = true;
-            if (m_outputTexture != null)
+            if (outputTexture != null)
             {
                 rthsRenderFlag flags = 0;
                 if (m_cullBackFaces)
@@ -1008,7 +1016,7 @@ namespace UTJ.RaytracedHardShadow
                     m_renderer.SetRaytraceFlags(flags);
                     m_renderer.SetShadowRayOffset(m_ignoreSelfShadow ? 0.0f : m_shadowRayOffset);
                     m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
-                    m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
+                    m_renderer.SetRenderTarget(GetRenderTargetData(outputTexture));
                     m_renderer.SetCamera(cam, m_useCameraCullingMask);
                     EnumerateLights(
                         (l, idx) => { m_renderer.AddLight(l, m_useLightCullingMask); },
@@ -1036,7 +1044,7 @@ namespace UTJ.RaytracedHardShadow
                 m_issueFinish = true;
             }
             if (m_assignGlobalTexture)
-                Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+                Shader.SetGlobalTexture(m_globalTextureName, outputTexture);
 
             return succeeded;
         }
@@ -1243,7 +1251,7 @@ namespace UTJ.RaytracedHardShadow
 
         void OnPreRender()
         {
-            Render(m_camera);
+            Render();
         }
 
         void OnPostRender()

@@ -1,7 +1,7 @@
 #pragma once
 
-#define rthsVersion     "0.6.1"
-#define rthsReleaseDate "20190725"
+#define rthsVersion     "0.7.0"
+#define rthsReleaseDate "20190909"
 
 
 #ifdef rthsDebug
