@@ -683,12 +683,12 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         return;
     }
 
-    int updated_buffer_count = 0;
-    auto translate_gpu_buffer = [this, &updated_buffer_count](GPUResourcePtr buffer) {
+    int buffer_update_count = 0;
+    auto translate_gpu_buffer = [this, &buffer_update_count](GPUResourcePtr buffer) {
         auto& data = m_buffer_records[buffer];
         if (!data) {
             data = m_resource_translator->translateBuffer(buffer);
-            ++updated_buffer_count;
+            ++buffer_update_count;
         }
         return data;
     };
@@ -747,6 +747,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         else {
             if (mesh_dxr->vertex_buffer->is_updated) {
                 m_resource_translator->updateBuffer(*mesh_dxr->vertex_buffer);
+                ++buffer_update_count;
             }
         }
 
@@ -791,7 +792,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         }
         rd.instances.push_back(inst_dxr);
     }
-    if (updated_buffer_count > 0) {
+    if (buffer_update_count > 0) {
         // fence for complete buffer copy
         rd.fv_translate = m_resource_translator->insertSignal();
     }

@@ -126,6 +126,7 @@ uint64_t D3D11ResourceTranslator::insertSignal()
 {
     auto fv = GfxContextDXR::getInstance()->incrementFenceValue();
     m_host_context->Signal(m_fence, fv);
+    m_host_context->Flush();
     return fv;
 }
 
