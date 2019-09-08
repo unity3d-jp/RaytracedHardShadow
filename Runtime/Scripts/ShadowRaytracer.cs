@@ -933,7 +933,6 @@ namespace UTJ.RaytracedHardShadow
                 GL.Clear(true, true, Color.black);
                 RenderTexture.active = prevRT;
             }
-
         }
 
 
@@ -966,12 +965,7 @@ namespace UTJ.RaytracedHardShadow
                     (outputTexture.width != resolution.x || outputTexture.height != resolution.y || outputTexture.format != format))
                 {
                     // resolution/format has changed. release existing RenderTexture
-#if UNITY_EDITOR
-                    if (!AssetDatabase.Contains(outputTexture))
-#endif
-                    {
-                        DestroyImmediate(outputTexture);
-                    }
+                    Misc.DestroyIfNotAsset(outputTexture);
                     outputTexture = null;
                 }
                 if (outputTexture == null)
@@ -982,10 +976,18 @@ namespace UTJ.RaytracedHardShadow
                     outputTexture.Create();
                 }
             }
-            else if (outputTexture == null && m_outputTexture != null)
+            else if (outputTexture != m_outputTexture && m_outputTexture != null)
             {
-                // scene view camera etc. create new RT based on m_outputTexture
-                outputTexture = new RenderTexture(m_outputTexture.width, m_outputTexture.height, 0, m_outputTexture.format);
+                if (outputTexture != null &&
+                    (outputTexture.width != m_outputTexture.width ||
+                     outputTexture.height != m_outputTexture.height ||
+                     outputTexture.format != m_outputTexture.format))
+                {
+                    Misc.DestroyIfNotAsset(outputTexture);
+                    outputTexture = null;
+                }
+                if (outputTexture == null)
+                    outputTexture = new RenderTexture(m_outputTexture.width, m_outputTexture.height, 0, m_outputTexture.format);
             }
 
             // setup renderer

@@ -1,10 +1,15 @@
 ﻿using System;
+using System.Linq;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Rendering;
 #if UNITY_2019_1_OR_NEWER
 using Unity.Collections;
 using UnityEngine.Experimental.Rendering;
+#endif
+#if UNITY_EDITOR
+using UnityEditor;
 #endif
 
 namespace UTJ.RaytracedHardShadow
@@ -40,6 +45,51 @@ namespace UTJ.RaytracedHardShadow
         public static string CString(IntPtr ptr)
         {
             return ptr == IntPtr.Zero ? "" : Marshal.PtrToStringAnsi(ptr);
+        }
+
+        public static V GetOrAddValue<K, V>(Dictionary<K, V> dict, K key) where V : new()
+        {
+            V ret;
+            if (!dict.TryGetValue(key, out ret))
+            {
+                ret = new V();
+                dict.Add(key, ret);
+            }
+            return ret;
+        }
+
+        public static bool RemoveNullKeys<K, V>(Dictionary<K, V> dict) where K : UnityEngine.Object
+        {
+            bool containNullKey = false;
+            foreach (var kvp in dict)
+            {
+                if (kvp.Key == null)
+                {
+                    containNullKey = true;
+                    break;
+                }
+            }
+            if (containNullKey)
+            {
+                // remove stale records
+                var keys = dict.Where(kvp => kvp.Key == null)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                foreach (var key in keys)
+                    dict.Remove(key);
+                return true;
+            }
+            return false;
+        }
+
+        public static void DestroyIfNotAsset(UnityEngine.Object obj)
+        {
+#if UNITY_EDITOR
+            if (!AssetDatabase.Contains(obj))
+#endif
+            {
+                UnityEngine.Object.DestroyImmediate(obj);
+            }
         }
 
         public static void SafeDispose<T>(ref T obj) where T : class, IDisposable

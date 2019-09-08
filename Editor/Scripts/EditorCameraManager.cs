@@ -26,13 +26,14 @@ namespace UTJ.RaytracedHardShadowEditor
             public class Record
             {
                 public RenderTexture outputTexture;
-                public bool updated = false;
             }
 
             public Dictionary<ShadowRaytracer, Record> records = new Dictionary<ShadowRaytracer, Record>();
+            public int updateCount;
         }
         static bool s_enableSceneViewRendering = true;
         static Dictionary<Camera, CameraContext> s_cameraContexts = new Dictionary<Camera, CameraContext>();
+        static int s_updateCount = 0;
 
 
         // Only process Cameras in the Scene Window
@@ -53,40 +54,16 @@ namespace UTJ.RaytracedHardShadowEditor
             if (!s_enableSceneViewRendering || !IsValidCamera(cam))
                 return;
 
-            CameraContext ctx;
-            if (!s_cameraContexts.TryGetValue(cam, out ctx))
-            {
-                ctx = new CameraContext();
-                s_cameraContexts.Add(cam, ctx);
-            }
-
-            foreach (var kvp in ctx.records)
-                kvp.Value.updated = false;
-
-            int updateCount = 0;
+            var ctx = Misc.GetOrAddValue(s_cameraContexts, cam);
             foreach (var shadowRaytracer in GetEditorShadowRaytracer())
             {
-                CameraContext.Record rec;
-                if (!ctx.records.TryGetValue(shadowRaytracer, out rec))
-                {
-                    rec = new CameraContext.Record();
-                    ctx.records.Add(shadowRaytracer, rec);
-                }
-
+                var rec = Misc.GetOrAddValue(ctx.records, shadowRaytracer);
                 shadowRaytracer.Render(cam, ref rec.outputTexture, true);
-                rec.updated = true;
-                ++updateCount;
             }
 
-            if (updateCount < ctx.records.Count)
-            {
-                // remove stale records
-                var keys = ctx.records.Where(kvp => !kvp.Value.updated)
-                    .Select(kvp => kvp.Key)
-                    .ToList();
-                foreach (var key in keys)
-                    ctx.records.Remove(key);
-            }
+            ++ctx.updateCount;
+            if (ctx.updateCount % 128 == 0)
+                Misc.RemoveNullKeys(ctx.records);
         }
 
         static void RaytraceHardShadowPostRender(Camera cam)
@@ -96,6 +73,10 @@ namespace UTJ.RaytracedHardShadowEditor
 
             foreach (var shadowRaytracer in GetEditorShadowRaytracer())
                 shadowRaytracer.Finish();
+
+            ++s_updateCount;
+            if (s_updateCount % 256 == 0)
+                Misc.RemoveNullKeys(s_cameraContexts);
         }
     }
 } //namespace UTJ.RaytracedHardShadowEditor
