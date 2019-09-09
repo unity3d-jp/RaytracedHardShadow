@@ -144,7 +144,8 @@ TextureDataDXRPtr D3D11ResourceTranslator::createTemporaryTexture(GPUResourcePtr
     ret->width = src_desc.Width;
     ret->height = src_desc.Height;
     ret->format = src_desc.Format;
-    ret->resource = createTemporaryTextureImpl(ret->width, ret->height, ret->format, true);
+    ret->internal_resource = createTemporaryTextureImpl(ret->width, ret->height, ret->format, true);
+    ret->resource = ret->internal_resource;
 
     auto hr = GfxContextDXR::getInstance()->getDevice()->CreateSharedHandle(ret->resource, nullptr, GENERIC_ALL, nullptr, &ret->handle);
     if (SUCCEEDED(hr)) {
@@ -222,7 +223,8 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
         hr = ret->temporary_d3d11->QueryInterface(IID_PPV_ARGS(&ires));
         if (SUCCEEDED(hr)) {
             hr = ires->GetSharedHandle(&ret->handle); // note: this handle is *NOT* NT handle
-            hr = GfxContextDXR::getInstance()->getDevice()->OpenSharedHandle(ret->handle, IID_PPV_ARGS(&ret->resource));
+            hr = GfxContextDXR::getInstance()->getDevice()->OpenSharedHandle(ret->handle, IID_PPV_ARGS(&ret->internal_resource));
+            ret->resource = ret->internal_resource;
             ret->size = src_desc.ByteWidth;
         }
     }
@@ -292,7 +294,8 @@ TextureDataDXRPtr D3D12ResourceTranslator::createTemporaryTexture(GPUResourcePtr
         ret->resource = tex_host;
     }
     else {
-        ret->resource = createTemporaryTextureImpl(ret->width, ret->height, ret->format, false);
+        ret->internal_resource = createTemporaryTextureImpl(ret->width, ret->height, ret->format, false);
+        ret->resource = ret->internal_resource;
     }
     return ret;
 }

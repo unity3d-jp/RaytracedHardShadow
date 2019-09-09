@@ -150,7 +150,7 @@ std::string RendererDXR::getTimestampLog()
 void* RendererDXR::getRenderTexturePtr()
 {
     if (m_render_data.render_target)
-        return m_render_data.render_target->texture->resource.GetInterfacePtr();
+        return m_render_data.render_target->texture->resource;
     return nullptr;
 }
 

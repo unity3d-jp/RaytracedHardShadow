@@ -92,7 +92,8 @@ public:
     int height = 0;
 
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-    ID3D12ResourcePtr  resource;
+    ID3D12Resource     *resource = nullptr;
+    ID3D12ResourcePtr  internal_resource;
     ID3D11Texture2DPtr temporary_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;
@@ -109,7 +110,8 @@ public:
     GPUResourcePtr host_ptr = nullptr;
     int size = 0;
 
-    ID3D12ResourcePtr resource;
+    ID3D12Resource    *resource = nullptr;
+    ID3D12ResourcePtr internal_resource;
     ID3D11BufferPtr   temporary_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;

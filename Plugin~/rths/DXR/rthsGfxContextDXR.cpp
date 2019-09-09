@@ -116,6 +116,17 @@ GfxContextDXR::GfxContextDXR()
 {
     if (!initialize())
         return;
+
+    // set hook callbacks
+    SetOnTextureRelease([](void *texture) {
+        GfxContextDXR::getInstance()->onTextureRelease(texture);
+    });
+    SetOnBufferRelease([](void *buffer) {
+        GfxContextDXR::getInstance()->onBufferRelease(buffer);
+    });
+    SetOnBufferUpdate([](void *buffer) {
+        GfxContextDXR::getInstance()->onBufferUpdate(buffer);
+    });
 }
 
 GfxContextDXR::~GfxContextDXR()
@@ -212,17 +223,6 @@ bool GfxContextDXR::initialize()
         SetErrorLog("Initialization failed. DXR is not supported on this system.");
         return false;
     }
-
-    // set hooks callbacks
-    SetOnTextureRelease([](void *texture) {
-        GfxContextDXR::getInstance()->onTextureRelease(texture);
-    });
-    SetOnBufferRelease([](void *buffer) {
-        GfxContextDXR::getInstance()->onBufferRelease(buffer);
-    });
-    SetOnBufferUpdate([](void *buffer) {
-        GfxContextDXR::getInstance()->onBufferUpdate(buffer);
-    });
 
     // resource translator (null if there is no host device)
     m_resource_translator = CreateResourceTranslator();
