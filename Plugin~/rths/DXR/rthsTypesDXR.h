@@ -109,7 +109,7 @@ public:
     GPUResourcePtr host_ptr = nullptr;
     int size = 0;
 
-    ID3D12ResourcePtr resource, host_d3d12;
+    ID3D12ResourcePtr resource;
     ID3D11BufferPtr   temporary_d3d11;
     HANDLE handle = nullptr;
     bool is_nt_handle = false;

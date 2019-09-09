@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEditor;
 
 #if UNITY_EDITOR
-public class TestMenu
+public class DebugCommands
 {
     [MenuItem("Debug/Print Layers")]
     public static void MakePackage()
@@ -79,6 +79,10 @@ public class TestMenu
         }
         mesh.SetVertices(vertices);
         mesh.UploadMeshData(false);
+
+        var vb = (ulong)mesh.GetNativeVertexBufferPtr(0);
+        var ib = (ulong)mesh.GetNativeIndexBufferPtr();
+        Debug.Log(string.Format("MoveVertices(): vb={0:X} ib={1:X}", vb, ib));
     }
 }
 #endif

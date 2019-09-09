@@ -115,15 +115,6 @@ static UINT WINAPI ID3D12ResourceRelease_hook(ID3D12Resource *self)
     return ret;
 }
 
-static UINT(WINAPI *ID3D12ResourceUnmap_orig)(ID3D12Resource *self, UINT Subresource, const D3D12_RANGE *pWrittenRange);
-static UINT WINAPI ID3D12ResourceUnmap_hook(ID3D12Resource *self, UINT Subresource, const D3D12_RANGE *pWrittenRange)
-{
-    UINT ret = ID3D12ResourceUnmap_orig(self, Subresource, pWrittenRange);
-    if (ret == 0 && g_on_buffer_update)
-        g_on_buffer_update(self);
-    return ret;
-}
-
 template<>
 bool InstallHook(ID3D12Resource *dst)
 {
@@ -133,8 +124,6 @@ bool InstallHook(ID3D12Resource *dst)
     void **&vtable = ((void***)dst)[0];
     (void*&)ID3D12ResourceRelease_orig = vtable[2];
     ForceWrite(vtable[2], (void*)ID3D12ResourceRelease_hook);
-    (void*&)ID3D12ResourceUnmap_orig = vtable[9];
-    ForceWrite(vtable[9], (void*)ID3D12ResourceUnmap_hook);
     return true;
 }
 

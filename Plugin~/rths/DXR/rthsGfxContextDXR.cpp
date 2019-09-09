@@ -745,8 +745,7 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
 #endif // rthsEnableBufferValidation
         }
         else {
-            if (mesh_dxr->vertex_buffer->is_updated) {
-                m_resource_translator->updateBuffer(*mesh_dxr->vertex_buffer);
+            if (m_resource_translator->updateBuffer(*mesh_dxr->vertex_buffer)) {
                 ++buffer_update_count;
             }
         }

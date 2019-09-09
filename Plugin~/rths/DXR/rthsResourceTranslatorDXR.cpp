@@ -231,7 +231,7 @@ BufferDataDXRPtr D3D11ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
 
 bool D3D11ResourceTranslator::updateBuffer(BufferDataDXR& buf)
 {
-    if (!buf.temporary_d3d11 || !buf.host_ptr)
+    if (!buf.is_dynamic || !buf.is_updated)
         return false;
 
     m_host_context->CopyResource(buf.temporary_d3d11, (ID3D11Buffer*)buf.host_ptr);
@@ -318,7 +318,13 @@ BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
     auto buf_host = (ID3D12Resource*)ptr;
     InstallHook(buf_host);
     ret->host_ptr = ptr;
-    ret->host_d3d12 = buf_host;
+
+    D3D12_HEAP_PROPERTIES heap_props;
+    D3D12_HEAP_FLAGS heap_flags;
+    if (SUCCEEDED(buf_host->GetHeapProperties(&heap_props, &heap_flags))) {
+        if (heap_props.Type == D3D12_HEAP_TYPE_UPLOAD)
+            ret->is_dynamic = true;
+    }
 
     D3D12_RESOURCE_DESC src_desc = buf_host->GetDesc();
     // on d3d12, buffer can be directly shared with DXR side
@@ -329,7 +335,12 @@ BufferDataDXRPtr D3D12ResourceTranslator::translateBuffer(GPUResourcePtr ptr)
 
 bool D3D12ResourceTranslator::updateBuffer(BufferDataDXR& buf)
 {
-    // nothing to do
+    if (!buf.is_dynamic)
+        return false;
+    // Unity's d3d12 dynamic buffer is mapped persistently.
+    // (Map() on initialize end never Unmap(), detail: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12resource-map#advanced-usage-models )
+    // so, buffer update can't be detected by hooking Unmap(). therefore, assume dynamic buffer is always updated.
+    buf.is_updated = true;
     return true;
 }
 
