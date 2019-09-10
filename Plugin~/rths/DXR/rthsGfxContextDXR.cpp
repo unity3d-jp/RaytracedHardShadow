@@ -792,8 +792,11 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         rd.instances.push_back(inst_dxr);
     }
     if (buffer_update_count > 0) {
-        // fence for complete buffer copy
+        // wait for buffer copy complete.
+        // todo: ID3D12CommandQueue::Wait() should be enough but it causes resource de-sync in some cases. fix it.
         rd.fv_translate = m_resource_translator->insertSignal();
+        m_fence->SetEventOnCompletion(rd.fv_translate, rd.fence_event);
+        ::WaitForSingleObject(rd.fence_event, kTimeoutMS);
     }
 
     // deform
