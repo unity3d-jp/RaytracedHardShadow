@@ -212,6 +212,7 @@ namespace UTJ.RaytracedHardShadowEditor
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
             EditorGUILayout.PropertyField(so.FindProperty("m_adaptiveSampling"));
             EditorGUILayout.PropertyField(so.FindProperty("m_antialiasing"));
+            EditorCameraManager.enableSceneViewRendering = EditorGUILayout.Toggle("Preview In Scene View", EditorCameraManager.enableSceneViewRendering);
 
             // debug
             var foldDebug = so.FindProperty("m_foldDebug");
@@ -254,7 +255,7 @@ namespace UTJ.RaytracedHardShadowEditor
                 ExportToImageWindow.Open(t);
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField(System.String.Format("Plugin version: {0} ({1})", rthsGlobals.version, rthsGlobals.releaseDate));
+            EditorGUILayout.LabelField(System.String.Format("Plugin version: {0} ({1})", Lib.version, Lib.releaseDate));
         }
     }
 }

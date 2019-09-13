@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="rths\DXR\rthsDeformerDXR.cpp" />
+    <ClCompile Include="rths\DXR\rthsHookDXR.cpp" />
     <ClCompile Include="rths\Foundation\rthsLog.cpp" />
     <ClCompile Include="rths\Foundation\rthsMath.cpp" />
     <ClCompile Include="rths\Foundation\rthsMisc.cpp" />
@@ -29,6 +30,7 @@
   <ItemGroup>
     <ClInclude Include="rths\DXR\rthsDeformerDXR.h" />
     <ClInclude Include="rths\DXR\rthsDXRSettings.h" />
+    <ClInclude Include="rths\DXR\rthsHookDXR.h" />
     <ClInclude Include="rths\Foundation\rthsHalf.h" />
     <ClInclude Include="rths\Foundation\rthsLog.h" />
     <ClInclude Include="rths\Foundation\rthsMath.h" />
@@ -87,8 +89,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <PostBuildEvent>
-      <Command>xcopy /Yq $(TargetPath) $(SolutionDir)..\Runtime\Plugins\x86_64\
-xcopy /Yq $(TargetPath) C:\SSD\Projects\UnityChan-CRS-Toon2018-RTHS\Library\PackageCache\com.utj.raytracedhardshadow@863bd38b4a2f2881fbf2b44001b7faff01a0d1ff\Assets\Runtime\Plugins\x86_64\</Command>
+      <Command>xcopy /Yq $(TargetPath) $(SolutionDir)..\Runtime\Plugins\x86_64\</Command>
     </PostBuildEvent>
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -107,8 +108,7 @@ xcopy /Yq $(TargetPath) C:\SSD\Projects\UnityChan-CRS-Toon2018-RTHS\Library\Pack
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <PostBuildEvent>
-      <Command>xcopy /Yq $(TargetPath) $(SolutionDir)..\Runtime\Plugins\x86_64\
-xcopy /Yq $(TargetPath) C:\SSD\Projects\UnityChan-CRS-Toon2018-RTHS\Library\PackageCache\com.utj.raytracedhardshadow@863bd38b4a2f2881fbf2b44001b7faff01a0d1ff\Assets\Runtime\Plugins\x86_64\</Command>
+      <Command>xcopy /Yq $(TargetPath) $(SolutionDir)..\Runtime\Plugins\x86_64\</Command>
     </PostBuildEvent>
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>

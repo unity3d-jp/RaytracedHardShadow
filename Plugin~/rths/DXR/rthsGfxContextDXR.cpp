@@ -4,6 +4,7 @@
 #include "Foundation/rthsMisc.h"
 #include "rthsGfxContextDXR.h"
 #include "rthsResourceTranslatorDXR.h"
+#include "rthsHookDXR.h"
 
 // shader binaries
 #include "rthsShadowDXR.hlsl.h"
@@ -115,10 +116,22 @@ GfxContextDXR::GfxContextDXR()
 {
     if (!initialize())
         return;
+
+    // set hook callbacks
+    SetOnTextureRelease([](void *texture) {
+        GfxContextDXR::getInstance()->onTextureRelease(texture);
+    });
+    SetOnBufferRelease([](void *buffer) {
+        GfxContextDXR::getInstance()->onBufferRelease(buffer);
+    });
+    SetOnBufferUpdate([](void *buffer) {
+        GfxContextDXR::getInstance()->onBufferUpdate(buffer);
+    });
 }
 
 GfxContextDXR::~GfxContextDXR()
 {
+    ClearResourceCallbacks();
 }
 
 bool GfxContextDXR::initialize()
@@ -670,12 +683,12 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         return;
     }
 
-    int translated_gpu_buffer_count = 0;
-    auto translate_gpu_buffer = [this, &translated_gpu_buffer_count](GPUResourcePtr buffer) {
+    int buffer_update_count = 0;
+    auto translate_gpu_buffer = [this, &buffer_update_count](GPUResourcePtr buffer) {
         auto& data = m_buffer_records[buffer];
         if (!data) {
             data = m_resource_translator->translateBuffer(buffer);
-            ++translated_gpu_buffer_count;
+            ++buffer_update_count;
         }
         return data;
     };
@@ -731,6 +744,12 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
             }
 #endif // rthsEnableBufferValidation
         }
+        else {
+            if (m_resource_translator->updateBuffer(*mesh_dxr->vertex_buffer)) {
+                ++buffer_update_count;
+            }
+        }
+
         if (!mesh_dxr->index_buffer) {
             if (mesh->gpu_index_buffer)
                 mesh_dxr->index_buffer = translate_gpu_buffer(mesh->gpu_index_buffer);
@@ -772,9 +791,12 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         }
         rd.instances.push_back(inst_dxr);
     }
-    if (translated_gpu_buffer_count > 0) {
-        // fence for complete buffer copy
+    if (buffer_update_count > 0) {
+        // wait for buffer copy complete.
+        // todo: ID3D12CommandQueue::Wait() should be enough but it causes resource de-sync in some cases. fix it.
         rd.fv_translate = m_resource_translator->insertSignal();
+        m_fence->SetEventOnCompletion(rd.fv_translate, rd.fence_event);
+        ::WaitForSingleObject(rd.fence_event, kTimeoutMS);
     }
 
     // deform
@@ -865,8 +887,10 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
             }
         }
         else {
-            if (!mesh_dxr.blas) {
+            if (!mesh_dxr.blas || mesh_dxr.vertex_buffer->is_updated) {
                 // BLAS for non-deformable meshes
+
+                bool perform_update = mesh_dxr.blas != nullptr;
 
                 D3D12_RAYTRACING_GEOMETRY_DESC geom_desc{};
                 geom_desc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
@@ -883,15 +907,20 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
 
                 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
                 inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-                if (mesh.is_dynamic)
-                    inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+                if (mesh_dxr.vertex_buffer->is_dynamic) {
+                    inputs.Flags =
+                        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE |
+                        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+                    if (perform_update)
+                        inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+                }
                 else
                     inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
                 inputs.NumDescs = 1;
                 inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
                 inputs.pGeometryDescs = &geom_desc;
 
-                {
+                if (!mesh_dxr.blas) {
                     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
                     m_device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
 
@@ -903,6 +932,8 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
 
                 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC as_desc{};
                 as_desc.Inputs = inputs;
+                if (perform_update)
+                    as_desc.SourceAccelerationStructureData = mesh_dxr.blas->GetGPUVirtualAddress();
                 as_desc.DestAccelerationStructureData = mesh_dxr.blas->GetGPUVirtualAddress();
                 as_desc.ScratchAccelerationStructureData = mesh_dxr.blas_scratch->GetGPUVirtualAddress();
 
@@ -917,7 +948,8 @@ void GfxContextDXR::setMeshes(RenderDataDXR& rd, std::vector<MeshInstanceDataPtr
         }
         if (inst_dxr.is_updated)
             needs_build_tlas = true;
-        inst.clearUpdateFlags(); // prevent other renderers to build BLAS again
+        inst.clearUpdateFlags();                    // 
+        mesh_dxr.vertex_buffer->is_updated = false; // prevent other renderers to build BLAS again
     }
 
     rthsTimestampQuery(rd.timestamp, cl_blas, "Building BLAS end");
@@ -1289,6 +1321,27 @@ void GfxContextDXR::onMeshInstanceDelete(MeshInstanceData *mesh)
 void GfxContextDXR::onRenderTargetDelete(RenderTargetData *rt)
 {
     m_rendertarget_records.erase(rt);
+}
+
+void GfxContextDXR::onTextureRelease(void *texture)
+{
+    auto it = m_texture_records.find(texture);
+    if (it != m_texture_records.end())
+        it->second->is_released = true;
+}
+
+void GfxContextDXR::onBufferUpdate(void *buffer)
+{
+    auto it = m_buffer_records.find(buffer);
+    if (it != m_buffer_records.end())
+        it->second->is_updated = true;
+}
+
+void GfxContextDXR::onBufferRelease(void *buffer)
+{
+    auto it = m_buffer_records.find(buffer);
+    if (it != m_buffer_records.end())
+        it->second->is_released = true;
 }
 
 

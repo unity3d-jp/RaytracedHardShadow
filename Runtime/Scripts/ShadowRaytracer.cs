@@ -713,22 +713,22 @@ namespace UTJ.RaytracedHardShadow
             return false;
         }
 
-        public void EnumerateLights(Action<Light> bodyL, Action<ShadowCasterLight> bodySCL)
+        public void EnumerateLights(Action<Light, int> bodyL, Action<ShadowCasterLight> bodySCL = null)
         {
             // C# 7.0 supports function in function but we stick to the old way for compatibility
 
-            int lightIndex = 1;
+            int lightIndex = 0;
             Action<Light> processLight = (l) => {
                 if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None))
                 {
-                    bodyL.Invoke(l);
+                    bodyL.Invoke(l, lightIndex);
                     if (m_setLightIndexToAlpha)
                     {
                         // set light index to alpha in light color.
                         // 1000 * (light index + 1) is index param that is passed to shader.
                         // (first one is 1000, next one is 2000 ...)
                         var col = l.color;
-                        col.a = 1000.0f * lightIndex / l.intensity;
+                        col.a = 1000.0f * (lightIndex + 1) / l.intensity;
                         l.color = col;
                     }
                     ++lightIndex;
@@ -744,9 +744,13 @@ namespace UTJ.RaytracedHardShadow
 
                     foreach (var l in go.GetComponentsInChildren<Light>())
                         processLight(l);
-                    foreach (var scl in go.GetComponentsInChildren<ShadowCasterLight>())
-                        if (scl.enabled)
-                            bodySCL.Invoke(scl);
+
+                    if (bodySCL != null)
+                    {
+                        foreach (var scl in go.GetComponentsInChildren<ShadowCasterLight>())
+                            if (scl.enabled)
+                                bodySCL.Invoke(scl);
+                    }
                 }
             };
 
@@ -757,16 +761,9 @@ namespace UTJ.RaytracedHardShadow
                     if (scenePath == null || scenePath.Length == 0)
                         continue;
 
-                    int numScenes = SceneManager.sceneCount;
-                    for (int si = 0; si < numScenes; ++si)
-                    {
-                        var scene = SceneManager.GetSceneAt(si);
-                        if (scene.isLoaded && scene.path == scenePath)
-                        {
-                            processGOs(scene.GetRootGameObjects());
-                            break;
-                        }
-                    }
+                    var scene = SceneManager.GetSceneByPath(scenePath);
+                    if (scene.isLoaded)
+                        processGOs(scene.GetRootGameObjects());
                 }
             };
 
@@ -774,9 +771,13 @@ namespace UTJ.RaytracedHardShadow
             {
                 foreach (var l in FindObjectsOfType<Light>())
                     processLight(l);
-                foreach (var scl in FindObjectsOfType<ShadowCasterLight>())
-                    if (scl.enabled)
-                        bodySCL.Invoke(scl);
+
+                if (bodySCL != null)
+                {
+                    foreach (var scl in FindObjectsOfType<ShadowCasterLight>())
+                        if (scl.enabled)
+                            bodySCL.Invoke(scl);
+                }
             };
 
             switch (m_lightScope)
@@ -814,16 +815,9 @@ namespace UTJ.RaytracedHardShadow
                     if (scenePath == null || scenePath.Length == 0)
                         continue;
 
-                    int numScenes = SceneManager.sceneCount;
-                    for (int si = 0; si < numScenes; ++si)
-                    {
-                        var scene = SceneManager.GetSceneAt(si);
-                        if (scene.isLoaded && scene.path == scenePath)
-                        {
-                            processGOs(scene.GetRootGameObjects());
-                            break;
-                        }
-                    }
+                    var scene = SceneManager.GetSceneByPath(scenePath);
+                    if (scene.isLoaded)
+                        processGOs(scene.GetRootGameObjects());
                 }
             };
 
@@ -894,6 +888,7 @@ namespace UTJ.RaytracedHardShadow
                     ++s_instanceCount;
                     if (s_meshDataCache == null)
                     {
+                        // first instance initialize cache records
                         s_meshDataCache = new Dictionary<Mesh, MeshRecord>();
                         s_bakedMeshDataCache = new Dictionary<Component, MeshRecord>();
                         s_meshInstDataCache = new Dictionary<Component, MeshInstanceRecord>();
@@ -938,13 +933,17 @@ namespace UTJ.RaytracedHardShadow
                 GL.Clear(true, true, Color.black);
                 RenderTexture.active = prevRT;
             }
-
         }
 
 
         bool m_issueFinish = false, m_issueFrameEnd = false;
 
-        internal bool Render(Camera cam)
+        internal bool Render()
+        {
+            return Render(m_camera, ref m_outputTexture, m_generateRenderTexture);
+        }
+
+        internal bool Render(Camera cam, ref RenderTexture outputTexture, bool generateRenderTexture)
         {
             if (!m_initialized || !m_renderer.valid)
                 return false;
@@ -957,37 +956,43 @@ namespace UTJ.RaytracedHardShadow
             m_issueFrameEnd = lastInstance;
 
             // setup RenderTexture
-            if (m_generateRenderTexture)
+            if (generateRenderTexture)
             {
                 var resolution = new Vector2Int(cam.pixelWidth, cam.pixelHeight);
                 var format = m_outputType == OutputType.Image ? RenderTextureFormat.RHalf : RenderTextureFormat.RInt;
 
-                if (m_outputTexture != null &&
-                    (m_outputTexture.width != resolution.x || m_outputTexture.height != resolution.y || m_outputTexture.format != format))
+                if (outputTexture != null &&
+                    (outputTexture.width != resolution.x || outputTexture.height != resolution.y || outputTexture.format != format))
                 {
                     // resolution/format has changed. release existing RenderTexture
-#if UNITY_EDITOR
-                    if (!AssetDatabase.Contains(m_outputTexture))
-#endif
-                    {
-                        DestroyImmediate(m_outputTexture);
-                    }
-                    m_outputTexture = null;
+                    Misc.DestroyIfNotAsset(outputTexture);
+                    outputTexture = null;
                 }
-                if (m_outputTexture == null)
+                if (outputTexture == null)
                 {
-                    m_outputTexture = new RenderTexture(resolution.x, resolution.y, 0, format);
-                    m_outputTexture.name = "RaytracedHardShadow";
-                    m_outputTexture.enableRandomWrite = true; // enable unordered access
-                    m_outputTexture.Create();
-                    if (m_assignGlobalTexture)
-                        Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+                    outputTexture = new RenderTexture(resolution.x, resolution.y, 0, format);
+                    outputTexture.name = "RaytracedHardShadow";
+                    outputTexture.enableRandomWrite = true; // enable unordered access
+                    outputTexture.Create();
                 }
+            }
+            else if (outputTexture != m_outputTexture && m_outputTexture != null)
+            {
+                if (outputTexture != null &&
+                    (outputTexture.width != m_outputTexture.width ||
+                     outputTexture.height != m_outputTexture.height ||
+                     outputTexture.format != m_outputTexture.format))
+                {
+                    Misc.DestroyIfNotAsset(outputTexture);
+                    outputTexture = null;
+                }
+                if (outputTexture == null)
+                    outputTexture = new RenderTexture(m_outputTexture.width, m_outputTexture.height, 0, m_outputTexture.format);
             }
 
             // setup renderer
             bool succeeded = true;
-            if (m_outputTexture != null)
+            if (outputTexture != null)
             {
                 rthsRenderFlag flags = 0;
                 if (m_cullBackFaces)
@@ -1013,10 +1018,10 @@ namespace UTJ.RaytracedHardShadow
                     m_renderer.SetRaytraceFlags(flags);
                     m_renderer.SetShadowRayOffset(m_ignoreSelfShadow ? 0.0f : m_shadowRayOffset);
                     m_renderer.SetSelfShadowThreshold(m_selfShadowThreshold);
-                    m_renderer.SetRenderTarget(GetRenderTargetData(m_outputTexture));
+                    m_renderer.SetRenderTarget(GetRenderTargetData(outputTexture));
                     m_renderer.SetCamera(cam, m_useCameraCullingMask);
                     EnumerateLights(
-                        l => { m_renderer.AddLight(l, m_useLightCullingMask); },
+                        (l, idx) => { m_renderer.AddLight(l, m_useLightCullingMask); },
                         scl => { m_renderer.AddLight(scl); }
                     );
                     EnumerateMeshRenderers(
@@ -1041,7 +1046,7 @@ namespace UTJ.RaytracedHardShadow
                 m_issueFinish = true;
             }
             if (m_assignGlobalTexture)
-                Shader.SetGlobalTexture(m_globalTextureName, m_outputTexture);
+                Shader.SetGlobalTexture(m_globalTextureName, outputTexture);
 
             return succeeded;
         }
@@ -1248,7 +1253,7 @@ namespace UTJ.RaytracedHardShadow
 
         void OnPreRender()
         {
-            Render(m_camera);
+            Render();
         }
 
         void OnPostRender()
