@@ -3,17 +3,17 @@
 [English](https://translate.google.com/translate?sl=ja&tl=en&u=https://github.com/unity3d-jp/RaytracedHardShadow)
 
 
-レイトレーシングにより、ピクセル単位の正確なハードシャドウを生成するプラグインです。[UnityChanToonShader](https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project) などと併用することを想定した、アニメ用影システムとなります。
+This plugin is for creating pixel-level precise hard shadows using raytracing. Combine this plugin with tools like [UnityChanToonShader](https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project) to create an anime-style shadow system. 
 
-実行には DirectX Raytracing (DXR) が動作する環境が必要です。
-具体的には、**Windows 10 の 1809 (October 2018 Update) 以降、GeForce 1070 以上の GPU が必須** になります。  
- 2019/07 現在、NVIDIA の GPU (GeForce および Quadro) しか DXR をサポートしていません。また、GeForce 1060 には DXR をサポートしているモデルとしていないモデルが混在しており、同 GPU でも動く可能性はあります。([DXR Supported GPUs 2019/03](https://www.nvidia.com/content/dam/en-zz/Solutions/geforce/news/geforce-rtx-gtx-dxr/geforce-rtx-gtx-dxr-supported-gpus-march-2019.png) によれば、GTX 1060 **6GB** はサポートしているようです)
+This plugin requires an environment that can also run DirectX Raytracing (DXR).
+Specifically, **the Windows 10 1809 (October 2018 Update) or later and a GeForce 1070 or higher GPU are required**.  
+As of 2019/07, only NVIDIA GPUs (GeForce or Quadro) support DXR. Also, some GeForce 1060 models support DXR and some do not, so be aware when attempting run this plugin on those GPUs (according to the list of [DXR Supported GPUs 2019/03](https://www.nvidia.com/content/dam/en-zz/Solutions/geforce/news/geforce-rtx-gtx-dxr/geforce-rtx-gtx-dxr-supported-gpus-march-2019.png), the GTX 1060 **6GB** supports DXR).
  
-Unity 2017.4 以降 で動作します。Unity 側のグラフィック API は D3D11 (デフォルト)、もしくは D3D12 である必要があります。
+This plugin is compatible with Unity 2017.4 and later. The D3D11 (default) or D3D12 Unity graphics API is also required. 
 
-## 使い方
-- [releases](https://github.com/unity3d-jp/RaytracedHardShadow/releases) からパッケージをダウンロードし、Unity のプロジェクトにインポート。
-  - Unity 2018.3 以降の場合、この github リポジトリを直接インポートすることもできます。プロジェクト内にある Packages/manifest.json をテキストエディタで開き、"dependencies" に以下の行を加えます。
+## How-to Guide
+- Download the package from [releases](https://github.com/unity3d-jp/RaytracedHardShadow/releases) import it into a Unity project. 
+  - This github repository can also be directly imported into Unity 2018.3. To do soOpen the project's Packages/manifest.json file in a text editor and add the following line to "dependencies".
   > "com.unity.raytracedhardshadow": "https://github.com/unity3d-jp/RaytracedHardShadow.git",
 
 - Camera を選択し、"Add Component" -> "UTJ/Raytraced Hard Shadow/Shadow Raytacer" を選択。このコンポーネントが影生成を担当します。
