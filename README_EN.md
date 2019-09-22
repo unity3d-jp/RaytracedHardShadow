@@ -37,17 +37,17 @@ When this is active, the shadow texture will act as a global shader parameter. T
 #### Shadows
 ##### Use Camera Culling Mask
 When active, the Culling Mask assigned to the Camera will be applied when shadows are generated.
-無効な場合 Camera の Culling Mask は無視しますが、"Use Light Culling Mask" が有効な場合は Light 側の Culling Mask の影響は受けます。
+When inactive, the Camera's Culling Mask is ignored, but if "Use Light Culling Mask" is active the Light Culling Mask's effect will be applied.
 
 ##### Cull Back Faces
-有効な場合、裏面カリングを行います。
+When active, culling will happen on the back face.
 
 ##### Ignore Self Shadow
-自分自身に落とす影 (セルフシャドウ) を無視します。  
-"Keep Self Drop Shadow" が有効な場合、レイが遮られるまでの距離がほぼゼロ ("Self Shadow Threshold" で調節可) であればその遮ったオブジェクトは無視しますが、それ以上であれば自分自身であっても影とみなします。  
+This will ignore the effect of self shadows.   
+If "Keep Self Drop Shadow" is enabled, and the distance at which a ray is obstructed is close to zero (can be adjusted with "Self Shadow Threshold"), the obstructing object will be ignored, but beyond that threshold objects will be considered shadows, even if it's the object itself.   
 
-デフォルトでは "Ignore Self Shadow" "Keep Self Drop Shadow" 共に有効となっており、通常これが最も望ましい動作であると思われます。  
-ハードシャドウはポリゴンの形状がはっきり影になるため、セルフシャドウの境界が角張ってしまいます。
+"Ignore Self Shadow" and "Keep Self Drop Shadow" are enabled by default, and is the recommended configuration.  
+In order for HardShadow to clearly turn polygons into shadows, the edges of the self shadow need to be angular.   ハードシャドウはポリゴンの形状がはっきり影になるため、セルフシャドウの境界が角張ってしまいます。
 そのため、セルフシャドウに関してはシェーディング (光源方向と法線から陰を判別) に任せた方がきれいな結果が得られます。
 しかしそれだけだと、例えば鼻や耳が顔に落とす影が出なくなってしまいます。同じセルフシャドウでも落ち影は保った方がいいでしょう。
 デフォルト設定はこれらの要件を満たすものになっています。
