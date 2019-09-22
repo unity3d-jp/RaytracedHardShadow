@@ -13,10 +13,10 @@ This plugin is compatible with Unity 2017.4 and later. The D3D11 (default) or D3
 
 ## How-to Guide
 - Download the package from [releases](https://github.com/unity3d-jp/RaytracedHardShadow/releases) import it into a Unity project. 
-  - This github repository can also be directly imported into Unity 2018.3. To do soOpen the project's Packages/manifest.json file in a text editor and add the following line to "dependencies".
+  - This github repository can also be directly imported into Unity 2018.3. To do so, open the project's Packages/manifest.json file in a text editor and add the following line to "dependencies".
   > "com.unity.raytracedhardshadow": "https://github.com/unity3d-jp/RaytracedHardShadow.git",
 
-- Camera を選択し、"Add Component" -> "UTJ/Raytraced Hard Shadow/Shadow Raytacer" を選択。このコンポーネントが影生成を担当します。
+- Select Camera, then "Add Component" -> "UTJ/Raytraced Hard Shadow/Shadow Raytacer". This component will handle generating the shadows. 
 
 <img align="right" src="https://user-images.githubusercontent.com/1488611/61529039-4b162880-aa5b-11e9-9a64-57429f21b8ce.png" width=400>
 
@@ -24,19 +24,19 @@ This plugin is compatible with Unity 2017.4 and later. The D3D11 (default) or D3
 
 #### Output
 ##### Generate Render Texture
-これが有効な場合、出力先の影テクスチャを画面の解像度に合わせて自動的に作成/更新します。
-既存の RenderTexture を出力先としたい場合、このオプションを無効化して "Output Texture" を手動で設定します。
+When this is active, the texture's shadow texture resolution will automatically conform to the same resolution as the monitor.
+If you would like an existing RenderTexture to be the output texture, disable this option and set the "Output Texture" manually.
 
-**RenderTexture が 32bit の Int もしくは Uint のフォーマットである場合、bitmask として出力します**。"Generate Render Texture" が有効な場合、"Output Type" を "Bit Mask" にすると bitmask になります。  
-bitmask の場合、n 番目の bit が n 番目のライトに対応するようになります。例えば、あるピクセルが 0 番目と 2 番目のライトの光を受ける場合、(1 << 0) | (1 << 2) で 5 が出力されます。シェーダで複数のライトの影に対応する場合、この bitmask の値を用いてライト毎の影を判別します。  
-["Set Light Index To Alpha"](#set-light-index-to-alpha) も参照ください。
+**If the RenderTexture is a 32bit Int or a Uint, it will output as a bitmask**. If "Generate Render Texture" is active, set the "Output Type" to "Bit Mask" in order to output a bitmask.   
+When outputting a bitmask, the "n-th" bit will correspond to the "n-th" light. For example, if a pixel recieves light from the 0-th and 2nd lights, (1 << 0) | (1 << 2) will lead to an output of 5. If a shader will handle shadows from multiple lights, it will differentiate the shadow from each light using this bitmask value.   
+See ["Set Light Index To Alpha"](#set-light-index-to-alpha) for more details.
 
 ##### Assign Global Texture
-これが有効な場合、影テクスチャをグローバルなシェーダパラメータとして設定します。パラメータ名は "Global Texture Name" に設定した名前になります。
+When this is active, the shadow texture will act as a global shader parameter. The parameter's name will be the name set under the "Global Texture Name" setting. 
 
 #### Shadows
 ##### Use Camera Culling Mask
-有効な場合、Camera に設定されている Culling Mask をそのまま影生成時にも適用します。
+When active, the Culling Mask assigned to the Camera will be applied when shadows are generated.
 無効な場合 Camera の Culling Mask は無視しますが、"Use Light Culling Mask" が有効な場合は Light 側の Culling Mask の影響は受けます。
 
 ##### Cull Back Faces
