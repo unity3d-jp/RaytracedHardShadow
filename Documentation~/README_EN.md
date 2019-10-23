@@ -1,6 +1,6 @@
 ![demo](https://user-images.githubusercontent.com/1488611/60965577-1ca89700-a351-11e9-9b7d-962a6a7e1aed.png)
 # Raytraced Hard Shadow
-[Japanese](https://github.com/unity3d-jp/RaytracedHardShadow/blob/master/Readme.md)
+[Japanese](Readme.md)
 
 
 This plugin is for creating pixel-level precise hard shadows using ray tracing. Combine this plugin with tools like [UnityChanToonShader](https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project) to create an anime-style shadow system. 
@@ -110,4 +110,4 @@ This option is ideal for special cases such as wanting to use the shadow buffer 
   - Support for these cases would be difficult, and is unlikely in future updates. 
 
 ## License
-[Unity Companion License](LICENSE.md) 
+[Unity Companion License](https://github.com/unity3d-jp/RaytracedHardShadow/blob/master/LICENSE_EN.md) 
