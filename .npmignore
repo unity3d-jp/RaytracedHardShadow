@@ -19,3 +19,4 @@ build.bat
 build.bat.meta
 
 RaytracedHardShadow~/**
+Plugin~/**
