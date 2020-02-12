@@ -75,6 +75,9 @@ namespace Unity.RaytracedHardShadow.Editor
 
         void OnEnable()
         {
+
+            m_rayTracer = target as ShadowRaytracer;
+
             if (s_instances == null)
                 s_instances = new List<ShadowRaytracerEditor>();
             s_instances.Add(this);
@@ -86,6 +89,7 @@ namespace Unity.RaytracedHardShadow.Editor
                 SceneView.onSceneGUIDelegate += OnSceneGUI;
 #endif
             }
+
         }
 
         void OnDisable()
@@ -212,7 +216,10 @@ namespace Unity.RaytracedHardShadow.Editor
             EditorGUILayout.PropertyField(so.FindProperty("m_GPUSkinning"));
             EditorGUILayout.PropertyField(so.FindProperty("m_adaptiveSampling"));
             EditorGUILayout.PropertyField(so.FindProperty("m_antialiasing"));
-            EditorCameraManager.enableSceneViewRendering = EditorGUILayout.Toggle("Preview In Scene View", EditorCameraManager.enableSceneViewRendering);
+
+            m_rayTracer.ShowPreviewInSceneView(
+                EditorGUILayout.Toggle("Preview In Scene View", m_rayTracer.IsPreviewShownInSceneView())
+            );
 
             // debug
             var foldDebug = so.FindProperty("m_foldDebug");
@@ -257,5 +264,10 @@ namespace Unity.RaytracedHardShadow.Editor
             EditorGUILayout.Space();
             EditorGUILayout.LabelField(System.String.Format("Plugin version: {0} ({1})", Lib.version, Lib.releaseDate));
         }
+
+//----------------------------------------------------------------------------------------------------------------------
+
+        ShadowRaytracer m_rayTracer = null;
+
     }
-}
+} //end namespace
