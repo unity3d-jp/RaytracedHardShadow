@@ -8,12 +8,6 @@ namespace UTJ.RaytracedHardShadowEditor
 {
     public static class EditorCameraManager
     {
-        public static bool enableSceneViewRendering
-        {
-            get { return s_enableSceneViewRendering; }
-            set { s_enableSceneViewRendering = value; }
-        }
-
         [InitializeOnLoadMethod]
         static void Init()
         {
@@ -31,7 +25,6 @@ namespace UTJ.RaytracedHardShadowEditor
             public Dictionary<ShadowRaytracer, Record> records = new Dictionary<ShadowRaytracer, Record>();
             public int updateCount;
         }
-        static bool s_enableSceneViewRendering = true;
         static Dictionary<Camera, CameraContext> s_cameraContexts = new Dictionary<Camera, CameraContext>();
         static int s_updateCount = 0;
 
@@ -44,20 +37,22 @@ namespace UTJ.RaytracedHardShadowEditor
                     cam.gameObject.name == "Preview Camera";
         }
 
-        static ShadowRaytracer[] GetEditorShadowRaytracer()
+        static ShadowRaytracer[] GetEditorShadowRaytracers()
         {
             return Object.FindObjectsOfType<ShadowRaytracer>();
         }
 
-        static void RaytraceHardShadowPreRender(Camera cam)
-        {
-            if (!s_enableSceneViewRendering || !IsValidCamera(cam))
+//----------------------------------------------------------------------------------------------------------------------
+        static void RaytraceHardShadowPreRender(Camera cam) {
+            if (!IsValidCamera(cam))
                 return;
 
-            var ctx = Misc.GetOrAddValue(s_cameraContexts, cam);
-            foreach (var shadowRaytracer in GetEditorShadowRaytracer())
-            {
-                var rec = Misc.GetOrAddValue(ctx.records, shadowRaytracer);
+            CameraContext  ctx = Misc.GetOrAddValue(s_cameraContexts, cam);
+            m_curShadowRaytracers = GetEditorShadowRaytracers();
+            foreach (ShadowRaytracer shadowRaytracer in m_curShadowRaytracers) {
+                if (!shadowRaytracer.IsPreviewShownInSceneView())
+                    continue;
+                CameraContext.Record rec = Misc.GetOrAddValue(ctx.records, shadowRaytracer);
                 shadowRaytracer.Render(cam, ref rec.outputTexture, true);
             }
 
@@ -66,17 +61,25 @@ namespace UTJ.RaytracedHardShadowEditor
                 Misc.RemoveNullKeys(ctx.records);
         }
 
-        static void RaytraceHardShadowPostRender(Camera cam)
-        {
-            if (!s_enableSceneViewRendering || !IsValidCamera(cam))
+//----------------------------------------------------------------------------------------------------------------------
+
+        static void RaytraceHardShadowPostRender(Camera cam) {
+            if (!IsValidCamera(cam))
                 return;
 
-            foreach (var shadowRaytracer in GetEditorShadowRaytracer())
+            foreach (ShadowRaytracer shadowRaytracer in m_curShadowRaytracers) {
+                if (!shadowRaytracer.IsPreviewShownInSceneView())
+                    continue;
+
                 shadowRaytracer.Finish();
+            }
 
             ++s_updateCount;
             if (s_updateCount % 256 == 0)
                 Misc.RemoveNullKeys(s_cameraContexts);
         }
+
+//----------------------------------------------------------------------------------------------------------------------
+        static UTJ.RaytracedHardShadow.ShadowRaytracer[] m_curShadowRaytracers;
     }
 } //namespace UTJ.RaytracedHardShadowEditor

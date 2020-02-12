@@ -270,6 +270,7 @@ namespace UTJ.RaytracedHardShadow
         [SerializeField] ObjectScope m_geometryScope;
 #if UNITY_EDITOR
         [SerializeField] SceneAsset[] m_geometryScenes;
+        [SerializeField] bool m_showPreviewInSceneView;
 #endif
         [SerializeField] string[] m_geometryScenePaths;
         [SerializeField] GameObject[] m_geometryObjects;
@@ -470,6 +471,7 @@ namespace UTJ.RaytracedHardShadow
                 ToPaths(ref m_geometryScenePaths, m_geometryScenes);
 #endif
         }
+
 
         // request export to image. actual export is done at the end of frame.
         public void ExportToImage(string path, ImageFormat format)
@@ -838,6 +840,14 @@ namespace UTJ.RaytracedHardShadow
                 case ObjectScope.Objects: processGOs(m_geometryObjects); break;
             }
         }
+
+//----------------------------------------------------------------------------------------------------------------------
+
+#if UNITY_EDITOR
+        internal bool IsPreviewShownInSceneView() { return m_showPreviewInSceneView; }
+        internal void ShowPreviewInSceneView(bool show) { m_showPreviewInSceneView = show; }
+#endif
+//----------------------------------------------------------------------------------------------------------------------
 
         // actual initialization is done in render thread (create d3d12 device if needed and initialize GPU resources).
         // wait for complete actual initialization if 'wait' is true.
