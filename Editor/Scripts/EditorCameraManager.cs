@@ -1,8 +1,6 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using Unity.RaytracedHardShadow;
 
 namespace Unity.RaytracedHardShadow.Editor
 {
@@ -80,6 +78,6 @@ namespace Unity.RaytracedHardShadow.Editor
         }
 
 //----------------------------------------------------------------------------------------------------------------------
-        static UTJ.RaytracedHardShadow.ShadowRaytracer[] m_curShadowRaytracers;
+        static Unity.RaytracedHardShadow.ShadowRaytracer[] m_curShadowRaytracers;
     }
 } //namespace UTJ.RaytracedHardShadowEditor

@@ -1,5 +1,4 @@
 ﻿using NUnit.Framework;
-using UTJ.RaytracedHardShadow;
 
 namespace Unity.RaytracedHardShadow.Tests {
     public class RTHSAPITest
