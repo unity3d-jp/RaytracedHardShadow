@@ -1,11 +1,9 @@
 ﻿using NUnit.Framework;
 
 namespace Unity.RaytracedHardShadow.Tests {
-    public class RTHSAPITest
-{
+internal class RTHSAPITest {
     [Test]
-    public void RTHSInitialization()
-    {
+    public void RTHSInitialization() {
         rthsRenderer renderer = rthsRenderer.Create();
         renderer.Release();
     }

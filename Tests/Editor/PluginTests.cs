@@ -1,13 +1,9 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
+﻿using NUnit.Framework;
 using UnityEngine.Windows;
 
 namespace Unity.RaytracedHardShadow.EditorTests {
 
-public class PluginTests {
+internal class PluginTests {
 
     [Test]
     public void CheckPluginExist() {
