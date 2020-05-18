@@ -29,6 +29,11 @@ obj/
 TestLocal/
 TestLocal.meta
 
+# Project/Solution files
 RaytracedHardShadow~/*.csproj
 RaytracedHardShadow~/*.sln
+RaytracedHardShadow~/.idea/**
+
+# Logs
 RaytracedHardShadow~/Logs/*
+
