@@ -31,3 +31,4 @@ TestLocal.meta
 
 RaytracedHardShadow~/*.csproj
 RaytracedHardShadow~/*.sln
+RaytracedHardShadow~/Logs/*
