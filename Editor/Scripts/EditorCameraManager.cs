@@ -2,9 +2,9 @@
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using UTJ.RaytracedHardShadow;
+using Unity.RaytracedHardShadow;
 
-namespace UTJ.RaytracedHardShadowEditor
+namespace Unity.RaytracedHardShadow.Editor
 {
     public static class EditorCameraManager
     {

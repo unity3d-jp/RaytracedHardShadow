@@ -1,0 +1,17 @@
+{
+    "name": "Unity.RaytracedHardShadow.Editor",
+    "references": [
+        "GUID:d2f2fdafbf2b25e46bd82c9abb25947d"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

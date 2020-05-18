@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEditor;
 #endif
 
-namespace UTJ.RaytracedHardShadow
+namespace Unity.RaytracedHardShadow
 {
     public enum ShadowCasterLightType
     {

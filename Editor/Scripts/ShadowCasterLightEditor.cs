@@ -1,11 +1,11 @@
 using UnityEngine;
 using UnityEditor;
-using UTJ.RaytracedHardShadow;
+using Unity.RaytracedHardShadow;
 
-namespace UTJ.RaytracedHardShadowEditor
+namespace Unity.RaytracedHardShadow.Editor
 {
-    [CustomEditor(typeof(UTJ.RaytracedHardShadow.ShadowCasterLight))]
-    public class ShadowCasterLightEditor : Editor
+    [CustomEditor(typeof(Unity.RaytracedHardShadow.ShadowCasterLight))]
+    public class ShadowCasterLightEditor : UnityEditor.Editor
     {
         [MenuItem("GameObject/RaytracedHardShadow/Create Shadow Caster Light", false, 10)]
         public static void CreateShadowCasterLight(MenuCommand menuCommand)
