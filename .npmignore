@@ -4,9 +4,6 @@ build/**
 node_modules/**
 Documentation/ApiDocs/**
 Documentation~/ApiDocs/**
-AE~/**
-RaytracedHardShadow~/**
-Plugin~/**
 .DS_Store
 .npmrc
 .npmignore
@@ -21,3 +18,5 @@ build.sh.meta
 build.bat
 build.bat.meta
 
+RaytracedHardShadow~/**
+Plugin~/**
