@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using UTJ.RaytracedHardShadow;
+using Unity.RaytracedHardShadow;
 
-namespace UTJ.RaytracedHardShadowEditor
+namespace Unity.RaytracedHardShadow.Editor
 {
-    [CustomEditor(typeof(UTJ.RaytracedHardShadow.ShadowRaytracer))]
-    public class ShadowRaytracerEditor : Editor
+    [CustomEditor(typeof(Unity.RaytracedHardShadow.ShadowRaytracer))]
+    public class ShadowRaytracerEditor : UnityEditor.Editor
     {
         // return drag & dropped scenes from *Hierarchy*.
         // scene assets from Project are ignored. these should be handled by Unity's default behavior.

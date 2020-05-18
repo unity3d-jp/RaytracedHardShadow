@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 using UnityEditor;
 #endif
 
-namespace UTJ.RaytracedHardShadow
+namespace Unity.RaytracedHardShadow
 {
     [ExecuteInEditMode]
     [RequireComponent(typeof(Camera))]

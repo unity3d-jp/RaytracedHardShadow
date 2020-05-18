@@ -12,7 +12,7 @@ using UnityEngine.Experimental.Rendering;
 using UnityEditor;
 #endif
 
-namespace UTJ.RaytracedHardShadow
+namespace Unity.RaytracedHardShadow
 {
 // Object.Equals(object o) & Object.GetHashCode()
 #pragma warning disable CS0660, CS0661

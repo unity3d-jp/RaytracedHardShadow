@@ -1,2 +1,2 @@
 ﻿using System.Runtime.CompilerServices;
-[assembly: InternalsVisibleTo("UTJ.RaytracedHardShadowEditor")] 
+[assembly: InternalsVisibleTo("Unity.RaytracedHardShadow.Editor")] 
