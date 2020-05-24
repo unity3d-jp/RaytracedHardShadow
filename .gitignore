@@ -34,6 +34,14 @@ RaytracedHardShadow~/*.csproj
 RaytracedHardShadow~/*.sln
 RaytracedHardShadow~/.idea/**
 
+RaytracedHardShadowHDRP~/*.csproj
+RaytracedHardShadowHDRP~/*.sln
+RaytracedHardShadowHDRP~/.idea/**
+
+RaytracedHardShadowUniversalRP~/*.csproj
+RaytracedHardShadowUniversalRP~/*.sln
+RaytracedHardShadowUniversalRP~/.idea/**
 # Logs
 RaytracedHardShadow~/Logs/*
-
+RaytracedHardShadowHDRP~/Logs/*
+RaytracedHardShadowUniversalRP~/Logs/*

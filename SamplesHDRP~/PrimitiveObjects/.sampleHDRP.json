@@ -1,5 +1,5 @@
 {
-	"displayName":"Primitive Objects",
+	"displayName":"Primitive Objects for HDRP",
 	"description": "A sample scene with primitive objects, which uses DirectX Raytracing (DXR) Hard Shadow",
 	"createSeparatePackage": false
 }

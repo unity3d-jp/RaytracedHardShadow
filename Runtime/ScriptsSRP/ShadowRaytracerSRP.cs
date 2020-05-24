@@ -14,8 +14,8 @@ namespace Unity.RaytracedHardShadow
 {
     [ExecuteInEditMode]
     [RequireComponent(typeof(Camera))]
-    [AddComponentMenu("UTJ/Raytraced Hard Shadow/Shadow Raytracer for HDRP")]
-    public class ShadowRaytracerHDRP : MonoBehaviour
+    [AddComponentMenu("UTJ/Raytraced Hard Shadow/Shadow Raytracer for SRP")]
+    public class ShadowRaytracerSRP : MonoBehaviour
     {
         #region types
         public enum ObjectScope

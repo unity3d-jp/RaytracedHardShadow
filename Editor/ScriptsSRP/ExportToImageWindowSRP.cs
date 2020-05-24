@@ -4,15 +4,15 @@ using Unity.RaytracedHardShadow;
 
 namespace Unity.RaytracedHardShadowEditor
 {
-    public class ExportToImageWindowHDRP : EditorWindow
+    public class ExportToImageWindowSRP : EditorWindow
     {
-        ShadowRaytracerHDRP m_raytracer;
-        static ShadowRaytracerHDRP.ImageFormat m_format = ShadowRaytracerHDRP.ImageFormat.PNG; // static to keep last selection
+        ShadowRaytracerSRP m_raytracer;
+        static ShadowRaytracerSRP.ImageFormat m_format = ShadowRaytracerSRP.ImageFormat.PNG; // static to keep last selection
         string m_path;
 
-        public static void Open(ShadowRaytracerHDRP sr)
+        public static void Open(ShadowRaytracerSRP sr)
         {
-            var window = EditorWindow.GetWindow<ExportToImageWindowHDRP>();
+            var window = EditorWindow.GetWindow<ExportToImageWindowSRP>();
             window.titleContent = new GUIContent("Export To Image");
             window.m_raytracer = sr;
             window.Show();
@@ -26,16 +26,16 @@ namespace Unity.RaytracedHardShadowEditor
                 return;
             }
 
-            m_format = (ShadowRaytracerHDRP.ImageFormat)EditorGUILayout.EnumPopup("Format", m_format);
+            m_format = (ShadowRaytracerSRP.ImageFormat)EditorGUILayout.EnumPopup("Format", m_format);
             if (GUILayout.Button("Export"))
             {
                 string ext = "";
                 switch(m_format)
                 {
-                    case ShadowRaytracerHDRP.ImageFormat.PNG: ext = "png"; break;
-                    case ShadowRaytracerHDRP.ImageFormat.EXR: ext = "exr"; break;
+                    case ShadowRaytracerSRP.ImageFormat.PNG: ext = "png"; break;
+                    case ShadowRaytracerSRP.ImageFormat.EXR: ext = "exr"; break;
 #if UNITY_2018_3_OR_NEWER
-                    case ShadowRaytracerHDRP.ImageFormat.TGA: ext = "tga"; break;
+                    case ShadowRaytracerSRP.ImageFormat.TGA: ext = "tga"; break;
 #endif
                 }
 

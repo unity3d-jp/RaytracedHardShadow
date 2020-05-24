@@ -5,8 +5,8 @@ using Unity.RaytracedHardShadow;
 
 namespace Unity.RaytracedHardShadowEditor
 {
-    [CustomEditor(typeof(Unity.RaytracedHardShadow.ShadowRaytracerHDRP))]
-    public class ShadowRaytracerUTS2_HDRPEditor : Editor
+    [CustomEditor(typeof(Unity.RaytracedHardShadow.ShadowRaytracerSRP))]
+    public class ShadowRaytracerSRP_Editor : Editor
     {
         // return drag & dropped scenes from *Hierarchy*.
         // scene assets from Project are ignored. these should be handled by Unity's default behavior.
@@ -71,15 +71,15 @@ namespace Unity.RaytracedHardShadowEditor
 
 
         //static readonly int indentSize = 16;
-        static List<ShadowRaytracerUTS2_HDRPEditor> s_instances;
+        static List<ShadowRaytracerSRP_Editor> s_instances;
 
         void OnEnable()
         {
 
-            m_rayTracer = target as ShadowRaytracerHDRP;
+            m_rayTracer = target as ShadowRaytracerSRP;
 
             if (s_instances == null)
-                s_instances = new List<ShadowRaytracerUTS2_HDRPEditor>();
+                s_instances = new List<ShadowRaytracerSRP_Editor>();
             s_instances.Add(this);
             if (s_instances.Count == 1)
             {
@@ -112,7 +112,7 @@ namespace Unity.RaytracedHardShadowEditor
             {
                 foreach (var inst in s_instances)
                 {
-                    var t = inst.target as ShadowRaytracerHDRP;
+                    var t = inst.target as ShadowRaytracerSRP;
                     if (t != null)
                         inst.Repaint();
                 }
@@ -123,7 +123,7 @@ namespace Unity.RaytracedHardShadowEditor
         {
             //DrawDefaultInspector();
 
-            var t = target as ShadowRaytracerHDRP;
+            var t = target as ShadowRaytracerSRP;
             var so = serializedObject;
 
             // output
@@ -185,12 +185,12 @@ namespace Unity.RaytracedHardShadowEditor
             {
                 var spLightScope = so.FindProperty("m_lightScope");
                 EditorGUILayout.PropertyField(spLightScope);
-                switch ((ShadowRaytracerHDRP.ObjectScope)spLightScope.intValue)
+                switch ((ShadowRaytracerSRP.ObjectScope)spLightScope.intValue)
                 {
-                    case ShadowRaytracerHDRP.ObjectScope.Scenes:
+                    case ShadowRaytracerSRP.ObjectScope.Scenes:
                         DrawScenesField(so.FindProperty("m_lightScenes"));
                         break;
-                    case ShadowRaytracerHDRP.ObjectScope.Objects:
+                    case ShadowRaytracerSRP.ObjectScope.Objects:
                         EditorGUILayout.PropertyField(so.FindProperty("m_lightObjects"), true);
                         break;
                 }
@@ -203,10 +203,10 @@ namespace Unity.RaytracedHardShadowEditor
             EditorGUILayout.PropertyField(so.FindProperty("m_geometryScope"));
             switch (t.geometryScope)
             {
-                case ShadowRaytracerHDRP.ObjectScope.Scenes:
+                case ShadowRaytracerSRP.ObjectScope.Scenes:
                     DrawScenesField(so.FindProperty("m_geometryScenes"));
                     break;
-                case ShadowRaytracerHDRP.ObjectScope.Objects:
+                case ShadowRaytracerSRP.ObjectScope.Objects:
                     EditorGUILayout.PropertyField(so.FindProperty("m_geometryObjects"), true);
                     break;
             }
@@ -260,7 +260,7 @@ namespace Unity.RaytracedHardShadowEditor
 
             EditorGUILayout.Space();
             if (GUILayout.Button("Export to image", GUILayout.Width(200)))
-                ExportToImageWindowHDRP.Open(t);
+                ExportToImageWindowSRP.Open(t);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField(System.String.Format("Plugin version: {0} ({1})", Lib.version, Lib.releaseDate));
@@ -268,7 +268,7 @@ namespace Unity.RaytracedHardShadowEditor
 
 //----------------------------------------------------------------------------------------------------------------------
 
-        ShadowRaytracerHDRP m_rayTracer = null;
+        ShadowRaytracerSRP m_rayTracer = null;
 
     }
 } //end namespace
