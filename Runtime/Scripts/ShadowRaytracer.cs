@@ -293,6 +293,7 @@ namespace Unity.RaytracedHardShadow
         rthsRenderer m_renderer;
         Camera m_camera = null;
         bool m_initialized = false;
+        bool m_srpCallbackInitialized = false;
         List<ExportRequest> m_exportRequests;
 
         static int s_instanceCount, s_updateCount, s_renderCount;
@@ -855,7 +856,18 @@ namespace Unity.RaytracedHardShadow
         bool InitializeRenderer(bool wait = false, double timeoutInSeconds = 3.0)
         {
             if (m_initialized)
+            {
+
+                // RenderPipelineManager.currentPipeline can be null when called from OnEnable().
+                // So, we need to check after m_initialized is set to true.
+                if (null != RenderPipelineManager.currentPipeline && !m_srpCallbackInitialized)
+                {
+                    RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
+                    RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
+                    m_srpCallbackInitialized = true;
+                }
                 return m_renderer;
+            }
 #if UNITY_EDITOR
             // initializing renderer can interfere GI baking. so wait until it is completed.
             if (Lightmapping.isRunning)
@@ -871,13 +883,6 @@ namespace Unity.RaytracedHardShadow
                 m_renderer.name = gameObject.name;
                 if (m_dbgVerboseLog)
                     Debug.Log(String.Format("Initializing Renderer start ({0}f)", Time.frameCount));
-
-
-                if (null != RenderPipelineManager.currentPipeline)
-                {
-                    RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
-                    RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
-                }
             }
 
             if (wait)
@@ -902,6 +907,7 @@ namespace Unity.RaytracedHardShadow
                 m_initialized = true;
                 if (m_renderer.valid)
                 {
+
                     ++s_instanceCount;
                     if (s_meshDataCache == null)
                     {
@@ -938,11 +944,13 @@ namespace Unity.RaytracedHardShadow
             if (m_renderer)
             {
                 m_renderer.Release();
-                if (null != RenderPipelineManager.currentPipeline)
-                {
-                    RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
-                    RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
-                }
+            }
+
+            if (m_srpCallbackInitialized)
+            {
+                RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
+                RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+                m_srpCallbackInitialized = false;
             }
 
             m_initialized = false;
