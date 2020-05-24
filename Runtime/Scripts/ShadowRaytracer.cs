@@ -871,6 +871,13 @@ namespace Unity.RaytracedHardShadow
                 m_renderer.name = gameObject.name;
                 if (m_dbgVerboseLog)
                     Debug.Log(String.Format("Initializing Renderer start ({0}f)", Time.frameCount));
+
+
+                if (null != RenderPipelineManager.currentPipeline)
+                {
+                    RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
+                    RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
+                }
             }
 
             if (wait)
@@ -931,6 +938,11 @@ namespace Unity.RaytracedHardShadow
             if (m_renderer)
             {
                 m_renderer.Release();
+                if (null != RenderPipelineManager.currentPipeline)
+                {
+                    RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
+                    RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+                }
             }
 
             m_initialized = false;
@@ -1270,6 +1282,17 @@ namespace Unity.RaytracedHardShadow
         {
             Finish();
         }
+
+        void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
+        {
+            Render();
+        }
+
+        void OnEndCameraRendering(ScriptableRenderContext context, Camera camera)
+        {
+            Finish();
+        }
+
         #endregion
     }
 }
