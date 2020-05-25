@@ -289,7 +289,7 @@ namespace Unity.RaytracedHardShadow
         [SerializeField] bool m_clampBlendshapeWeights = true;
 
         [SerializeField] bool m_dbgVerboseLog = false;
-        [SerializeField] List<Light> m_directionalLightListHDRP = new List<Light>();
+        [SerializeField] List<Light> m_HDRPDirectionalLightList = new List<Light>();
         [SerializeField] RenderPipeline m_renderPipeLine;
 #if UNITY_EDITOR
 #pragma warning disable CS0414
@@ -741,7 +741,7 @@ namespace Unity.RaytracedHardShadow
 
             int lightIndex = 0;
             Action<Light> processLight = (l) => {
-                if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None || m_directionalLightListHDRP.Contains(l) ))
+                if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None || m_HDRPDirectionalLightList.Contains(l) ))
                 {
                     bodyL.Invoke(l, lightIndex);
                     if (m_setLightIndexToAlpha)

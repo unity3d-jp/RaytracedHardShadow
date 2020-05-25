@@ -202,9 +202,12 @@ namespace Unity.RaytracedHardShadow.Editor
             }
             if (t.renderPipeline == ShadowRaytracer.RenderPipeline.HDRP)
             {
-                EditorGUILayout.Space();
-                EditorGUILayout.PropertyField(so.FindProperty("m_directionalLightListHDRP"), true );
+                EditorGUILayout.PropertyField(so.FindProperty("m_HDRPDirectionalLightList"), true );
+                EditorGUI.indentLevel++;
+                EditorGUILayout.LabelField("If you want to use multiple light sources for shadows in HDRP, put the lights into above and disable their shadow map.");
+                EditorGUI.indentLevel--;
             }
+            EditorGUILayout.Space();
 
             // geometry
             EditorGUILayout.LabelField("Geometry", EditorStyles.boldLabel);
