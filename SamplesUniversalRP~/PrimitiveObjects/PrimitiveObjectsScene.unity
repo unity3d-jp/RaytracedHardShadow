@@ -760,6 +760,8 @@ MonoBehaviour:
   m_antialiasing: 0
   m_clampBlendshapeWeights: 0
   m_dbgVerboseLog: 0
+  m_directionalLightListHDRP: []
+  m_renderPipeLine: 1
   m_foldDebug: 0
 --- !u!114 &963194230
 MonoBehaviour:

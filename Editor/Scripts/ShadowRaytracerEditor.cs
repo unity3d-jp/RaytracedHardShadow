@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using Unity.RaytracedHardShadow;
+using UnityEngine.Rendering;
 
 namespace Unity.RaytracedHardShadow.Editor
 {
@@ -126,6 +127,11 @@ namespace Unity.RaytracedHardShadow.Editor
             var t = target as ShadowRaytracer;
             var so = serializedObject;
 
+            // render pipe line.
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Render pipeline", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(so.FindProperty("m_renderPipeLine"));
+
             // output
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Output", EditorStyles.boldLabel);
@@ -194,7 +200,11 @@ namespace Unity.RaytracedHardShadow.Editor
                         break;
                 }
             }
-            EditorGUILayout.Space();
+            if (t.renderPipeline == ShadowRaytracer.RenderPipeline.HDRP)
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.PropertyField(so.FindProperty("m_directionalLightListHDRP"), true );
+            }
 
             // geometry
             EditorGUILayout.LabelField("Geometry", EditorStyles.boldLabel);

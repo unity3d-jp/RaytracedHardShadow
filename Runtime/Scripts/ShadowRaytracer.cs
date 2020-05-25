@@ -38,6 +38,13 @@ namespace Unity.RaytracedHardShadow
 #endif
         }
 
+        public enum RenderPipeline
+        {
+            Legacy,
+            Universal,
+            HDRP,
+        }
+
         public class MeshRecord
         {
             public rthsMeshData meshData;
@@ -282,7 +289,8 @@ namespace Unity.RaytracedHardShadow
         [SerializeField] bool m_clampBlendshapeWeights = true;
 
         [SerializeField] bool m_dbgVerboseLog = false;
-
+        [SerializeField] List<Light> m_directionalLightListHDRP = new List<Light>();
+        [SerializeField] RenderPipeline m_renderPipeLine;
 #if UNITY_EDITOR
 #pragma warning disable CS0414
         [SerializeField] bool m_foldDebug = false;
@@ -294,6 +302,7 @@ namespace Unity.RaytracedHardShadow
         Camera m_camera = null;
         bool m_initialized = false;
         bool m_srpCallbackInitialized = false;
+        RenderPipeline m_previousRenderPipeline = RenderPipeline.Legacy;
         List<ExportRequest> m_exportRequests;
 
         static int s_instanceCount, s_updateCount, s_renderCount;
@@ -394,6 +403,16 @@ namespace Unity.RaytracedHardShadow
             get { return m_lightScope; }
             set { m_lightScope = value; }
         }
+
+        // You might think automatic ricognization is possible using, RenderPipelineManager.currentPipeline.
+        // However, when it is referenced inside some functions, such as OnEnable(), OnDisable(), the value is null.
+        // To avoid this confusion, we added renderPipeline property.
+        public RenderPipeline renderPipeline
+        {
+            get { return m_renderPipeLine; }
+            set { m_renderPipeLine = value; }
+        }
+
 #if UNITY_EDITOR
         public SceneAsset[] lightScenes
         {
@@ -722,7 +741,7 @@ namespace Unity.RaytracedHardShadow
 
             int lightIndex = 0;
             Action<Light> processLight = (l) => {
-                if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None))
+                if (l.enabled && (!m_useLightShadowSettings || l.shadows != LightShadows.None || m_directionalLightListHDRP.Contains(l) ))
                 {
                     bodyL.Invoke(l, lightIndex);
                     if (m_setLightIndexToAlpha)
@@ -857,15 +876,6 @@ namespace Unity.RaytracedHardShadow
         {
             if (m_initialized)
             {
-
-                // RenderPipelineManager.currentPipeline can be null when called from OnEnable().
-                // So, we need to check after m_initialized is set to true.
-                if (null != RenderPipelineManager.currentPipeline && !m_srpCallbackInitialized)
-                {
-                    RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
-                    RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
-                    m_srpCallbackInitialized = true;
-                }
                 return m_renderer;
             }
 #if UNITY_EDITOR
@@ -946,12 +956,7 @@ namespace Unity.RaytracedHardShadow
                 m_renderer.Release();
             }
 
-            if (m_srpCallbackInitialized)
-            {
-                RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
-                RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
-                m_srpCallbackInitialized = false;
-            }
+
 
             m_initialized = false;
             if (m_dbgVerboseLog)
@@ -1233,12 +1238,42 @@ namespace Unity.RaytracedHardShadow
         {
             m_camera = GetComponent<Camera>();
             InitializeRenderer(true);
+
+            EnableSrpCallbacks();
+
         }
 
         void OnDisable()
         {
+            DisableSrpCallbacks();
+
             ReleaseRenderer();
         }
+
+        void EnableSrpCallbacks()
+        {
+
+            if ((renderPipeline != RenderPipeline.Legacy) && !m_srpCallbackInitialized)
+            {
+
+                RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
+                RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
+                m_srpCallbackInitialized = true;
+            }
+            m_previousRenderPipeline = renderPipeline;
+        }
+        void DisableSrpCallbacks()
+        {
+
+            if (m_srpCallbackInitialized)
+            {
+                RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
+                RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+                m_srpCallbackInitialized = false;
+            }
+            m_previousRenderPipeline = renderPipeline;
+        }
+
 
         void Update()
         {
@@ -1246,6 +1281,15 @@ namespace Unity.RaytracedHardShadow
             m_clampBlendshapeWeights = PlayerSettings.legacyClampBlendShapeWeights;
 #endif
             InitializeRenderer();
+            if (m_previousRenderPipeline != renderPipeline)
+            {
+                
+                if ( m_previousRenderPipeline != RenderPipeline.Legacy)
+                {
+                    DisableSrpCallbacks();
+                }
+                EnableSrpCallbacks();
+            }
             if (!m_initialized || !m_renderer)
                 return;
 
