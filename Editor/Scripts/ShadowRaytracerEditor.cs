@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using Unity.RaytracedHardShadow;
+using UnityEngine.Rendering;
 
 namespace Unity.RaytracedHardShadow.Editor
 {
@@ -126,6 +127,11 @@ namespace Unity.RaytracedHardShadow.Editor
             var t = target as ShadowRaytracer;
             var so = serializedObject;
 
+            // render pipe line.
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Render pipeline", EditorStyles.boldLabel);
+            EditorGUILayout.PropertyField(so.FindProperty("m_renderPipeLine"));
+
             // output
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Output", EditorStyles.boldLabel);
@@ -193,6 +199,13 @@ namespace Unity.RaytracedHardShadow.Editor
                         EditorGUILayout.PropertyField(so.FindProperty("m_lightObjects"), true);
                         break;
                 }
+            }
+            if (t.renderPipeline == ShadowRaytracer.RenderPipeline.HDRP)
+            {
+                EditorGUILayout.PropertyField(so.FindProperty("m_HDRPDirectionalLightList"), true );
+                EditorGUI.indentLevel++;
+                EditorGUILayout.LabelField("If you want to use multiple light sources for shadows in HDRP, put the lights into above and disable their shadow map.");
+                EditorGUI.indentLevel--;
             }
             EditorGUILayout.Space();
 
