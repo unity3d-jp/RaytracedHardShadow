@@ -1,6 +1,6 @@
 ![demo](https://user-images.githubusercontent.com/1488611/60965577-1ca89700-a351-11e9-9b7d-962a6a7e1aed.png)
 # Raytraced Hard Shadow
-[English](README_EN.md)
+[English](../index.md)
 
 
 レイトレーシングにより、ピクセル単位の正確なハードシャドウを生成するプラグインです。[UnityChanToonShader](https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project) などと併用することを想定した、アニメ用影システムとなります。
@@ -109,5 +109,4 @@ Legacy Forward の場合、シェーダ側では_LightColor0.aでこの値を取
   - 頂点シェーダで特殊な変形を行っている場合や、Geometry Shader や Tessellation でポリゴンの増減を行っている場合などが該当します。
   - これらは対応が難しく、将来的にも対応する見込みは薄いです。
 
-## ライセンス
-[Unity Companion License](https://github.com/unity3d-jp/RaytracedHardShadow/blob/master/LICENSE.md) 
+
