@@ -5,8 +5,7 @@ using UnityEditor;
 
 namespace Unity.RaytracedHardShadow
 {
-    public enum ShadowCasterLightType
-    {
+    internal enum ShadowCasterLightType {
         Directional,
         Spot,
         Point,
@@ -16,8 +15,7 @@ namespace Unity.RaytracedHardShadow
     // this component doesn't light objects. only casts shadows. intended mainly for experiments.
     // (ReversePooint light is supported only by this component)
     [ExecuteInEditMode]
-    public class ShadowCasterLight : MonoBehaviour
-    {
+    internal class ShadowCasterLight : MonoBehaviour {
         [SerializeField] ShadowCasterLightType m_lightType;
         [SerializeField] float m_range = 10.0f;
         [SerializeField] [Range(1.0f, 179.0f)] float m_spotAngle = 30.0f;
