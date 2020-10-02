@@ -224,7 +224,7 @@ namespace Unity.RaytracedHardShadow
         public static void ClearErrorLog() { rthsClearErrorLog(); }
     }
 
-    public struct rthsMeshData
+    internal struct rthsMeshData
     {
         #region internal
         public IntPtr self;

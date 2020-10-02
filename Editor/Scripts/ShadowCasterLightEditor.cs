@@ -5,7 +5,7 @@ using Unity.RaytracedHardShadow;
 namespace Unity.RaytracedHardShadow.Editor
 {
     [CustomEditor(typeof(Unity.RaytracedHardShadow.ShadowCasterLight))]
-    public class ShadowCasterLightEditor : UnityEditor.Editor
+    internal class ShadowCasterLightEditor : UnityEditor.Editor
     {
         [MenuItem("GameObject/RaytracedHardShadow/Create Shadow Caster Light", false, 10)]
         public static void CreateShadowCasterLight(MenuCommand menuCommand)
