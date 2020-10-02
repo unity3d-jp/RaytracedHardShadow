@@ -17,8 +17,7 @@ namespace Unity.RaytracedHardShadow
 // Object.Equals(object o) & Object.GetHashCode()
 #pragma warning disable CS0660, CS0661
 
-    public static class Lib
-    {
+    internal static class Lib {
         #region internal
         public const string name =
 #if UNITY_IOS
@@ -40,8 +39,7 @@ namespace Unity.RaytracedHardShadow
         }
     }
 
-    public static class Misc
-    {
+    internal static class Misc {
         public static string CString(IntPtr ptr)
         {
             return ptr == IntPtr.Zero ? "" : Marshal.PtrToStringAnsi(ptr);
@@ -139,7 +137,7 @@ namespace Unity.RaytracedHardShadow
     }
 
     [Flags]
-    public enum rthsDebugFlag : uint
+    internal enum rthsDebugFlag : uint
     {
         Timestamp       = 0x01,
         ForceUpdateAS   = 0x02,
@@ -147,13 +145,13 @@ namespace Unity.RaytracedHardShadow
     }
 
     [Flags]
-    public enum rthsGlobalFlag : uint
+    internal enum rthsGlobalFlag : uint
     {
         DeferredInitialization = 0x01,
     };
 
     [Flags]
-    public enum rthsRenderFlag : uint
+    internal enum rthsRenderFlag : uint
     {
         CullBackFaces           = 0x00000001,
         FlipCasterFaces         = 0x00000002,
@@ -168,7 +166,7 @@ namespace Unity.RaytracedHardShadow
     }
 
     [Flags]
-    public enum rthsInstanceFlag : uint
+    internal enum rthsInstanceFlag : uint
     {
         ReceiveShadows  = 0x01,
         ShadowsOnly     = 0x02,
@@ -179,8 +177,7 @@ namespace Unity.RaytracedHardShadow
         CullBackShadow  = 0x80,
     };
 
-    public enum rthsRenderTargetFormat : uint
-    {
+    internal enum rthsRenderTargetFormat : uint {
         Unknown = 0,
         Ru8,
         RGu8,
@@ -193,15 +190,13 @@ namespace Unity.RaytracedHardShadow
         RGBAf32,
     }
 
-    public enum rthsOutputFormat : uint
-    {
+    internal enum rthsOutputFormat : uint {
         BitMask = 0,
         Float = 1,
     };
 
 
-    public struct rthsGlobals
-    {
+    internal struct rthsGlobals {
         #region internal
         [DllImport(Lib.name)] static extern IntPtr rthsGetErrorLog();
         [DllImport(Lib.name)] static extern void rthsClearErrorLog();
@@ -334,8 +329,7 @@ namespace Unity.RaytracedHardShadow
         }
     }
 
-    public struct rthsMeshInstanceData
-    {
+    internal struct rthsMeshInstanceData {
         #region internal
         public IntPtr self;
         [DllImport(Lib.name)] static extern IntPtr rthsMeshInstanceCreate(rthsMeshData mesh);
@@ -439,8 +433,7 @@ namespace Unity.RaytracedHardShadow
         }
     }
 
-    public struct rthsRenderTarget
-    {
+    internal struct rthsRenderTarget {
         #region internal
         public IntPtr self;
         [DllImport(Lib.name)] static extern IntPtr rthsRenderTargetCreate();
@@ -529,8 +522,7 @@ namespace Unity.RaytracedHardShadow
         }
     }
 
-    public struct rthsRenderer
-    {
+    internal struct rthsRenderer {
         #region internal
         public IntPtr self;
         [DllImport(Lib.name)] static extern IntPtr rthsRendererCreate();

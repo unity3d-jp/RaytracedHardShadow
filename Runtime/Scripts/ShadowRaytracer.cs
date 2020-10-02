@@ -13,7 +13,7 @@ namespace Unity.RaytracedHardShadow
     [ExecuteInEditMode]
     [RequireComponent(typeof(Camera))]
     [AddComponentMenu("UTJ/Raytraced Hard Shadow/Shadow Raytracer")]
-    public class ShadowRaytracer : MonoBehaviour
+    internal class ShadowRaytracer : MonoBehaviour
     {
         #region types
         public enum ObjectScope
@@ -38,14 +38,14 @@ namespace Unity.RaytracedHardShadow
 #endif
         }
 
-        public enum RenderPipeline
+        internal enum RenderPipeline
         {
             Legacy,
             Universal,
             HDRP,
         }
 
-        public class MeshRecord
+        internal class MeshRecord
         {
             public rthsMeshData meshData;
             public Mesh bakedMesh;
@@ -108,7 +108,7 @@ namespace Unity.RaytracedHardShadow
             }
         }
 
-        public class MeshInstanceRecord
+        internal class MeshInstanceRecord
         {
             public rthsMeshInstanceData instData;
             public rthsMeshData meshData;

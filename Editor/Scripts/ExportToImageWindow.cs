@@ -4,7 +4,7 @@ using Unity.RaytracedHardShadow;
 
 namespace Unity.RaytracedHardShadow.Editor
 {
-    public class ExportToImageWindow : EditorWindow
+    internal class ExportToImageWindow : EditorWindow
     {
         ShadowRaytracer m_raytracer;
         static ShadowRaytracer.ImageFormat m_format = ShadowRaytracer.ImageFormat.PNG; // static to keep last selection
