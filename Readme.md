@@ -1,7 +1,14 @@
 ![demo](https://user-images.githubusercontent.com/1488611/60965577-1ca89700-a351-11e9-9b7d-962a6a7e1aed.png)
 # Raytraced Hard Shadow
-[Japanese](Documentation~/jp/index.md)
+[日本語](Documentation~/jp/index.md)
 
+[![](https://badge-proxy.cds.internal.unity3d.com/2f753479-a9ae-4522-9bb3-663d330849a1)](https://badges.cds.internal.unity3d.com/packages/com.unity.raytracedhardshadow/build-info?branch=dev&testWorkflow=package-isolation)
+[![](https://badge-proxy.cds.internal.unity3d.com/0a01adba-5b86-4e26-ac9e-9f0ab13f7783)](https://badges.cds.internal.unity3d.com/packages/com.unity.raytracedhardshadow/dependencies-info?branch=dev&testWorkflow=updated-dependencies)
+[![](https://badge-proxy.cds.internal.unity3d.com/39c14fe0-d180-4f14-b002-85c30febc4c4)](https://badges.cds.internal.unity3d.com/packages/com.unity.raytracedhardshadow/dependants-info)
+[![](https://badge-proxy.cds.internal.unity3d.com/b5e7caac-2ee5-403e-bba7-5b97302a8f71)](https://badges.cds.internal.unity3d.com/packages/com.unity.raytracedhardshadow/warnings-info?branch=dev)
+
+![ReleaseBadge](https://badge-proxy.cds.internal.unity3d.com/2bdbaba9-da54-4d11-881b-633027a046fa)
+![ReleaseBadge](https://badge-proxy.cds.internal.unity3d.com/3ddda566-e55f-456e-8b37-9def3a8b1aef)
 
 This plugin is for creating pixel-level precise hard shadows using ray tracing. Combine this plugin with tools like [UnityChanToonShader](https://github.com/unity3d-jp/UnityChanToonShaderVer2_Project) to create an anime-style shadow system. 
 
