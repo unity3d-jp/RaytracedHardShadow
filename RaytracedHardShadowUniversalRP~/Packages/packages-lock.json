@@ -2,7 +2,7 @@
   "dependencies": {
     "com.unity.ext.nunit": {
       "version": "1.0.6",
-      "depth": 0,
+      "depth": 1,
       "source": "registry",
       "dependencies": {},
       "url": "https://packages.unity.com"
@@ -23,20 +23,39 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
-    "com.unity.package-validation-suite": {
-      "version": "0.10.0-preview",
-      "depth": 0,
-      "source": "registry",
-      "dependencies": {
-        "nuget.mono-cecil": "0.1.6-preview"
-      },
-      "url": "https://packages.unity.com"
-    },
     "com.unity.raytracedhardshadow": {
       "version": "file:com.unity.raytracedhardshadow",
       "depth": 0,
       "source": "embedded",
       "dependencies": {}
+    },
+    "com.unity.render-pipelines.core": {
+      "version": "7.3.1",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.ugui": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.render-pipelines.universal": {
+      "version": "7.3.1",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.render-pipelines.core": "7.3.1",
+        "com.unity.shadergraph": "7.3.1"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.shadergraph": {
+      "version": "7.3.1",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.render-pipelines.core": "7.3.1"
+      },
+      "url": "https://packages.unity.com"
     },
     "com.unity.test-framework": {
       "version": "1.1.24",
@@ -78,13 +97,6 @@
         "com.unity.modules.ui": "1.0.0",
         "com.unity.modules.imgui": "1.0.0"
       }
-    },
-    "nuget.mono-cecil": {
-      "version": "0.1.6-preview",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {},
-      "url": "https://packages.unity.com"
     },
     "com.unity.modules.ai": {
       "version": "1.0.0",
