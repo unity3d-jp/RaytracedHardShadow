@@ -45,25 +45,15 @@
       },
       "url": "https://packages.unity.com"
     },
-    "com.unity.render-pipelines.high-definition": {
+    "com.unity.render-pipelines.universal": {
       "version": "7.3.1",
       "depth": 0,
       "source": "registry",
       "dependencies": {
         "com.unity.render-pipelines.core": "7.3.1",
-        "com.unity.shadergraph": "7.3.1",
-        "com.unity.visualeffectgraph": "7.3.1",
-        "com.unity.render-pipelines.high-definition-config": "7.3.1"
+        "com.unity.shadergraph": "7.3.1"
       },
       "url": "https://packages.unity.com"
-    },
-    "com.unity.render-pipelines.high-definition-config": {
-      "version": "file:../LocalPackages/com.unity.render-pipelines.high-definition-config",
-      "depth": 0,
-      "source": "local",
-      "dependencies": {
-        "com.unity.render-pipelines.core": "7.3.1"
-      }
     },
     "com.unity.shadergraph": {
       "version": "7.3.1",
@@ -114,15 +104,6 @@
         "com.unity.modules.ui": "1.0.0",
         "com.unity.modules.imgui": "1.0.0"
       }
-    },
-    "com.unity.visualeffectgraph": {
-      "version": "7.3.1",
-      "depth": 1,
-      "source": "registry",
-      "dependencies": {
-        "com.unity.shadergraph": "7.3.1"
-      },
-      "url": "https://packages.unity.com"
     },
     "com.unity.modules.ai": {
       "version": "1.0.0",
